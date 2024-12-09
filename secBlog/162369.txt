@@ -1,0 +1,38 @@
+*本文中涉及到的相关漏洞已报送厂商并得到修复，本文仅限技术研究与讨论，严禁用于非法用途，否则产生的一切后果自行承担。
+一、漏洞背景
+Adobe公司在当地时间2018年2月1日发布了一条安全公告：
+https://helpx.adobe.com/security/products/flash-player/apsa18-01.html
+公告称一个新的Flash 0Day漏洞（CVE-2018-4878）已经存在野外利用，可针对Windows用户发起定向攻击。攻击者可以诱导用户打开包含恶意 Flash 代码文件的 Microsoft Office 文档、网页、垃圾电子邮件等。
+该漏洞影响 Flash Player 当前最新版本28.0.0.137以及之前的所有版本，而Adobe公司计划在当地时间2月5日紧急发布更新来修复此漏洞。从Adobe公告致谢来看，这个漏洞的野外攻击样本最早是由韩国计算机应急响应小组（KR-CERT）发现的，而KR-CERT也表示，来自朝鲜的黑客组织已经成功利用这个0Day 漏洞发起攻击。
+二、漏洞原理分析
+CVE-2018-4878与2017年10月发现的0Day 漏洞CVE-2017-11292一样，都位于Flash的com.adobe.tvsdk包中。CVE-2018-4878是一个UAF漏洞，需要借助强制GC或者刷新页面来触发该漏洞。
+POC关键代码如下：
+MyListener是一个继承自DRMOperationCompleteListener类的对象：
+将MyListener对象注册为MediaPlayer对象的一个通知回调接口，然后释放MyListener对象，但是在MediaPlayer对象中仍然保存着MyListener对象，当强制系统进行垃圾回收时，MediaPlayer对象的回调会执行，但此时MyListener已经被释放，从而导致了UAF漏洞。
+下图是POC在IE运行时crash位置：
+rcx正是MediaPlayer对象里的DRMManager成员，偏移0x18处存放的正是MyListener对象，可以看到MyListener对象已经被释放了。
+三、漏洞利用分析
+漏洞通过修改Flash脚本对象ByteArray的长度为0xFFFFFFFF，从而实现任意地址读写。其后的利用技术与HackingTeam曝光所使用的exploits一致，不再做详细阐述。
+在HackingTeam泄漏事件后，Vector这种能简单稳定的用于漏洞利用中实现任意地址读写的方式迅速传播开来，Adobe随后对Flash采取了一系列的安全加固措施，包括堆隔离、对Vector、ByteArray等常见可被利用的对象进行长度校验、数据区校验等安全验证措施，这些措施在一定程度上增加了Flash漏洞攻击的难度，但并不能完全阻止此类攻击。在这次的0Day利用中，ByteArray就被用来实现任意地址读写。ByteArray的结构包括两部分，第一部分结构如下，其中一个关键成员是m_buffer:
+m_buffer中包含了该ByteArray的数据区地址array，数据区的容量，长度等重要值，紧挨着存放的是这几个值的加密备份，当Flash检测到可能因漏洞利用程序而导致这两个值不一致时，就会触发异常终止执行。该结构如下：
+这是利用执行前，ByteArray的对象数据，图中红框标识的是m_buffer成员：
+触发漏洞，修改m_buffer的值，使得array地址为0，而容量和长度修改为0xFFFFFFFF：
+进而在32位地址空间下实现了任意地址读写。
+四、ShellCode分析
+Shellcode运行后获取自己需要的API地址，遍历当前环境的进程，主要判断是否有韩国杀软AhnLab和ViRobot APT Shield等安全防护类产品。根据不同的环境，Shellcode会选择不同的执行方案：
+注：
+AhnLab:asdsvc.exe v3ui.exe v3svc.exe任意一个进程存在；
+ViRobot APT Shield:vraptshieldlaunchersvc.exe hagenttray.exe hvrtray.exe任意一个进程存在；
+360:zhudongfangyu.exe 360tray.exe qhsafemain.exe任意一个进程存在。
+方案1：
+AhnLab，ViRobot APT Shield， 360均不存在，或者只有AhnLab时，执行此方案。以隐藏方式启动cmd.exe，创建远程线程，将第二段shellcode注入到cmd.exe中执行。注入到cmd.exe中shellcode执行后也会去获取所需要的API地址，并且加载”wininet.dll”（为了获取网络操作API），通过访问：
+hxxp:// www.1588-2040.co.kr/conf/product.jpg (已失效)获取第三段shellcode，最后直接跳到获取到第三段shellcode内存地址继续执行恶意代码。
+方案2：
+当同时存在AhnLab和360，或者只有360以及只有ViRobot APT Shield时执行此方案。首先创建一个新线程，动态获取%TEMP%目录，通过访问：
+hxxp://www.1588-2040.co.kr/conf/product_old.jpg获取数据，将其写入到%TEMP%\fontdrvhost.exe，最后启动%TEMP%\fontdrvhost.exe。
+方案3：
+当AhnLab与ViRobot APT Shield并存时，Shellcode会直接退出，不做任何事情。
+五、查杀和防御
+考虑到CVE-2018-4878漏洞攻击代码很可能会被公开，甚至集成到黑客工具包中，腾讯电脑管家已经第一时间实现了该漏洞攻击样本的查杀。
+此外，Adobe已经于北京时间2月6日发布了该漏洞补丁，企业IT人员或系统管理员可到Adobe官网下载和安装最新的Flash更新包。
+*本文作者：腾讯电脑管家，转载请注明来自FreeBuf.COM

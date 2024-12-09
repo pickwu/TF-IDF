@@ -1,0 +1,27 @@
+一些开发人员认为，只要程序身份验证代码是安全的，则其程序输入也应该是相对没问题的。通常，这种想法会导致一些草率随意的代码，一旦攻击者在这些代码中发现漏洞，一些后验证性（Post-authentication）Bug就能被攻击者利用，对软件系统形成威胁。今天，我们要来说的就是，通过身份验证绕过漏洞结合用户输入的表达式注入漏洞，形成对HP智能管理服务器（ HPE IMC）系统的远程代码执行。
+在ZDI上有多个HP智能管理服务器（ HPE IMC）的后验证型漏洞，它们是需要身份认证绕过方式才能利用的，然而最近，名为Steven Seeley的ZDI常客就非常厉害地提交了一个身份认证绕过漏洞ZDI-18-139，该漏洞的出现使得之前一大波HPE IMC的后验证型漏洞立马变得极具利用价值。该身份认证绕过漏洞的存在，根本上是由于2017年3月被发现的另一个HPE IMC漏洞ZDI-17-161（CVE-2017-5791）的未完全修复而导致的。
+由于目前Steven Seeley发现的这个ZDI-18-139身份认证绕过漏洞还未完全公开技术细节，本文中，我们通过对漏洞ZDI-17-161的补丁分析，来尝试自行发现ZDI-18-139漏洞，最后，我们会利用该绕过漏洞，结合一个独特的表达式注入漏洞ZDI-17-663，实现对HPE IMC服务器系统的远程代码执行。
+补丁比对发现HPE IMC系统doFilter方法远程绕过漏洞ZDI-17-161
+在下面的web.xml文件中，HPE IMC系统使用了UrlAccessController类作为访问控制过滤器，来限制未授权用户对受保护URL的访问。该访问控制过滤器是一个开发人员经常用到的，用来实现访问控制功能的Java组件。
+以下就是HPE IMC的7.3E0504P2系统版本中，未完全修复漏洞ZDI-17-161的补丁下UrlAccessController::doFilter()方法的补丁反编译分析片段：
+在以上补丁中可发现，过滤器逻辑之前，添加了一个保护函数normalizeSyntax()用于对输入内容的净化审核。如果路径中缺少“..”字符，则此函数将退出不执行任何操作。因此，我们可以让normalizeSyntax()函数来尝试执行一些包含“..”字符路径的“规范化”操作，如果路径是/imc/primepush/../<target URI>这种样子的，攻击者就能绕过过滤器以未授权用户身份访问受保护的其它系统组件。事实上，这也就是ZDI-17-161漏洞的威胁所在。
+从补丁信息中发现隐秘宝藏-ZDI-18-139漏洞
+如果你仔细检查ZDI-17-161补丁中新添加的函数normalizeSyntax()，不难发现，其中存在一个严重的身份认证绕过漏洞。在此，你先花点时间看看能否发现这个漏洞......。这个漏洞就存在于函数normalizeSyntax()的前几行代码中，如果攻击者把URL路径中的字符".."进行编码混淆，将会编过函数提前返回某些信息。换句话说，攻击者可以简单地使用形如这样的路径/imc/primepush/%2e%2e/<target URI>去绕过补丁！
+使用URL编码混淆路径遍历字符之后，攻击者只能绕过URL访问控制器，但也能查看到某些受保护的身份验证页面，但至此，攻击者可以利用ZDI-18-136来劫持管理员会话信息，或使用以下存在于HPE IMC系统中的任意表达式注入漏洞（EL injection）来实现远程代码执行：
+表达式注入漏洞（EL injection）介绍
+表达式语言（Expression Language, EL）是称为Java Server Faces (JSF)的Web应用UI框架的一部份，在此就有一个表达式语言在JSF框架下如何工作的简单例子。而表达式语言注入漏洞（EL injection）是一个相对新的漏洞类，除了Minded Security的Stefano Di Paola和Aspect Security的Arshan Dabirsiaghi及少数分析博客提出了最初的漏洞概念之外，没有更多网上现成的参考资料。
+第一个表达式语言注入漏洞可追溯到2011年，也就是CVE-2011-2730，它涉及到了Spring框架中的一个双向评价漏洞并可导致某些信息泄露。到了2012年，Dan Amodio在 JSP/EL 2.2 中演示了一种利用表达式注入漏洞的新技巧以实现远程代码执行，该技巧不需要漏洞代码对攻击者控制的表达式进行两次估值（Evaluate）。
+剖析表达式注入漏洞ZDI-17-663
+ZDI-17-663是一个后验证性表达式注入漏洞，该漏洞环境下，攻击者可以利用传递到ictExpertDownload.xhtml的beanName参数来实现任意表达式语言执行。我们先来看看该漏洞的入口点 -- 也就是路径C:\Program Files\iMC\client\web\apps\imc\ict\export\ictExpertDownload.xhtml中的ictExpertDownload.xhtml文件：
+在上述代码[1]标记处，导入了一个名为"http://www.huawei-3com.com/jsf/core" 的命名空间，其中包含了一些通用标签，其中就包括imcf:beanMethod标签，当该页面发起请求时，标记[2]处的imcf:beanMethod就会对ictTableExportBean中的initPage方法进行调用，该操作行为也在位于C:\Program Files\iMC\client\web\apps\imc\WEB-INF\imc-jsf-core.taglib.xml中的标签库中能有所记载：
+我们可以对上述代码中的ictTableExportBean.initPage()方法作用进行认真查看，该方法被定义在了imcweb_plat.jar中的com.h3c.imc.ict.export.view.IctTableExportBean类中：
+以上代码的标记[4]处，本质上说，并不是表达式进行估值的地方，在这里攻击者控制的数据可被传递到FacesUtils类中，实际上来讲，也完成了一次表达式估值。以下是FacesUtils类的反编译代码：
+com.h3c.imc.common.faces.FacesUtils.java:
+至此，攻击者控制的数据可被解析为一个ValueExpression并被完成最终估值，一旦目标Web服务器运行的是系统权限，则攻击者构造的恶意Payload也将会以系统权限执行。
+综合形成Metasploit利用模块
+综上所述，综合身份认证绕过漏洞ZDI-18-139和表达式注入漏洞ZDI-17-663，我们写出了一个Metasploit利用模块hp_imc_el_injection_rce.rb，经测试，该利用模块结合cmd/windows/powershell_reverse，可在HPE iMC7.3E0504P2 系统下成功利用，具体利用方式如以下视频所示：
+https://www.youtube.com/watch?v=E8TjFWysI78
+http://v.youku.com/v_show/id_XMzQxODE4OTQ5Mg==.html
+总结
+本文中提到的HPE IMC 信息泄露和代码执行漏洞，侧面说明了开发人员应该重视程序的输入机制安全，即使这些输入机制是存在于安全的身份验证框架下，也不能说明它们就是绝对安全的。这里也说明，后验证性漏洞同样能被攻击者和渗透测试人员加以利用，形成危害。而表达式注入漏洞由于在黑盒测试前提下，很难被发现，但非常有必要通过源代码审查来发现并排除这种漏洞。希望这类漏洞在造成一些重要影响后，能像字符串漏洞一样可被快速消除，及时防范。
+*参考来源：zerodayinitiative，FreeBuf小编clouds编译，转载请注明来自FreeBuf.COM

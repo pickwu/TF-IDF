@@ -1,0 +1,31 @@
+*本文原创作者：m09046105，本文属FreeBuf原创奖励计划，未经许可禁止转载
+前言：
+Omer Gil在BlackHat USA 2017 和BSides Tel-Aviv 2017 上，对Web 缓存欺骗技术这种攻击技术进行了演示，在他发布的“Web 缓存欺骗技术白皮书”中也做了详细的介绍。在特定情况下，web缓存欺骗攻击可以导致攻击者获得受害者的敏感信息。
+Web缓存是指Web资源以副本的形式介于Web服务器和客户端之间，当下一个相同请求来到的时候，会根据缓存机制决定是直接使用副本响应访问请求，还是向源服务器再次发送请求。在实际应用中，web缓存十分常见，主要是Web缓存有着如下的优点：产生极小的网络流量，减少对源服务器的请求，降低服务器的压力， 同时能够明显加快页面打开速度。缓存分为以下几种类型：（1）数据库缓存，当web应用的数据库表繁多，为了提供查询的性能，会将查询后的数据放到内存中进行缓存，下次从内存缓存直接返回，比如memcached（2）浏览器缓存，浏览器会将一些页面缓存到客户端 ，不同的浏览器有着自己的缓存机制。（3） 服务端缓存：常见的服务端缓存比如：CND、Squid、Nginx反向代理等。
+0x00漏洞原理
+假设我们要访问的某个网站使用了服务器缓存技术，架构如下：
+当注册的用户成功登入了该网站，会跳转到自己的账户页面my.php，该Nginx反向代理服务器会将css、js、jpg等静态资源缓存到nginx设定的目录下。受害者不小心在浏览器中输入了如下的url：http://victim.com/my.php/favicon.ico ， favicon.ico 并不存在，此时会发什么神奇的事情呢？
+Nginx反向代理服务器发现url以静态文件的扩展名(.ico)结尾，由于favicon.ico 不存在，它的缓存机制会将 my.php 缓存到缓存目录中，这时攻击者访问了：http://victim.com/my.php/favicon.ico ，之前 缓存的帐户页面便成功返回给了攻击者。
+0x01利用条件：
+经过上一步的分析，我们知道该漏洞要想成功利用需要满足三个条件：
+要想满足以上几个条件，需要考虑到不同的web服务器、代理机制以及浏览器着各自的特性。比如：我们在tomcat服务器上访问http://victim.com/my.jsp/1.css，服务器无法返回my.jsp的内容，因此这种攻击无法利用在tomcat+java上面。
+0x02漏洞演示：
+test.php <?php echo "123"; ?>
+通过以上的实验，我们知道apache+ php,满足第一个条件：访问http://victim.com/my.php/favicon.ico 页面时，Web服务器返回了该my.php的内容。我们的缓存功能使用的是nginx反向代理中的缓存功能，nginx的缓存机制是根据url中的扩展名来判断是否进行缓存文件，同时我们设置其忽略任何缓存头，因此也满足了第二个条件。
+Web服务器的登入页面和账户页面：
+Login.php <html> <head> <title>login</title> </head> <body> <form action="my.php" method="post"> <input name="name" type="text" value='<?php echo $_COOKIE["name"]; ?>' /> <input type="submit" name="submit" value="Login" /> </form> </body> </html> My.php <?php $name = $_POST["name"]; $cookie = $_COOKIE["name"]; if($name=="admin"){ echo "Welcome ".$_POST['name'] ; setcookie("name",$name,time()+600); } else{ if($cookie=='admin'){ echo "Welcome ".$_COOKIE['name'] ; }else{ echo '<script>window.location.href = "./login.php";</script>'; } } ?>
+当用户成功登入之后，跳转到自己的账户页面my.php
+此时我们通过社工的方法诱使管理员访问了my.php/静态资源 的url，便在nginx 缓存目录中发现了缓存的管理员的my.php页面。
+当我换一个浏览器firefox访问 /my.php/1.css地址的时候，成功返回来之前admin用户缓存到nginx缓存目录里面的内容，即admin的账户信息！
+0x03漏洞危害及利用
+正如前文所说的漏洞利用条件，此外还需要结合社工的方法，诱使登入网站的用户特别是有权限的用户（管理员）等，访问http://victim.com/my.php/静态资源 这种形式的链接。
+攻击者通过这种攻击，可以获取到受害者的账户等敏感信息。
+0x04预防措施
+预防该类攻击，只要保证以上的攻击条件中有任何一个不满足即可实现，通过以下三个方面来预防：
+（1）合理配置web服务器
+通过配置服务器对于http://victim.com/my.php/favicon.ico 这类的请求页面，不返回my.php页面的内容，可以返回404或302.
+（2）合理设置缓存机制
+将缓存文件的缓存机制配置为仅当缓存文件的HTTP缓存标头允许时才进行缓存。
+（3）提高管理员等的安全意识
+作为网站的用户，禁止访问http://victim.com/my.php/favicon.ico之类的连接请求。
+*本文原创作者：m09046105，本文属FreeBuf原创奖励计划，未经许可禁止转载

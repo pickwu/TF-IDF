@@ -1,0 +1,68 @@
+前言：
+本文详细介绍了如何在fedora26上部署mysql，以及如何利用hydra暴力破解mysql弱口令密码并利用mysql服务写入一句话木马连接菜刀，这个过程中我遇到了许多坑，走了不少弯路，好在最后还是达到了目的，在此整理一下思路，供像我一样的小白们学习参考，如有错误烦请大牛们斧正。
+一、漏洞简介以及危害：
+MySQL 弱口令漏洞指 MySQL 数据库 root 账号对应的密码长度太短或者复杂度不够，如仅包含数字，或仅包含字母等。
+弱口令容易被暴力破解，一旦被恶意利用来登录系统，会导致数据泄露，如果得到了root权限登录mysql服务，则可以写入恶意文件，危害更大，本文就是以root身份远程登录mysql服务写入了一句话木马连接了菜刀。
+二、漏洞重现以及利用：
+1.环境搭建（LAMP的搭建）：
+（一）Fedora26下安装mysql：
+（1）在root用户模式下输入rpm -qa |grep mysql，列出本地的mysql rpm软件包：
+（2）输入rpm –e+软件包名，从列表的最下面一个包开始，逐个往上删除，直至全部删掉(不必输版本号)：
+（3）更新mysql5.7.20版的rpm包的源（链接只对Fedora26有用）：
+dnf install https://dev.mysql.com/get/mysql57-community-release-fc26-10.noarch.rpm
+（4）安装mysql5.7.20：
+（5）如果愿意的话可以输入 dnf–enablerepo=mysql80-community install mysql-community-server更新至8.0.3：
+（6）此时如果直接运行mysql服务的话会出现如下错误：
+解决方法：
+输入vim /etc/my.cnf，在【mysqld】节点下增加一行代码skip-grant-tables （忽略密码授权）如下：
+保存退出，然后启动mysql服务：systemctl start mysqld；
+输入ps -e | grep mysql找到mysql服务的pid：
+杀掉mysql进程（kill+pid号）：
+使用mysql -u root -p重新进入mysql的root模式，依次输入以下内容：
+use mysql；
+UPDATE user SET authentication_string=PASSWORD('12345678')WHERE user='root';
+（注意mysql5之后的版本user表里没有password列改为了authentication_string）
+再次编辑my.cnf文件，注释掉刚才加上的代码；
+重启mysql服务：systemctl restart mysqld
+至此，初始密码修改为了12345678
+（7） 输入mysql_secure_installation，开始进行安全设置（必须设置一遍才能正常使用mysql），此时密码为12345678：
+（8） 修改密码，会发现纯数字密码如12345678不能通过，如下：
+查了查资料才知道，这是由于MySQL5.6.6版本之后增加了密码强度验证插件validate_password，相关参数设置的较为严格。使用了该插件会检查设置的密码是否符合当前设置的强度规则，若不满足则拒绝设置（坑。），如果不想下载低版本的mysql，可采用如下步骤解决：
+输入mysql -u root -p，进入mysql的root模式（此时的密码为初始密码12345678），然后输入以下代码：
+退出mysql，重新进入安全设置：
+可以设置简单密码12345678，问题解决。
+（9）继续进行安全设置，注意下图红圈处选择n，确保能远程登录mysql服务：
+（10）安全设置完成后，还需关闭mysql的文件写入保护（这个地方坑了我很久，不关上只能把文件写入设置好的默认路径，不能把一句话木马写到服务器的默认目录，所以一定要关上），Mysql默认开启文件写入保护，只能写入固定的文件路径，其他位置不能写入，如下图所示，使用 show variables like '%secure%'可以看到默认路径为/var/lib/mysql-files/，如果直接写入其他路径会报错：
+解决方法：
+编辑/etc/my.cnf，加上secure_file_priv=（等号后不输任何东西，设置为空值即可）：
+重启mysql服务，发现可以写入其他路径，问题解决：
+至此便完成了mysql在fedora26的部署，此时的部署是有弱口令漏洞的。
+（二）hydra的安装：
+hydra是著名黑客组织thc的一款开源的暴力密码破解工具，可以在线破解多种密码。这款暴力密码破解工具相当强大，支持几乎所有协议的在线密码破解，其密码能否被破解关键在于字典是否足够强大。
+Fedora26直接使用 dnf install hydra安装即可：
+（三）apache服务的安装：
+fedora默认装有apache服务，启动命令为systemctl start httpd
+（四）安装php：
+dnf install php php-common dnf install php-mysqlnd php-gd php-cli -php-mbstring
+上面两条命令运行完成即安装完成
+（五）使用vbox的链接复制，复制该虚拟机，一台作为靶机一台作为攻击端
+2.漏洞利用：
+（1）启动两台虚拟机，网络设置为近主机模式：
+靶机的ip为192.168.56.101，使用ifconfig + 网卡名 + ip + up修改攻击端的ip为192.168.56.102，确保互相之间能ping通：
+（2）启动靶机的mysql服务 systemctl start mysqld：
+启动靶机的apache服务：systemctl start httpd
+关闭靶机的防火墙服务：systemctl stop firewalld
+（3）在攻击端新建user.txt和pass.txt作为暴力破解靶机口令的字典，由于这里只是用于演示，因此我直接把正确密码写进了字典，节约破解时间：
+user.txt的内容如下：
+pass.txt的内容如下：
+（4）使用hydra暴力破解靶机的root用户密码，命令为：hydra -L 用户名字典 -P 密码字典 靶机IP mysql
+得到靶机mysql服务root用户的密码为12345678
+写入一句话木马并连接菜刀的操作我是在本机上进行的，本机的系统为win10，Cknife的百度云链接为：
+链接：https://pan.baidu.com/s/1dpboom 密码：uyyo
+另外因为这个是java写的，还需下载JDK(官网下载最新版即可）
+（注意，因为靶机的php版本为php7，之前找到的中国菜刀不支持php7，很坑，建议要么该换低版本的php要么直接下载我给的这个）
+（5）在win10上使用破解得到的靶机mysql服务的密码登录靶机的mysql，然后写入一句话木马至/var/www/html目录下（httpd服务默认路径）：
+这里能写入成功的前提是：1.以root用户的身份登录mysql服务；2.mysql服务关闭了secure_file_priv。
+（6）打开Cknife，编辑内容如下：
+连接成功：
+*本文原创作者：flurry，属于FreeBuf原创奖励计划，禁止转载

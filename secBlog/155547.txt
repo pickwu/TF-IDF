@@ -1,0 +1,89 @@
+*本文作者：0d9y，属于FreeBuf原创奖励计划，未经许可禁止转载。
+一次对Web应用的渗透，九成都是从信息收集开始，所以信息收集就显得尤为重要。关键信息的收集可以使你在后期渗透的时候更加的得心应手，把渗透比喻成走黑暗迷宫的话，那信息收集可以帮你点亮迷宫的大部分地图。
+信息收集涉及的点特别多，本次开发的软件主要是针对搭建Web的操作系统以及开发的端口，搭建Web的Server以及大概版本，搭建Web的CMS（国内常见的一些CMS）
+避免重复造轮子，下面介绍一些软件的一些特点和制作时的思路。
+1.Web操作系统以及开发的端口
+程序中使用了nmap的接口，针对不同的系统进行检测，使用适当的探测方式来获取目前应用搭建的操作系统版本和开发的端口以及指纹判断使用端口的服务。
+2.WebServer类型以及版本
+WebServer的类型其实是一次渗透中的重中之重，不同的WebServer有不一样的特性，同类型不同版本有不同的特性，有时候配合这些特性往往可以发现一些容易被忽略的重大漏洞。针对WebServer有两种探测方式。
+第一种就是通过对HTTP头部域顺序和状态码定义两种指纹的思想来对WebServer进行检测。经过在ZoomEye中大量收集Nginx、Apache、IIS不同版本的Web程序进行探测后统计出了如下7中不同种类其中表格第一列是进行请求的方式和HTTP请求协议和版本，第二列是请求后返回的HTTP状态码定义，表格最后一行是返回的HTTP头部域顺序。利用大量测试绘制的表格通过Python的Socket库封装了一个HTTP请求类进行探测WebServer的具体类型和大概版本
+Apache/1.3.X GET / HTTP/1.1 200 OK HEAD / HTTP/1.1 200 OK PUT / HTTP/1.1 405 Method Not Allowed DELETE / HTTP/1.1 405 Method Not Allowed CONNECT / HTTP/1.1 400 Bad Request 0D9Y / HTTP/1.1 200 OK HEAD / 0D9Y/1.1 400 Bad Request HEAD / HTTP/3.1 200 OK Date 、Server、Content-Length、Connection、Content-Type
+Nginx/0.7.69-1.3.9 GET / HTTP/1.1 200 OK HEAD / HTTP/1.1 200 OK PUT / HTTP/1.1 411 Length Required DELETE / HTTP/1.1 200 OK /405 Not Allowed / 502 Bad Gateway CONNECT / HTTP/1.1 200 OK /405 Not Allowed / 502 Bad Gateway XXX / HTTP/1.1 小写字母或者数字200 OK /405 Not Allowed / 502 Bad Gateway 大写字母 无返回信息 HEAD / 0D9Y/1.1 无返回信息 HEAD / HTTP/3.1 200 OK Server 、Date、Content-Type、Content-Length、Connection
+Nginx/1.4.0-1.5.4 GET / HTTP/1.1 200 OK HEAD / HTTP/1.1 200 OK PUT / HTTP/1.1 405 NOT ALLOWED DELETE / HTTP/1.1 405 NOT ALLOWED CONNECT / HTTP/1.1 405 NOT ALLOWED XXX / HTTP/1.1 小写字母或者数字没有返回信息 大写字母405 METHOD NOT ALLOWED HEAD / 0D9Y/1.1 无返回信息 HEAD / HTTP/3.1 200 OK Server 、Date、Content-Type、Content-Length、Connection
+Nginx/1.5.5-Now GET / HTTP/1.1 200 OK HEAD / HTTP/1.1 200 OK PUT / HTTP/1.1 405 Not Allowed DELETE / HTTP/1.1 405 Not Allowed CONNECT / HTTP/1.1 405 Not Allowed XXX / HTTP/1.1 小写字母或者数字400 Bad Request大写字母 405 Not Allowed HEAD / 0D9Y/1.1 无返回信息 HEAD / HTTP/3.1 200 OK Server 、Date、Content-Type、Content-Length、Connection
+Microsoft-IIS/6.0 GET / HTTP/1.1 200 OK HEAD / HTTP/1.1 200 OK PUT / HTTP/1.1 411 Length Required DELETE / HTTP/1.1 501 Not Implemented CONNECT / HTTP/1.1 501 Not Implemented XXX / HTTP/1.1 小写字母或者数字501 Not Implemented 大写字母 501 Not Implemented HEAD / 0D9Y/1.1 400 Bad Request HEAD / HTTP/3.1 505 HTTP Version Not Supported Connection 、Date、Server、Content-Type、Content-Length
+Microsoft-IIS/7.0-8.5 GET / HTTP/1.1 200 OK HEAD / HTTP/1.1 200 OK PUT / HTTP/1.1 411 Length Required DELETE / HTTP/1.1 405 Method Not Allowed CONNECT / HTTP/1.1 405 Method Not Allowed XXX / HTTP/1.1 小写字母或者数字 405 Method Not Allowed 大写字母 405 Method Not Allowed HEAD / 0D9Y/1.1 400 Bad Request HEAD / HTTP/3.1 505 HTTP Version Not Supported HEAD ：Content-Length、Content-Type、Server、Date、Connection
+第二种就是可能各位经常用的方法，在返回的HTTP头中查看Server字段，不过Server字段可以修改达到蒙蔽的效果，所以这种方法仅作为辅。
+3、搭建Web的CMS类型
+目前程序可以快速精准探测的CMS有74CMS、ASPCMS、CMSEASY、DEDECMS、DISCUZ、DRUPAL、ECSHOP、JOOMLA、METINFO、PHPCMS、PHPWIND、WORDPRESS、XYCMS、Z-BLOG等快速建站系统。针对CMS指纹的收集，首先是下载了这些CMS的最新版本以及一些老旧版本，提取其目录、以及目录下的文件，然后将文件和其文件MD5绑定，再通过ZoomEye中搜索这种类型Web网站，成功访问到该文件并且md5匹配的条目进行输出，然后选取匹配度最高的几条，达到快速匹配的目的（如下）。不过如果没有匹配成功，则可以试试精准匹配，这种速度比较慢，不过是匹配所有条目，成功率较高，而且程序中通过目录一层层向下的方式，譬如/js/index.js,/js/jq.js...等条目，程序会先尝试js目录是否为404，然后依次向下的算法。
+74cms.txt
+/templates/default/css/wap.css 50c71ede9badf9417b15a3df09890a50
+/templates/default/js/jquery.highlight-3.js 9b9f1ebc7411e9d9cec08031622a645a
+/templates/default/js/jquery.KinSlideshow.min.js 376a6749c02e3d527cfce83a2e77d568
+/templates/tpl_company/default/css/ui-dialog.css 4440728e29e7b41b79f33fb212845b9f
+ASPCMS.txt
+/images/qq/qqkf1/default.css 76cb116c87b88929c439a6104bfc9c0f
+/plug/collect/style.css fa87014850b44b241b14ee993d7ed223
+/plug/vote/style.css fa87014850b44b241b14ee993d7ed223
+/images/qq/qqkf2/kefu.js 1cdeba13ea60605047e77ce38f2fa77c
+CmsEasy.txt
+/js/jquery.min.js 10092eee563dec2dca82b77d2cf5a1ae
+/common/js/jquery/ui/themes/flora/flora.datepicker.css 670ec3ce24416b0c7a462e39bc39ca1d
+/common/js/jquery/ui/themes/flora/flora.all.css 7f325a06e7ccf2222c0c4527449c0527
+/common/js/jquery/ui/themes/flora/flora.tabs.css 28cddf861963342333a844bac80f2219
+dedecms.txt
+/images/swfupload/plugins/swfupload.swfobject.js 9cf88d567c218192eb26bf3b27763b83
+/images/swfupload/plugins/swfupload.cookies.js f6940672b1ef27fccbe5a360d8382b72
+/images/swfupload/plugins/swfupload.speed.js d840d5988a2b8b64350faed539041550
+/images/swfupload/plugins/swfupload.queue.js 83b614f4e551d5c176833ee44c8f0e01
+Discuz.txt
+/static/image/common/extstyle_none.css 7215ee9c7d9dc229d2921a40e899ec5f
+/source/admincp/robots.txt 96bbf89620d30c72c1dab0e8b8eca17d
+/uc_server/robots.txt 15dde9868cbc402f19261bd376496d38
+/template/default/common/wysiwyg.css a3ae9afbc98ac594a1ff90f8410b38f3
+drupal.txt
+/themes/seven/ie7.css d408f1a7cfd5ae23bd7817f036e94cea
+/modules/profile/profile.js 80c518c28630fca61a98d46124210221
+/modules/poll/poll-rtl.css 28f82f3171b115e9031c250abee951c0
+/modules/dashboard/dashboard.css ac59df14268190ef0ea60e1d7a804fda
+ECShop.txt
+/includes/fckeditor/editor/filemanager/browser/default/js/common.js cf81ed7a0668e5eb3b9135bf7eb65b9a
+/includes/fckeditor/fckeditor.js 5ec5a57d981113875d68d2daa3e01a0d
+/includes/fckeditor/editor/dtd/fck_xhtml10transitional.js 2eaa9662e59360ed579aa2e422c7aa39
+/includes/fckeditor/editor/dialog/common/fck_dialog_common.js 2341d0ae9d63666fbe01469582068419
+Joomla.txt
+/media/system/js/punycode-uncompressed.js 1b6d3b0e700c0a47cd91bbe2a75dcd12
+/media/editors/codemirror/mode/jinja2/jinja2.js 7078315f8a3f9181c79d8b969cb10607
+/media/editors/codemirror/addon/scroll/simplescrollbars.css 0352ba51fd6a422fe6cc44925e33ad88
+/media/editors/codemirror/mode/crystal/crystal.js 37af5605299e885305a5a1f499288d3c
+MetInfo.txt
+/public/js/yao.js 858a08c6c59dfa72a33ab3d623e989a5
+/public/js/metzoom.js 45af213d8f5dda4746ed101fe5a9dcb9
+/public/js/imgdisplay5.js 1c2827d0e79de5bfc1337800c6522f04
+/public/js/metzoomHTML.js 060a5e02653a9a34a3bcb24d9f5d38a6
+phpcms.txt
+/statics/js/calendar/calendar-blue.css c0c2286a4460f3b9a870be43923d4395
+/robots.txt 7750f62fc14ea34527c09c7694a3d406
+/statics/js/calendar/border-radius.css 888d3ead98ff921a09c0365a723339f5
+/phpsso_server/statics/js/jquery.min.js 10092eee563dec2dca82b77d2cf5a1ae
+phpwind.txt
+/js/DeployInit.js ed1109ddea65852255c15b543a3ec161
+/js/wind_editor.js e624e24a8de77dadff7c768ff7247fd6
+/js/Deploy.js f1e394ddf8ae52faf4dc90fdfb5632e4
+/js/credit_pop.js f80829a7eaf499dfb4dd3dd145f9ca07
+wordpress.txt
+/wp-includes/js/admin-bar.min.js 5bd4dfd347e0592a6bc8a5b9d6b070fc
+/wp-includes/js/comment-reply.js d30ad028653d4eac285a1d4d06567bbd
+/wp-includes/js/tinymce/skins/lightgray/content.inline.min.css 35b20a1298ab637a58ac70fa73df335c
+/wp-includes/js/media-models.min.js bc01c1de1fdb0176783247e8a754a60b
+xycms.txt
+/system/images/Deepteach_colorPicker.js b2096cbcab653ad132350ef455f10e95
+/system/images/menu.js 6b22b5913da498c9194205930fb95922
+/system/images/style.css 6bfbaf7c3e740b19e1af6c4b6bb3ffa2
+/system/images/common.js 49ed0d60b73129aebf93de5bbc4fd76e
+Z-Blog.txt
+/zb_users/plugin/AppCentre/images/style.css b8e0b269520535b3daf15e7fcc5bd9f9
+其实还有很多的信息收集小技巧，将自己平时的一些收集技巧写到自己的程序其实也是一种解放，并且效率会有很大的上升。各位有什么技巧也可以私密我过段时间我来帮你写出来加入到我的程序中。
+软件的下载可以到我的github进行下载，软件使用说明在github的readme上。
+个人博客地址http://blog.0d9y.cn欢迎各位大大留言和友联。
+*本文作者：0d9y，属于FreeBuf原创奖励计划，未经许可禁止转载。

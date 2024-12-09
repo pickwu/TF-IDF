@@ -1,0 +1,44 @@
+本次环境我们采用的是最新版本的WebGoat 8，如果对WebGoat不熟悉的同学，可以参考OWASP的官方链接。由于本次我们主要是做静态代码分析，而不是渗透测试，因此我们只需要将WebGoat 8的源代码下载下来， 并上传到“自动化安全代码检测平台”即可。
+一、从GitHub上下载WebGoat 8的源代码
+下载链接为：https://github.com/WebGoat/WebGoat/releases，我们直接下载最新的源码压缩包即可：
+二、下载后解压，并通过SVN上传至“自动化安全代码检测平台”
+1. 清除前期的测试代码
+如果前搭建环境中（包括我给大家的镜像中）都含有一个HelloWorld的源码库，因此需要删除此源码库。大家也可以重新配置SVN，但为了便于实验的方便，我们直接删除HelloWorld源码库。
+删除比较简单，直接通过SVN下载本机，然后在本机上删除后再提交即可，具体步骤如下图所示：
+a. 加载“自动化安全代码检测平台” （如果镜像正常，并未释放，可以跳过此操作）
+在阿里云上加载镜像，创建的ECS建议大家使用的配置为：2CPU、8G内存、40G硬盘、2M带宽。
+小提示：建议大家用“竞价实例”，目前价格比较便宜。
+b. 清理SVN中前期的HelloWorld源码
+在前期本地创建的文件夹上点击右键，然后选择“SVN Update”，然后将同步好的代码全部删除：
+再在此文件上点击右键选择“SVN Commit”，选择所有文件，点击“OK”：
+这样平台上的“HelloWorld”源码将全部删除。
+2. 将我们下载的WebGoat 8源码解压到此文件夹后上传平台
+在总文件夹上点击右键选择“SVN Commit”上传：
+三、更新和配置SonarQube的检测插件
+WebGoat 8是Java编写的，本次实验我们使用Findbugsfor Java的插件来进行检测（插件相关说明将会在后续文章中描述，有兴趣的朋友也可以自行在互联网上搜索）。
+1. 登录SonarQube
+在Chrome浏览器中打开SonarQube，并登陆：http://ip:9000
+2. 选择“配置”—》应用市场，并在搜索中输入“findbug”，如下图：
+3. 点击“安装”
+在这里直接点击安装即可，安装完成后，会提示重启服务器，点击重启等待片刻页面重新能加载即安装完成。注意：由于网络的原因，可能会安装报错，只用重新点击安装按钮即可。
+4. 质量配置
+如下图所示，把Java、JSP相关的配置，把Findbugs设置为“默认”，这样就会使用Findbugs来进行检测：
+四、构建检测任务
+1. 登录Jenkins，并构建一个Maven的任务
+由于WebGoat是用Maven来创建并编写的，因此我们也要构建Maven的任务，如下图：
+2. 配置任务
+具体配置项如下内容：
+a. General，项目名称可以不用改动：
+b. 源码管理，前期我们配置过SVN，直接使用即可：
+c. 在Post Step中选择“Execute SonarQube Scanner”，并做如下配置：
+d. Analysisproperties内容如下：
+sonar.projectKey=my:WebGoat # this isthe name displayed in the SonarQube UI sonar.projectName=webgoat sonar.projectVersion=1.3.12 # Path isrelative to the sonar-project.properties file. Replace "\" by"/" on Windows. # SinceSonarQube 4.2, this property is optional if sonar.modules is set. # If notset, SonarQube starts looking for source code from the directory containing # thesonar-project.properties file. sonar.sources=. sonar.java.binaries=. #Encoding of the source code. Default is default system encoding #sonar.sourceEncoding=UTF-8
+e. 点击“保存”后，开始构建：
+注意：第一次构建时间较长，可在console界面中查看过程：
+完成后，会在console界面中显示“success”的提示
+五、在SonarQube中分析检查结果
+打开SonarQube中的结果，将会看到相关的缺陷，如下图所示：
+后续我们将针对WebGoat这个案例进行源码缺陷分析，可加笔者微信（fantastic103）拉入讨论群，持续关注和讨论。需要此案例镜像的同学可发邮件至 tangjf10@aliyun.com索要。
+致谢：
+本平台测试和搭建过程中得到了北京理工大学计算机学院计卫星教授、研究生高志伟以及“滇峰技术”团队的大力帮助和支持，在此表示感谢。
+*本文作者：hjy103，转载请注明来自 FreeBuf.COM

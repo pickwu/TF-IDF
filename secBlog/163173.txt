@@ -1,0 +1,11 @@
+Open Whisper Systems是隐私信息应用程序Signal背后的组织，周三Open Whisper Systems宣布成立Signal Foundation，初始投资额为5000万美元，由WhatsApp联合创始人Brian Acton提供。
+Signal是一款跨平台的加密通讯应用，支持的平台包括Android、iOS、以及Linux, Windows和macOS。Signal经互联网发送一对一及组群消息，消息可包含图像及视频，它还可以用来经互联网作语音通话。Signal采用标准流动电话号码为识别号，并设有端对端加密功能以确保Signal用户间的通信保密。
+Signal服务被数百万人使用，它的安全协议被集成在了WhatsApp，Facebook Messenger和Google Allo等流行应用程序中，被几亿用户使用。
+尽管其产品取得了成功，但Signal团队从未超过七名成员，平均只有2.3名全职开发人员。
+随着Signal Foundation的成立和Acton 5000万美元的资助，Signal将拥有必要的资源来扩大和加速使命，使每个人都可以进行私密通信。
+“通过这初始的5000万美元资金，我们现在可以增大团队的规模。消除发展的不确定性，实现我们的长期目标和价值观，“Open Whisper Systems创始人兼Signal Foundation首席执行官Moxie Marlinspike说。 “也许最重要的是，Brian的加入为我们的团队带来了一位非常有才华的工程师，他远见卓识，拥有数十年成功产品的经验。”
+Signal Foundation是501(c)(3)非营利组织。到目前为止，新闻自由基金会担任Signal的财政赞助人。
+去年离开WhatsApp和Facebook的Acton将担任Signal Foundation的执行主席，并将积极参与运营和产品开发。
+“在为全球一些最大的科技公司工作了20多年之后，我非常高兴有机会在技术和非营利世界的交叉点建立一个组织，”Acton说。
+“在不久的将来，我们将专注于招募人才，加入到我们小而精的团队中来，并且一起改进Signal Messenger。我们的长期愿景是让Signal Foundation提供符合我们核心任务的多种产品，“他补充说。
+* 参考来源：SecurityWeek，作者Sphinx，转载注明来自Freebuf.COM

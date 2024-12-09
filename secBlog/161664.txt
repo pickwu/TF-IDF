@@ -1,0 +1,27 @@
+*本文原创作者：yuegui_2004，本文属FreeBuf原创奖励计划，未经许可禁止转载
+Nmap应该是一款应用最广泛的安全扫描工具，备受渗透人员和黑客的青睐，在对目标服务器进行扫描的时候，能够快速识别潜在的漏洞。NSE（Nmap Scripting Engine）作为Nmap的一部分，具有强大灵活的特性，允许使用者编写自己的脚本来完成各种各样的网络扫描任务。Nmap本身内置有丰富的NSE脚本，可以非常方便的利用起来，当然也可以使用定制化的脚本完成个人的需求。今天就要讲讲如何利用Nmap的Scripts检测CVE漏洞。
+首先，介绍两个已经写好的NSE 脚本，nmap-vulners（https://github.com/vulnersCom/nmap-vulners）和vulscan（https://github.com/scipag/vulscan），这两个脚本都是通过输出某一个特定服务（如SSH、RDP、SMB等）的CVE相关信息来提高检测CVE漏洞的能力。Nmap首先通过扫描确认烧苗到的服务的版本信息，nmap-vulners和vulscan会利用该版本信息找出能够利用该服务漏洞的CVE编码，这样使服务漏洞检测更加的方便快捷。
+举个例子，Nmap本身自带服务版本检测功能，首先不使用上面的两个脚本进行服务探测，在目标主机上发现在该机器的22端口上存在SSH服务，该SSH使用的版本是“OpenSSH 4.3”。
+接着利用nmap-vulners和vulscan对同一台目标机器进行扫描，我们能够看到输出更多信息，这些信息包含了该OpenSSH版本可以利用的漏洞信息。
+红色方框是nmap-vulners的扫描结果，该结果包含了过去几年中可以利用的CVE漏洞编号，同时带有CVE漏洞的严重程度分数，分数越高代表严重级别越高。蓝色方框是vulscan的扫扫描结果，该结果则包含了与OpenSSH v4.3版本相关联的漏洞信息。
+这两个脚本在检测有漏洞的服务方面发挥了重要的作用。要利用这两个脚本首先需要进行安装，需要将这两个脚本安装在nmap的scripts目录下，
+Cd/usr/share/nmap/scripts/
+然后将脚本clone到该目录下：git clone https://github.com/vulnersCom/nmap-vulners.git
+这样nmap-vulners就安装成功了，不需要进行额外的配置。
+接下来是安装vulscan，同样是将该脚本clone到nmap的脚本目录下：git clone https://github.com/scipag/vulscan.git
+由于vulscan是利用预先存放在本地的配置文件来检索CVE漏洞信息，因此需要对vulscan进行简单的配置。这些配置文件放置在vulscan文件夹的根目录下，vulscan支持多个漏洞数据库配置，完整配置文件如下：
+scipvuldb.csv cve.csv osvdb.csv securityfocus.csv securitytracker.csv xforce.csv expliotdb.csv openvas.csv
+为了确保这些配置已经更新至最新的数据，可以通过vulscan/utilities/updater/目录中的脚本updateFiles.sh对配置数据进行更新。
+至此，vulscan的配置更新完成了，就可以开始使用nmap-vulners和vulscan这两个脚本了。
+NSE脚本使用起来非常方便，只需要在使用nmap命令的时候带上参数--script然后带上需要使用的脚本名称即可。命令如下：
+Nmap--script nmap-vulners -sV <target IP>
+上面命令中的参数-sV一定要带上，这个参数是告诉nmap需要探测目标地址的运行服务的版本信息。如果nmap没有获取服务版本信息，nmap-vulners就不会有任何有效结果输出。
+使用vulscan也是同样的命令参数，只是在--script参数后面带上vulscan脚本名称就可以了。命令如下：
+Nmap--script vulscan -sV <target IP>
+默认情况下，vulscan会查询前面提到的所有的数据配置文件，从上图可以看出输出内容较多。也可以通过添加vulscandb参数来指定查询某个特定的数据配置文件，命令如下：
+nmap --script vulscan --script-argsvulscandb=database_name -sV <target IP> nmap --script vulscan --script-argsvulscandb=scipvuldb.csv -sV <target IP>
+vulscan脚本的开发者会时常更新scipvuldb.csv这个数据配置文件，因此查询这个数据配置输出的结果是最新最全的。
+上面两个脚本我们也可以通过一个脚本整合起来使用，命令如下：
+nmap --script nmap-vulners,vulscan --script-argsvulscandb=scipvuldb.csv -sV <target IP>
+以上就是如何利用vulscan和nmap-vulners进行服务版本漏洞扫描，能够帮助我们快速的找到目标主机上的服务存在的可以利用的漏洞，我们在进行企业安全检查的时候，能够快速的帮我们找到存在漏洞的服务，及时进行修复，保证服务的安全性。
+*本文原创作者：yuegui_2004，本文属FreeBuf原创奖励计划，未经许可禁止转载

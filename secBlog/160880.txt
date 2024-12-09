@@ -1,0 +1,49 @@
+一、 概述
+“人面马”组织（T-APT-05），又称APT34、Oilrig、Cobalt Gypsy，是一个来自于伊朗的APT组织。该组织自2014年开始活动，主要攻击目标在中东地区，对政府、金融、能源、电信等各行业都进行过攻击。
+该组织最近一次的活动由FireEye在2017年12月7日进行了披露。但是腾讯御见威胁情报中心发现，该组织在FireEye披露后，不但未停手，反而更加“肆无忌惮”，自那后又进行了多次的攻击活动。这也表明，APT攻击不会因为被曝光而停止，即使被曝光后某些技术手段失效，但是只要被攻击目标存在价值，攻击组织的行动依然持续。
+同时可以发现，该组织的攻击武器库一直在不断地进行升级，攻击手法也越来越高明，从最初的容易检出的样本到发展到今天杀毒软件极难检测的脚本木马及jar版木马。chm文件藏毒、word藏毒、漏洞利用、钓鱼攻击、dns tunneling技术等手段也是无所不用其极。
+“人面马”组织最近几次主要攻击活动回顾：
+时间点 诱饵 技术特点 C2 2018.1.14 假订单文档 Risk.DOCX Word文档中藏js脚本、 Jar木马、Adwind Rat gorevleriyok.com 2018.1.2 _2_ محضر اجتماع بشأن مملكة.البحرين.chm (巴林王国会议记录) Chm藏毒、dns tunneling技术、powershell后门脚本 window5.win 185.181.8.246 2018.1.1 假订单钓鱼邮件，附件名为Liste_314.DOCX等 word文档中藏jar、Adwind Rat gorevleriyok.com 2017.12.21 假订单钓鱼邮件，附件名为Purchase Order.doc等 利用word宏下载c#版tesla木马,木马下载页目前仍有效 kemmetal@zoho.com rocketsky@zoho.com emperor_textile@zoho.com stevehoppe@zoho.com 2017.12.7 钓鱼邮件 CVE-2017-11882、CVE-2017-0199 mumbai-m.site 46.105.221.247
+二、 载荷投递
+“人面马”（APT34）组织主要使用鱼叉钓鱼进行攻击，诱饵文件主要为office文档、chm等。内容包括订单信息、政治敏感内容等。技术手段包括office漏洞、宏、内嵌恶意脚本、DDEAuto、恶意OLE对象等。
+以最后一次活动的诱饵文件为例进行分析，该攻击未使用漏洞，而是利用社会工程学的方式，将两个javascript恶意脚本藏在带有“订单”字眼的word文档中。一旦双击文档中的“订单列表”，js脚本就会运行起来，之后名为“Adwind Rat”的 jar远控木马就会被下载并执行。
+主要攻击流程为：
+1、 恶意文档分析
+点开文档后，呈现在眼前的是两个用土尔其语言写的“订单列表”，双击其中任何一个，会出现“打开文件提示”，当点击“打开”后，名为Siparis_Listesi_KLC.jse的 js脚本就会运行起来。文档中两个js文件其实为同一个。
+2、 脚本分析
+该脚本经过简单的混淆，主要作用是从hxxp://ornekkalite.com.tr/images/agrega_belge_detay2.jpg下载一个jar并执行此jar。
+三、 RAT分析
+该RAT使用JAVA进行编写，需要运行在安装有JAVA的环境中。该jar还使用了“Allatori Obfuscator v4.7 DEMO”java混淆器。该混淆器利用了java 7开始的invokedynamic特性对jar包进行了混淆，极大地增加了逆向难度，主流的反编译软件都无法有效的反编译。
+运行jar时的打印的字符串：
+函数调用时绝大部分使用invokedynamic方式：
+在程序运行一段时间后，可以发现某类的成员变量里出现明文字符串，“load/ID”及”load/stub.adwind”：
+此外，从down.jar中dump出另一个jar后，根据配置文件，可以确定该RAT为 “Adwind RAT”。该木马是一款跨平台的多功能木马，自2013年出现后，不断演变，命名也越来越多，比如AlienSpy、Frutas、Unrecom、Sockrat、JSocket 、jRat等都是对此木马的描述。木马主要功能有：
+收集按键信息 窃取浏览器存储的密码及网页表单中的数据 截屏上传 利用摄像头拍照或录制视频 利用麦克风录制声音 上传文件 收集系统及用户信息 窃取加密货币钱包中的密钥 窃取vpn凭证
+该jar运行后会根据不同的操作系统执行不同的功能，linux、windows、mac等操作系统都会受影响。该木马的配置项都在config.xml中。从文件修改时间可以看出，该木马自2013年4月就可能已经配置好了。
+jar解压后的目录：
+jar中的所有class：
+config.xml中的内容：
+开机自启动项名称为“Upgrade Corp. 2001-2017”，插件目录名称为” Iaqa“，扩展名为” Moso“，c2为” gorevleriyok.com“，存储在本地的jar名为” Waga“，存储jar时的目录名“Mabo”，端口号为“1505”或“1506”。
+插件目录，被隐藏：
+jar存储目录，被设置成了回收站图标：
+开机启动项：
+根据操作系统情况，检测是否在虚拟机中：
+截屏：
+获取计算机相关信息：
+模拟按键：
+四、 总结
+“人面马”（APT34）组织武器库齐全，基础设施资源丰富，技术强大，当今最新的漏洞及其它最新的攻击技术都会被利用。该组织近几年攻击活动频繁，攻击目标主要在中东地区，善于使用杀毒软件极难检出的脚本或word文档当前锋，接着用杀软极难检出的c#语言或java语言编写的远控木马进行攻击，攻击手法高明。该组织既擅长使用定向攻击，也喜欢利用钓鱼邮件的方式进行广撒网式攻击，非攻击目标内的普通人群也极易中招，因此大家要提前做好防范。
+附录：
+IOCs
+HASH：
+9de7fa8ae2f2814137dec6660b8e68eb （恶意word文档） D7B1230BF3EC5906797103E65BA3CFD7 （down.jar） EA382DE24064ADC342AF297413CCAF9D (dump.jar)
+C2：
+gorevleriyok.com
+IP:
+188.165.206.163
+URL：
+hxxp://ornekkalite.com.tr/images/agrega_belge_detay2.jpg
+参考链接
+https://www.fireeye.com/blog/threat-research/2017/12/targeted-attack-in-middle-east-by-apt34.html
+https://www.kaspersky.com/resource-center/threats/adwind
+*本文作者：腾讯电脑管家，转载请注明来自 FreeBuf.COM

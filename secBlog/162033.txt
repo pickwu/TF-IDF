@@ -1,0 +1,36 @@
+勒索病毒一直是安全行业的一个热点，近期安全人员发现了一款名为rapid的勒索病毒，该勒索病毒使用了 RSA加AES对文件进行加密，它不仅会感染计算机上已有的文件，还会对新创建的文件进行加密。本文对rapid病毒进行了详细分析，剖析其加密机制，解析其加密后的文件。
+1.概述
+当rapid病毒运行时，它会创建多个线程不断扫描文件系统，进行文件加密，它不仅会感染计算机上的已有文件，还会对新创建的文件进行加密。被加密的文件，其文件名被添加“.rapid”扩展名，同时文件大小增加了0x4D0字节。
+rapid病毒将在进行加密的文件夹中创建名为“How Recovery Files.txt”的勒索提示文件，文件中包含一个电子邮件，让受害者联系如何完成付款。用户重启电脑，将自动弹出名为“recovery.txt”的勒索提示文件，其内容和“How Recovery Files.txt”文件内容相同。
+2.详细分析
+使用兰眼（LanyEye）下一代威胁感知系统对rapid程序进行检测。在兰眼中，rapid程序被标记为高危：
+接下来对rapid程序进行逆向分析。
+首先程序调用ShellExecuteA执行如图所示命令：
+主要作用包括清除Windows卷影拷贝，防止受害者使用卷影拷贝恢复文件。禁用系统修复和自动修改功能，勒索程序可能加密驱动文件导致系统频繁崩溃，禁用修复功能，忽略错误降低系统崩溃概率。终止oracle.exe、sqlite.exe、sql.exe进程，一方面，可以释放内存，另一方面，可以解除这些数据库进程对某些文件的占用。
+接着程序添加开机启动项，在注册表HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Run下新建Encrypter和userinfo项，Encrypter项值为“%AppData\Romaing\info.exe”，userinfo的项值为“%AppData\Romaing\recovery.txt”。“info.exe”文件是勒索病毒程序自身的拷贝，“recovery.txt”文件是勒索信息文件，文件内容和上文提到的“How Recovery Files.txt”文件内容相同。
+本次为了保证系统能够正常运行，程序不会选取文件夹名称为“Windows”、“intel”、“nvidia”、“ProgramData”和“temp”下的文件：
+此勒索软件并没有通过后缀名过滤文件而是判断选取的文件是不是“How Recovery Files.txt”、“info.exe”、“recovery.txt”，如果是其中三个文件则跳过，剩下的全加密。
+2.1.加密过程
+程序首先创建了一个PROV_RSA_FULL类型的CSP容器，然后将通过Base64的硬编码在程序中的RSA的公钥（命名为RSA1）导入。
+接着程序会查看是否存在注册表项“local_public_key”。如果没有则会创建注册表项“local_public_key”
+程序创建了一个PROV_RSA_FULL类型的CSP容器，并且调用CryptGenKey()生成了随机RSA密钥对(命名为RSA2)。
+之后调用CryptExportKey()导出刚刚生成的RSA2私钥数据，并调用RSA1公钥对RSA2私钥加密。加密完成后，将RSA私钥数据写入注册表项HKEY_CURRENT_USER\Software\EncryptKeys\local_enc_private_key，将数据长度写入注册表项HKEY_CURRENT_USER\Software\EncryptKeys\local_enc_private_key_len
+再次调用CryptExportKey()导出刚刚生成的随机RSA2公钥数据，这次不需要加密，直接写入注册表HKEY_CURRENT_USER\Software\EncryptKeys\local_public_key和HKEY_CURRENT_USER\Software\EncryptKeys\local_public_key_len。
+之后开始对文件进行加密，获取选取文件的大小，如果文件大小小于0x4D0字节，则直接进入加密流程；否则读取文件尾部0x20字节的数据，并判断这部分数据是不是加密标志“F5 D5 CD CD CD 7D CD CD 95 91 C1 C1 CD AD CD CD 41 CD 41 CD C1 99 FD 1D 59 95 81 FD 99 79 25 A5”，如果不是则进入加密流程，否则选取下一个文件。因为加密过的文件是大于0x4D0的,并且在其文件尾部添加了0x20个字节的加密标志
+程序进入加密流程后，会先调用CryptGenKey()生成随机AES密钥。
+并调用CryptExportKey()导出AES密钥数据，BLOBTYPE=PLAINTEXTKEYBLOB：
+如图所示返回数据长度0x2C，0x3A42A8-0x3A42AF是BLOBHEADER ，0x3A42B0-0x3A42B3是keysize，0x3A42B4-0x3A42D3是AES的密钥，0x3A42D4-0x3A4327则是使用0xCD填充的数据：
+使用RSA2公钥加密AES密钥，加密的是上文中提到的“BLOB格式数据+AES密钥+填充数据”这整个0x80字节的数据：
+读取文件数据，使用AES密钥对读取的文件数据进行加密 ：
+AES加密是按照128bit进行分组，当原文件字节数不是128bit的整数倍时，加密后的密文数据将会大于明文数据，所以程序在加密前在明文尾部填充了0x10个字节的0x00(一个AES分组的字节数)。
+向文件覆写加密后的数据，首先只写入原文件大小的密文数据，变多的0x10字节的数据接下来再写；
+继续向文件中写数据，写入0x4D0字节的数据。这0x4D0字节的数据包括五部分：第一部分0x10字节，这部分就是变多的数据；第二部分0x20字节，包含源文件文件大小的字符串和0xCD的填充数据；第三部分0x80字节，是被加密的AES密钥数据；第四部分0x400字节，是被加密的RSA2私钥数据；第五部分0x20字节，是文件加密标志数据。
+在文件名后添加“.rapid”扩展名：
+显示勒索信息
+至此，我们已经分析完了rapid勒索软件的文件加密流程，接下来我们来分析被加密后的文件。
+3.加密文件解析
+假设一个大小为0x9000字节的文件被rapid程序加密，加密后的文件结构如下：
+4.小结
+rapid勒索病毒使用数字签名（RSA_AES-256）对文件进行加密，文件解密需要获取数字签名的私钥。但是，数组签名的私钥使用RSA加密，在没有RSA私钥的情况下，很难获取数字签名的私钥，文件恢复的难度极大。
+2017年是勒索病毒高发的一年，可以预见2018年这种状态仍将持续，我们每一个人都应该提高警惕，切勿打开来自可疑邮箱的附件，避免使用第三方软件资源，安装防病毒软件，降低安全隐患。
+*本文作者：兰云科技银河实验室，转载请注明来自FreeBuf.COM

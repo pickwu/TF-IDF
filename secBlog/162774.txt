@@ -1,0 +1,18 @@
+Altdns是一款运用置换扫描技术的子域发现工具，它可以帮助我们查找与某些排列或替换匹配的子域。AltDNS接受可能存在于域下的子域中的单词(例如测试，开发，分期)，以及获取你知道的子域列表。
+使用者只需提供两个输入列表，altdns就可以为我们生成输出大量可能存在的潜在子域并保存。这些保存好的子域列表，用作DNS爆破字典是个不错的选择。
+或者，你也可以使用-r命令，将生成的这些子域（多线程）直接解析后输出保存到文件当中。
+Altdns最好是配合大型的数据集工作，初始数据集最好有200或以上个子域，这样能帮助我们发现生成更多有效的子域。
+安装
+pip install -r requirements.txt
+使用
+# ./altdns.py -i subdomains.txt -o data_output -w words.txt -r -s results_output.txt
+subdomains.txt文件包含了目标的已知子域
+data_output文件将包含大量的更改和置换的子域列表
+words.txt是你想要置换子域的单词列表（即admin，staging，dev，qa）- 单词以行分隔
+-r命令解析每个生成的已排列的子域
+-s命令用于指定altdns在哪保存已解析的排列子域结果。results_output.txt将包含被发现有效的且具有DNS记录的排列后子域的最终列表。
+-t命令用于指定解析器同时使用的线程数
+-d 1.2.3.4将覆盖系统默认的DNS解析器，并使用指定的IP地址作为解析服务器。将其设置为目标域的授权DNS服务器，可能会提高解析的性能
+截图
+如果你有更好的想法或建议可以通过tweet @infosec_au或@nnwakelam告诉我们。
+*参考来源：github，FB小编 secist 编译，转载请注明来自FreeBuf.COM

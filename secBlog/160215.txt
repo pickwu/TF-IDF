@@ -1,0 +1,24 @@
+我们都知道Word文档常会被一些黑客所利用，进行各式各样的入侵活动。而在Web应用渗透和红队比赛中，Word文档也可被用于抓取NetNTLM哈希或用来证明网络出口过滤不严等问题。在不久前，netbiosX曾在他的博客发布过一篇关于通过frameset抓取NetNTLM哈希的文章。本文的核心思路与该文是相同的，只是用了不同的一种方式：即通过一个链接插入图片。
+本文中将会用到的工具：
+图像链接
+我们首先打开菜单栏上的“插入”选项卡并单击“图片”图标。此时将会弹出资源管理器窗口。在文件名字段中输入我们的恶意URL，并点击“插入”下拉菜单选择“链接到文件”。这样我们就成功插入了一个burp collaborator的链接。
+如果你的恶意文档是用于红队或社会工程项目的，那么你还可以通过Layout选项来调整图像大小，以提高其隐蔽性。
+请确保已将更改保存到文档中。现在无论何时打开此文档，Microsoft Word都会尝试解析文档中的图像链接。这些请求都将在Burp Collaborator客户端中被记录。
+利用UNC路径注入抓取NetNTLM哈希
+同样，这里我们用到的方法和netbiosX是一样的，使用7zip提取Word文档中包含的文件。我们要修改的文件是\your_word_doc.docx\word\_rels\下的document.xml.rels。该文件包含了一系列相互关联的目标，我们要做的就是将相关目标值设置为侦听主机的UNC路径。
+保存该文件并使用7zip将其复制到word文档中。
+一旦用户打开Word文档，Inveigh或Responder将会捕获传入的身份验证请求。
+PS C:\> Invoke-Inveigh -NBNS N -LLMNR N -ConsoleOutput Y -IP 192.168.0.2 Inveigh 1.3.1 started at 2017-12-19T17:22:26 Elevated Privilege Mode = Enabled WARNING: Windows Firewall = Enabled Primary IP Address = 192.168.0.2 LLMNR Spoofer = Disabled mDNS Spoofer = Disabled NBNS Spoofer = Disabled SMB Capture = Enabled WARNING: HTTP Capture Disabled Due To In Use Port 80 HTTPS Capture = Disabled Machine Account Capture = Disabled Real Time Console Output = Enabled Real Time File Output = Disabled WARNING: Run Stop-Inveigh to stop Inveigh Press any key to stop real time console output 2017-12-19T17:23:19 SMB NTLMv2 challenge/response captured from 192.168.0.3(DESKTOP-2QRDJR2): Administrator::DESKTOP-2QRDJR2:57[TRUNCATED]cb:091[TRUNCATED]5BC:010[TRUNCATED]02E0032002E00310038003200000000000000000000000000
+这种方法的一个主要有点是，其隐蔽性非常的高。一旦文档被打开就会发出请求，且不会向用户显示和提醒可能的恶意URL或UNC路径。
+使用PowerShell枚举关联目标
+上面用到的方法很简单，但却非常的有效，这是因为我们利用了Microsoft Office中的可信功能。接下来我将介绍两种简单的枚举关联目标的方法，这里将不会用到7zip。当然也有很多优秀的取证工具可以完成这些任务，如Yara。
+Word.Application COM对象可被用于访问Word文档的内容。这可以通过几个简单的命令来实现。WordOpenXML属性包含文档中的关联。
+$file = "C:\path\to\doc.docx" $word = New-Object -ComObject Word.Application $doc = $word.documents.open($file) $xml = New-Object System.XML.XMLDocument $xml = $doc.WordOpenXML $targets = $xml.package.part.xmlData.Relationships.Relationship $targets | Format-Table $word.Quit()
+这将成功枚举文档中的所有关联的目标。这里的问题是，当使用Word.Application COM对象时，将启动Word进程并解析URL/UNC路径。
+为了避免这种情况，我们可以使用DocumentFormat.OpenXML库并枚举文档中所有的外部关联。在测试中使用该方法，并没有捕获collaborator请求或身份验证请求。
+[System.Reflection.Assembly]::LoadFrom("C:\DocumentFormat.OpenXml.dll") $file = "C:\path\to\doc.docx" $doc = [DocumentFormat.OpenXml.Packaging.WordprocessingDocument]::Open($file,$true) $targets = $doc.MainDocumentPart.ExternalRelationships $targets $doc.Close()
+更进一步，DeleteExternalRelationship方法将通过提供关联id来移除与外部URL的关系。
+$doc.MainDocumentPart.DeleteExternalRelationship("rId4")
+参考
+感谢Josh Johnson 和 Karl Fosaaen (@kfosaaen) 的帮助与支持！
+*参考来源：netspi，FB小编 secist 编译，转载请注明来自FreeBuf.COM

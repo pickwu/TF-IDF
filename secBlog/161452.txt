@@ -1,0 +1,82 @@
+树莓派怎么超频？不管是树莓派3还是树莓派2，本文将告诉你怎么让树莓派设备最大化发挥自己的能量。
+树莓派超频，基本上说，就是调整几个设备参数，然后让树莓派硬件“加满油”工作，而这个过程则需要一定的硬件知识以及特殊技能。不过有一点你需要注意，超频对硬件来说是存在一定风险的，但是本文也会告诉你如何去避免这些风险。
+超频风险和警告提示
+目前树莓派3官方还不支持超频，所以你的树莓派设备可能会有损坏的风险，这一点我们可不负责，所以你需要考虑清楚，“盈亏自负”。
+超频可能会让硬件温度超过90摄氏度，情况好一点的话，就是系统或软件崩溃，情况不好的话，可能会损坏CPU或内存芯片。所以树莓派上的重要芯片都需要安装散热器，强烈建议大家安装高功率散热风扇。
+再次提示：如果没有安装有效的散热设备，请千万不要按照本文所介绍的方法超频。
+硬件要求
+如果你想超频树莓派，你至少需要下列三种关键硬件：
+1. 树莓派：本文将使用Raspberry Pi 3 Model B V1.2，运行Raspbian GNU/Linux8（jessie）.
+2. 供电电源：强烈建议大家使用稳定的电源，超频后的树莓派3大概需要至少1.5A，所以电源至少要能够提供2A电流。
+3. 散热设备：为了防止树莓派硬件（主要是芯片）被烧坏，我们必须安装散热风扇；
+重要提示-开始之前请使用下列命令更新系统：
+$sudo apt-get update && sudo apt-get dist-upgrade
+安装“sysbench“工具之后，你就可以随时查看系统性能了。安装命令如下：
+$sudo apt-get install sysbench
+下图中包含了超频所需的全部组件：
+硬件清单：
+1. RaspberryPi 3； 2. 5V/2.5A的供电电源； 3. 散热风扇； 4. 三个散热片； 5. 底座；
+安装完成后的情况如下：
+超频前的检查工作
+在开始超频之前，我们一定要检查设备状态。
+监控CPU频率
+为了了解CPU的当前运行频率，我们需要读取出从/sys/devices/system/cpu/cpu0/cpufreq/目录中读取出cpuinfo_min_freq、 cpuinfo_max_freq和cpuinfo_cur_freq这三个文件：
+cpuinfo_min_freq– 空闲模式下的最小频率
+cpuinfo_max_freq– 最大工作频率
+cpuinfo_cur_freq– 树莓派当前的运行频率
+监控CPU温度
+我们可以运行vcgencmd measure_temp命令以及while循环来监控CPU每秒钟的温度变化：
+$while true ; do vcgencmd measure_temp ; sleep 1 ; done
+循环会一直运行下去，直到我们按下 CTRL+C。
+设置默认速度
+树莓派的CPU配置在空闲模式下的默认速度为：
+arm_freq=600MHz core_freq=250MHz
+如果进程在运行的话，频率就会变成：
+arm_freq=1200MHz
+core_freq=400MHz(树莓派3默认配置下的最大值)
+为了防止空闲模式被破坏，我们还需要修改/boot/config.txt：
+force_turbo=1(警告！修改该参数将会失去保修) boot_delay=1
+重启设备，再次检查当前的运行频率，现在应该是1200000 KHz了。
+性能测试（未超频）
+首次进行性能测试的命令如下：
+$sysbench --test=memory --cpu-max-prime=2000 --num-threads=4 run
+输出结果如下所示：
+待会儿超频之后我们再对比一下性能情况。
+树莓派3超频攻略
+超频选项
+需要设置的超频参数都在/boot/config.txt文件中，选项如下：
+1. CPU超频：修改“arm_freq”参数-ARM频率，单位为MHz。 2. GPU超频：修改“core_freq”参数-GPU处理器核心频率，单位为MHz。 3. 内存超频：修改“sdram_freq”参数-SDRAM频率，单位为MHz。 4. 内存扩展：使用ZRAM。 5. 额外超频参数“Over_voltage”：调整ARM/GPU核心电压，只有指定了“force_turbo” 或“current_limit_override”参数之后，才可以将电压调整为6V以上。 6. 额外超频参数“Force_turbo”：这个参数可以禁用动态cpufreq驱动器。
+修改参数之前，别忘了备份/boot/config.txt。
+不同型号的树莓派在制作过程中可能会有一定的参数偏差，所以我们需要进行多次测试才能确定自己设备的最佳值。
+遇到问题怎么办？
+如果发现超频参数修改之后设备无法启动，你可以重启时按住“shift“键，这样就可以暂时禁用所有的超频参数了，并允许你在启动之后重新修改设置。
+超频算法
+这份算法可以调整CPU、GPU和内存的频率，以实现更好的性能。
+树莓派3的默认值如下：
+arm_freq=1200 gpu_freq=400 core_freq=400 sdram_freq=450/pre> over_voltage_sdram=0
+接下来，将下列参数写入到/boot/config.txt文件，然后重启设备：
+arm_freq=1300 gpu_freq=500 sdram_freq=500/pre> over_voltage_sdram=0
+如果设备运行正常的话，我们就可以尝试下一个配置：逐渐增加arm_freq的值，到1500为止。保存，然后重启。
+如果设备无法运行或运行不稳定的话，你可以逐渐调高over_voltage_sdram的值，直到设备能够稳定运行为止。如果调整over_voltage_sdram参数救不了你的话，你可以尝试调低arm_freq的值，每次修改之后别忘了重启设备。
+使用ZRAM超频
+这种方法涉及到设备内部内存的扩展，这里需要使用到ZRAM以及内部内存压缩。ZRAM使用了LZ4以及LZO压缩算法，LZO是默认的，它可以创建一个块设备，并当作通用RAM磁盘来使用。
+如何加载ZRAM？由于ZRAM已经整合进Linux内核了，我们只需要使用命令“sudo modprobe zram“来加载该模块即可。我们可以使用命令”sudolsmod | grep zram“来查看ZRAM模块的运行情况：
+如果我们想用ZRAM来优化树莓派的话，我们可以从这个【GitHub】库中获取zram.sh脚本。该脚本可以给每一个CPU核心创建一个额外的压缩RAM交换磁盘并激活，除此之外不需要任何其他的配置操作了。
+你可以使用下列命令下载脚本：
+sudo wget -O /usr/bin/zram.sh https://raw.githubusercontent.com/novaspirit/rpi_zram/master/\zram.sh
+然后制作可执行文件：
+在激活ZRAM之前先查看内存信息，“free -h“和”swap -s“命令表明我们树莓派已激活的交换空间仅有100MB。
+接下来，使用下列命令运行ZRAM：
+sudo zram.sh
+该脚本将为每一个CPU核心创建大小为232MB的交换空间，总共大小约为1GB。再次运行“free -h“和”swap-s“命令后，我们看到总的交换空间（4个分区）已经增加到了1GBRAM：
+为了让树莓派在启动之后自动运行ZRAM，我们还需要修改/etc/rc.local文件（添加红圈中的代码：/usr/bin/zram.sh &）：
+重启设备以确认修改成功。
+性能测试（已超频）
+设置完成之后，运行下列命令进行性能测试：
+sysbench--test=memory --cpu-max-prime=2000 --num-threads=4 run
+结果如下：
+大家可以看到，超频之后所有的性能参数值都有所提升，大家可以跟之前的测试结果对比一下。
+如何恢复原状？
+如果你不想超频的话，你只需要把之前备份的/boot/config.txt文件重新复制到/boot目录中，并重写config.txt文件即可。当然了，你还需要把“/usr/bin/zram.sh&”从 /etc/rc.local文件中删除。重启之后，一切就恢复原样了。
+参考资料
+* 参考来源：eltechs，FB小编Alpha_h4ck编译，转载请注明来自FreeBuf.COM

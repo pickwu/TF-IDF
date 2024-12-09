@@ -1,0 +1,62 @@
+上周我测试一个新的Android app时，遇到了一些关于Burp Suite无法正常工作的问题。为了解决这个问题我花了整整一下午的时间，并决定将我的解决方案分享出来。
+背景
+此前我已经在Genymotion VM或我的旧版Nexus Tablet，做过不少Android相关的测试。一直以来我都遵循Portswigger的说明文档，本地运行Burp Suite，并安装User Cert，配置一个WiFi代理。
+然而，当我对这个特定app（需要API level 24 (Android 7.0 - "Nougat")）测试时，突然发现Burp无法正常工作。我回顾了我的配置步骤，并没有发现遗漏的地方，但在Burp中只看到“connection reset（连接重置）”错误：
+在经过我几个小时的折腾后，我终于找出了问题所在。在进一步探讨之前，我向大家推荐两篇优秀的文章，这也是帮我解决该问题的关键信息：
+从Nougat开始，Android更改了对用户安装证书的默认信任行为。这意味着，从sdcard安装Burp CA将无法拦截应用流量。除非另有说明，否则应用程序将只会信任系统级别的CA。
+这里有两种方法可以帮我们绕过它：
+将Burp CA作为系统级CA安装在设备上 。这是我认为最简单的解决方法，但需要一个已经root的设备。还免去了设置锁屏PIN码的的麻烦：）
+。这是我认为最简单的解决方法，但需要一个已经root的设备。还免去了设置锁屏PIN码的的麻烦：） 修改manifest清单文件并重新打包应用程序。 操作步骤相对繁琐，但不需要root权限。
+注意：我在Windows 10上使用Burp Suite Pro完成了这些操作，使用的是Android 7.1（API25）Genymotion VM，但这些步骤应适用于任何设置。
+将Burp CA作为系统级CA安装在设备上
+对我来说，我认为最简单的解决方案就是将Burp CA安装到系统可信证书中。你可以通过Settings -> Security -> Trusted Credentials来查看所有与Android设备捆绑在一起的系统CA。在浏览器捆绑中你也能看到类似的CA。
+Android的受信任CA以特殊格式存储在/system/etc/security/cacerts 。如果我们有root权限，可以对这个位置进行写入放入Burp CA（经过一些修改后）。
+导出并转换Burp CA
+第一步是以正确的格式获取Burp CA。使用Burp Suite，以DER格式导出CA证书。我将它保存为cacert.der
+Android喜欢PEM格式证书，并且文件名为subject_hash_old值并以.0结尾。
+注意：如果你使用的OpenSSL <1.0，那么将是subject_hash，而不是“old”
+使用openssl将DER转换成PEM，然后输出subject_hash_old并重命名该文件：
+openssl x509 -inform DER -in cacert.der -out cacert.pem openssl x509 -inform PEM -subject_hash_old -in cacert.pem |head -1 mv cacert.pem <hash>.0
+例如，我的证书：
+将证书复制到设备
+我们可以使用adb来复制证书，但由于必须将其复制到/system文件系统，所以我们需要将它重新挂载为可写。作为root用户，adb remount非常简单。
+adb root adb remount adb push <cert>.0 /sdcard/
+进入adb shell将文件移动到/system/etc/security/cacerts，并将文件权限修改为644：
+mv /sdcard/<cert>.0 /system/etc/security/cacerts/ chmod 644 /system/etc/security/cacerts/<cert>.0
+最后，我们通过adb reboot命令重启设备。
+重启设备后，我们浏览到Settings -> Security -> Trusted Credentials应该能看到新的“Portswigger CA”已成为系统信任的CA。
+现在我们就可以设置代理并通过Burp来拦截所有的应用流量了：）
+修改并重新打包应用程序
+如果你没有root权限或不想修改系统可信证书，则你也可以将Burp CA作为用户证书安装，然后通过修改特定的APK来实现MitM。
+从Nougat开始，应用默认会忽略用户安装的证书。通过查看启动应用时的logcat输出信息可以验证这一点：
+没有网络安全配置，该应用程序将只信任系统CA，并直接忽视用户安装的Burp证书。
+想要解决这个问题，我们需要以下操作：
+拆解APK
+添加新的XML源来定义网络安全配置文件
+修改AndroidManifest.xml
+重新打包并自签名APK
+拆解并修改APK
+首先我们使用apktool来反汇编APK
+apktool d TestApp.apk
+接下来，通过在res/xml目录中创建文件network_security_config.xml来添加新的网络安全配置：
+vim TestApp\res\xml
+etwork_security_config.xml
+配置需要明确指出，用户证书是可被接受和信任的。内容如下：
+<network-security-config> <base-config> <trust-anchors> <!-- Trust preinstalled CAs --> <certificates src="system" /> <!-- Additionally trust user added CAs --> <certificates src="user" /> </trust-anchors> </base-config> </network-security-config>
+最后，我们必须在AndroidManifest.xml中定义网络安全配置。在<application>标签中，添加指向新XML文件的android:networkSecurityConfig属性：
+<application android:allowBackup="true" android:networkSecurityConfig="@xml/network_security_config" ...etc...>
+重新打包并自签名APK
+APK现在必须重建并签名才能安装。使用apktool b命令，将在dist/目录中创建一个新的APK：
+apktool b TestApp
+为了自签名应用程序，我们需要使用keytool来创建一个新的密钥库和密钥，然后使用jarsigner签名新的APK：
+keytool -genkey -v -keystore test.keystore -storepass password -alias android -keypass password -keyalg RSA -keysize 2048 -validity 10000 jarsigner.exe -verbose -keystore test.keystore -storepass password -keypass password TestApp\dist\TestApp.apk android
+最后，使用adb来安装新的APK：
+adb install TestApp\dist\TestApp.apk
+现在，当我们启动应用程序时，logcat输出将标示正在使用的新的网络安全配置：
+cheatsheet
+安装系统CA
+# Convert DER to PEM openssl x509 -inform DER -in cacert.der -out cacert.pem # Get subject_hash_old (or subject_hash if OpenSSL < 1.0) openssl x509 -inform PEM -subject_hash_old -in cacert.pem |head -1 # Rename cacert.pem to <hash>.0 mv cacert.pem 9a5ba575.0 # Remount and copy cert to device adb root adb remount adb push 9a5ba575.0 /sdcard/ adb shell vbox86p:/ # mv /sdcard/9a5ba575.0 /system/etc/security/cacerts/ vbox86p:/ # chmod 644 /system/etc/security/cacerts/9a5ba575.0 vbox86p:/ # reboot
+修改APK
+apktool d TestApp.apk vim TestApp\res\xml
+etwork_security_config.xml #Content: <network-security-config> <base-config> <trust-anchors> <!-- Trust preinstalled CAs --> <certificates src="system" /> <!-- Additionally trust user added CAs --> <certificates src="user" /> </trust-anchors> </base-config> </network-security-config> vim TestApp\AndroidManifest.xml # Add to <application > tag: android:networkSecurityConfig="@xml/network_security_config" # Rebuild and self-sign keytool -genkey -v -keystore test.keystore -storepass password -alias android -keypass password -keyalg RSA -keysize 2048 -validity 10000 apktool b TestApp jarsigner -keystore test.keystore -storepass password -keypass password TestApp\dist\TestApp.apk android # Install new APK adb install TestApp\dist\TestApp.apk # Install Burp CA to User Certs mv cacert.der cacert.cer adb push burpca.cer /mnt/sdcard Settings -> Security -> Install from SD Card
+*参考来源：ropnop，FB小编 secist 编译，转载请注明来自FreeBuf.COM

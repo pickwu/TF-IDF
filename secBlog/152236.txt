@@ -1,0 +1,100 @@
+在公司内网环境下， 有很多的不同应用都需要认证，比如无线、ssh 、v~p~n、业务后台，这些应用都需要进行认证，对于公司的信息安全来说，认证是第一道防护措施，所以认证的健壮性不言而喻的；同时，很多的公司的账号体系都是基于ldap搭建的。
+本文就利用freeradius和django的双因子认证简单的讲一下如何使用这两者搭建公司统一的认证平台（django主要是解决otp口令的问题，其它的框架也可以）。
+基于django的otp双因子认证，FreeBuf以前也有介绍过，【传送门】点我。
+组件：
+基本组件有三部分组成， 主要有radius、django用户管理及ldap服务器，其中 radius主要作为认证接口，负责对接不同的应用认证请求； django服务作为认证代理，主要负责用户的权限、otp口令的认证及ldap认证的转发，同时，实现用户认证的审计功能； ldap功能较为单一，只负责认证用户名和密码。
+主要逻辑 ：
+radius 作为统一认证接口，为不同的应用认证提供兼容接口，方便各类不同的应用接入，主要作为认证转换器的角色；django 认证代理，主要提供认证api服务，应用可以直接接入到该认证代理处认证（需要兼容该api）;radius调用 django认证代理的认证api，达到认证的目的。
+用法：
+用户接入双因子认证平台，已经存在的用户可以忽略， 主要是生成otp认证的密码 对应认证应用需要哪些用户可以接入，需要认证应用自己控制（以后会支持认证平台的应用用户控制），双因子认证平台只管认证，不管用户是否对于该应用具有权限 应用修改接入账号配置， 支持raius和http认证radius接口：auth.xxxx.xx.com：18121 支持时需要申请http 接口： http://auth.xxxxx.xx.com/api/auth/ content-type:applicatoin/x-www-form-urlencoded post-boby:username=xxxx&password=xxxx username是用户的邮箱前缀， password 为ldap的密码和移动端otp口令 对应radius的应用需要修改接入配置，以支持该应用。
+主要配置：
+我的系统是centos7, freeradius直接yum 安装即可。在 /etc/raddb/mods-available 目录下新建 motp文件
+qiexec MOTP {
+wait = yes
+program = "/usr/local/django_sites/django_ldap/radius.py %{User-Name} %{User-Password}"
+input_pairs = request
+output_pairs = reply
+​
+}
+​
+然后，在用软连接链接到 /etc/raddb/mods-enabled 。接下来配置 raddb的site。/etc/raddb/sites-available/motp-tunnel配置文件如下，用软连接链接到 /etc/raddb/sites-enabled。即可
+server motp-tunnel {
+listen {
+ipaddr = 127.0.0.1 # your ip
+port = 18121
+type = auth
+}
+authorize {
+chap
+mschap
+suffix
+update control {
+&Proxy-To-Realm := LOCAL
+}
+eap {
+ok = return
+}
+files
+expiration
+logintime
+pap
+}
+authenticate {
+Auth-Type External {
+MOTP
+}
+}
+​
+session {
+radutmp
+}
+​
+post-auth {
+Post-Auth-Type REJECT {
+attr_filter.access_reject
+}
+}
+pre-proxy {
+}
+post-proxy {
+eap
+}
+​
+} # motp-tunnel server block
+​
+/usr/local/django_sites/django_ldap/radius.py 脚本是radisu和django的“桥” 配置。
+#!/usr/bin/env python
+# coding=utf-8
+​
+import sys
+import httplib
+import urllib
+​
+auth_host = '10.20.9.130:80'
+​
+def main(username, password):
+reqheaders = {'Content-Type':'application/x-www-form-urlencoded',}
+reqdata = urllib.urlencode({'username':username, 'password':password})
+conn=httplib.HTTPConnection(auth_host)
+conn.request('POST', '/api/auth/', reqdata, reqheaders)
+res = conn.getresponse()
+conn.close()
+​
+if (res.status==200):
+sys.exit(0)
+else:
+sys.exit(-1)
+​
+if __name__ == '__main__':
+if len(sys.argv) != 3:
+sys.exit(-1)
+​
+username = sys.argv[1]
+password = sys.argv[2]
+​
+main(username, password)
+这样就会建立起freeradius和django的认证服务之间的关系。下面是django的settings文件，主要实现了与ldap的对接，这样既可以使用radisu认证，另外也能提供认证的接口，给其它的应用提供认证服务，同时还可以基于这个框架实现认证的审计，集成统一的认证服务。
+python 实现接口如下
+小结：
+实际使用中，如果用户量大的话，可能会出现性能问题，不过可以借鉴来实现更好性能的认证平台。本文只是介绍基本的思路，欢迎大家一起讨论。
+*本文原创作者：chengfangang，本文属FreeBuf原创奖励计划，未经许可禁止转载

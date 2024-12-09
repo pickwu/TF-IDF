@@ -1,0 +1,50 @@
+*本文中涉及到的相关漏洞已报送厂商并得到修复，本文仅限技术研究与讨论，严禁用于非法用途，否则产生的一切后果自行承担。
+*本文原创作者：kczwa1，本文属FreeBuf原创奖励计划，未经许可禁止转载
+感谢基友zBetweener一直与我讨论此次分析中遇到的各种问题，没有他的帮助我无法完成此文。
+1月17日，CNVD公开了D-LinkDIR 615/645/815 service.cgi远程命令执行漏洞（CNVD-2018-01084），freebuf上有前辈写了一篇漏洞复现和poc的文章（http://www.freebuf.com/new/160716.html）。
+在上一篇文章（http://www.freebuf.com/vuls/160040.html）里实际操作了一下用qemu system模式模拟路由器环境，那这一次再通过分析CNVD-2018-01084实际操作一下用qemu user 模式配合IDA对固件做调试。
+漏洞信息 ：
+D-Link DIR 615/645/815路由器1.03及之前的固件版本存在远程命令执行漏洞。该漏洞是由于service.cgi中拼接了HTTP POST请求中的数据，造成后台命令拼接，导致可执行任意命令。
+一 运行环境分析
+先下载到相关固件，dir815_FW_102.bin，此文件对应D-Link815路由器102版本固件 ，binwalk解开后找到cgibin文件.
+IDA打开Cgibin看一下main函数，如果要运行到处理service.cgi函数的分支，需要将一个参数设为相应的字符串
+尝试了之前网上一些大神的脚本方法，用标准输入的参数方式或者是直接在qemu命令后面加参数的方式，如下的代码，都没能成功
+echo "$INPUT" |chroot . ./qemu ./htdocs/cgibin chroot . ./qemu ./htdocs/cgibin service.cgi
+后来发现需要用qemu -0 的方式来指定参数第一个参数
+chroot. ./qemu -0 “service.cgi” ./htdocs/cgibin.
+运行cgibin,还需要配置一些必要的参数,搜索一下servicecgi_main，发现里面及其子函数cgibin_parse_request里面会取如下的环境变量,如果不配置相应的环境变量那么cgibin运行后会直接走到http 解析失败的分支。
+因此在执行cgibin时还需要加入如下的环境变量
+-E REQUEST_METHOD="POST" -E CONTENT_LENGTH=10 -EREQUEST_URI="service.cgi -ECONTENT_TYPE="application/x-www-form-urlencoded" -EHTTP_COOKIE="uid=aaaaa"
+如果需要调试还要加入 -g 参数指定端口号，那么整合成如下的shell脚本：
+#!/bin/bash PORT=1234 cp $(which qemu-mipsel-static) ./qemu chroot . ./qemu -0 "service.cgi" -EREQUEST_METHOD="POST" -E REQUEST_URI="service.cgi" -E CONTENT_LENGTH=$LEN -ECONTENT_TYPE="application/x-www-form-urlencoded" -EHTTP_COOKIE="uid=aaaaa" -g $PORT -E REMOTE_ADDR="127.0.0.1” ./htdocs/cgibin
+Ubuntu下面先切换到root用户再运行此脚本，
+此时cgibin就已经在等待调试器连接的状态。
+二 调试器设置
+调试器可以选择如下的两种方法：
+1. 用buildroot里面编译好的gdb来调试,
+步骤如图所示，用gdb启动要调试的文件后设置相应的远程调试地址和端口
+2.用IDA来远程调试，
+首先Ubuntu里安装wine,再用wine运行ida
+用ida打开cgibin
+debugger option里设置
+F9开始调试,选择文件和端口,参数等
+确认附加到远程进程里
+然后发现ida断在库函数里面
+F9运行,就到main函数入口处了
+三 调试过程
+CGI中一般通过getenv或stdlib库函数getenv来获得环境变量获取post过来的数据,
+在cgibin中未找到stdin,scanf这样的函数或者字符串,因此把要注入的命令当做输入参数传递不能成功，仔细检查每一个genenv,把要注入的命令放到request_uri环境变量时候成功
+当取到request_uri后,如下图,会去取”?”后面的内容，也就是我们注入的参数，
+因此在我们的shell脚本里面需要如下修改：
+-E REQUEST_URI="service.cgi\?EVENT=CHECKFW%26ls%26"
+http解析成功后,就是验证cookie的sess_ispoweruser函数,直接修改了返回值v0过掉,
+接下来就是用去取request_uri里面的参数,里面可以存在event,action,service三种类型的命令,
+找到event参数后,v0的值为CHECKFW&ls&:
+继续往下进入lxmldbc_system函数，vsnprintf将v0的内容输出到s0，s0的值为” eventCHECKFW&ls& > /dev/null “ ，已经是我们预期要执行的注入命令，然后赋值给a0作为system命令的第一个参数。
+在shell脚本里加入 -strace参数 ，可以看到此时的系统调用，如图，system函数执行了我们需要的参数，但是却报错
+目前的qemu版本：
+造成以上错误的原因是，qemu2.5 user模式并未实现execve函数，需要下载带补丁版本的qemu2.9版本并调加-evecve参数，
+最终的shell脚本如下：
+#!/bin/bash PORT="1234" chroot . ./qemu -0 "service.cgi" -EREQUEST_METHOD="POST" -E REQUEST_URI="service.cgi\?EVENT=CHECKFW%26ls%26" -ECONTENT_LENGTH=$LEN -ECONTENT_TYPE="application/x-www-form-urlencoded" -E HTTP_COOKIE="uid=aaaaa" -g $PORT -E REMOTE_ADDR="127.0.0.1" -execve -strace./htdocs/cgibin
+再执行后如图，注入的ls命令成功执行
+*本文原创作者：kczwa1，本文属FreeBuf原创奖励计划，未经许可禁止转载

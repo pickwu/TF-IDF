@@ -1,0 +1,24 @@
+介绍
+自从2014年Gartner将RASP列为应用领域的关键趋势后，互联网企业愈来认识到其是在边界模糊后的一种稳健的解决方案。列位读者首先需要认识到RASP和WAF并不是同一纬度的产品，“安全技术可以“內建”于应用自身或者运行环境”的特点可以提供：
+1. 应用的实时热补丁：无需在出现漏洞时修改源代码，修改代理程序添加防护代码即可。 2. 从根本上阻断漏洞：不再考虑规则的被绕过等，直接在执行层面分析敏感函数是否被调用，在应用程序内部基于调用栈调用检测模型阻断0DAY。 3. 实现应用的全生命周期监控，在可用性、不可抵赖性实现审计和日志收集功能。 4. 灵活集成SIEM工具，发挥代理的灵活优势。
+缺点为会造成性能的消耗增加、应用稳定性下降，上层业务不可知，模式以监控记录居多，阻断模式很少。
+产品
+国内有百度开源的OpenRASP产品，实现对JAVA容器（未来会推出php版本）的支持。可以实现攻击检测、CVE漏洞覆盖、服务器安全基线检查、支持SIEM插件。另外一款较早，为javaopenrasp，曾在kcon上发布过，似乎最近并未更新。商业产品为蓝海讯通发布的oneasp，官网已经打不开。国外有：HP: HP Application Defender、WARATEK: ApplicationSecurity for Java、OWASP: AppSensor 、Shandowd: Shadowd 、Prevoty: Prevoty Runtime Application Security
+技术实现
+PHP RASP方案是通过扩展模块实现对规则对应的恶意函数行为、上下文内容的判断和阻断。而JAVA的技术方案相对已经成熟，包括直接修改jvm（Waratek产品）和使用jvm编程接口（Jvm tool interface）。JDK1.5即提供JVM TI技术，在程序main方法运行前，jvm启动时添加-javaagent:参数调用使用lang.Instrument包编写agent程序后，以premain方式从而实现对java类的动态操作。而 jdk1.6agentmain的方式提供对虚拟机启动后的动态instrument和nativecode 的instrument。
+技术实现方面，一般是使用premain方式接入程序，通过实现transform接口的ClassTransformer方法
+测试用例如下：
+可以看到rasp的鲜明技术特点有：
+1. 可以通过inst获取 VM 的各项信息； 2. agent和main 程序使用同一个 classloader，如果程序自定义加载器则需要进行适配； 3. 类的ProtectionDomain相同，并不能增减实现权限提升。 4. 通过操 作类的字节码返回JVM 执行，具体可以使用 asm或者 Javassist技术实现。
+接下来就是实现具体的adapter和filter，实现业务层面操作和功能，不再赘述。已知防护层面较为简单的实现是有：
+SQL注入、CSRF、XSS、SSRF、任意文件读取下载、任意文件删除、可执行文件上传、命令执行(OS 注入、Struts2命令执行，反序列化)。
+代码编制完成后，在mf文件配置premain-class为 agent类名，通过设置-javaagent即可实施代理监控。
+总的来说从工程化、系统化能力方面。目前针对中间件rasp实现还是言过其实，技术并不复杂，规则还是开发的核心，当前阶段并不能做到“ 自适应”的预测、预防、监测、响应，但这正是它后期将要蓬勃发展的着力点。
+参考资料：
+1. 《JAVA SE 6中新增的Instrumentation功能》http://blog.csdn.net/jl19861101/article/details/4624795
+2. 《RASP技术分析》http://blog.nsfocus.net/rasp-tech/
+3. 《OpenRASP技术分析》http://blog.nsfocus.net/openrasp-tech/
+4. 《Java中的RASP实现》http://www.solinx.co/archives/950
+5. 《java.lang.instrument 学习（一）》http://blog.csdn.net/ykdsg/article/details/12080071
+6. 《深入字节码 -- 计算方法执行时间》https://www.cnblogs.com/sunysen
+7. https://github.com/linxin26/javarespdemo

@@ -1,0 +1,13 @@
+近日，Intel发布了最新版本的Linux处理器微代码数据文件，而这个补丁文件能够修复Intel CPU中的Spectre以及Meltdown漏洞。广大用户可以使用微代码文件来修复操作系统中目前已知的Intel CPU安全漏洞，而无需在计算机中执行BIOS更新。
+根据Intel微代码下载页面所提供的介绍，Intel此次发布了40种不同版本（针对Linux）的补丁代码，可适用于多款不同型号的Intel处理器。
+下面给出的就是Intel官方网站列出的处理器支持型号。大家可以参考下列表格以及cpu-world.com网站上的CPU信息来寻找合适自己处理器的补丁版本。注意，下列表格中的CPU版本号为十六进制值（例如(06-3c-03:32)），你可以在cpu-world.com寻找到相匹配的处理器识别码。
+Windows用户同样可以使用微代码来完成更新，但是这些针对Windows的微代码补丁得等到微软首先完成测试之后才会正式发布。
+在Linux中使用新版本的微代码数据文件
+对于Linux用户来说，可以轻松地使用新版本的微代码数据来更新Linux发行版，因为这些微代码文件一般都是以系统更新的形式推送给用户的。为了安装新版本的微代码补丁，最好的方法就是使用Linux发行版自带的Package管理器来完成安装。
+对于Debian和Ubuntu发行版的用户来说，可以使用apt命令来安装Intel的微代码数据包。除了更新补丁之外，Package管理器还会安装例如iucode-toll之类的其他依赖组件。Redhat以及CentOS用户还可以使用yum并搜索microcode_ctl来完成更新。
+如果你无法通过Package管理器来安装更新文件的话，你还可以手动安装。在现代Linux发行版系统中，我们还可以直接将下载下来的intel-ucode文件夹拷贝到/lib/firmware目录中，然后运行下列命令完成更新：
+echo 1 > /sys/devices/system/cpu/microcode/reload
+下面给出的是Ubuntu平台中实现手动更新的方法【传送门】以及截图：
+Intel所发布的原版微代码更新完整教程如下：
+--Microcode update instructions -- Thispackage contains Intel microcode files in two formats: *microcode.dat *intel-ucode directory microcode.datis in a traditional text format. It is still used in some Linuxdistributions. It can be updated to the system through the old microcode updateinterface which is avaialble in the kernel with CONFIG_MICROCODE_OLD_INTERFACE=y. Toupdate the microcode.dat to the system, one need: 1.Ensure the existence of /dev/cpu/microcode 2.Write microcode.dat to the file, e.g. dd if=microcode.dat of=/dev/cpu/microcodebs=1M intel-ucodedirctory contains binary microcode files named in family-model-steppingpattern. The file is supported in most modern Linux distributions.It's generally located in the /lib/firmware directory, andcan be updated throught the microcode reload interface. Toupdate the intel-ucode package to the system, one need: 1.Ensure the existence of /sys/devices/system/cpu/microcode/reload 2.Copy intel-ucode directory to /lib/firmware, overwrite the files in /lib/firmware/intel-ucode/ 3.Write the reload interface to 1 to reload the microcode files, e.g. echo 1 >/sys/devices/system/cpu/microcode/reload
+* 参考来源：bleepingcomputer，FB小编Alpha_h4ck编译，转载请注明来自FreeBuf.COM

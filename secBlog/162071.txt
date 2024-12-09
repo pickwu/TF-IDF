@@ -1,0 +1,25 @@
+*本文原创作者：xiyan，本文属FreeBuf原创奖励计划，未经许可禁止转载
+0x01 前言
+Kali Nethunter是一款用于安全研究的手机固件包，可以使Android设备增加“无线破解”、“HID攻击”、“伪造光驱”等的硬件功能以及metasploit等软件工具，目前官方只支持少量的Android手机：
+但是像我这种学生狗比较喜欢用小米、魅族之类的手机，但是我又想不换手机又用上nethunter，所以就通过查找资料找到了这个方法。
+0x02 所需文件
+Twrp(android的第三方Recovery,主要用于卡刷)版本最新就可以
+– 下载地址：https://twrp.me/（注意选择对应机型）
+offical TWRP app（用来刷入Recovery.img 推荐使用，而且里面可以直接选择文件来安装）
+kali Nethunter文件
+– 下载地址：https://build.nethunter.com/nightly
+BusyBox(这个刷完nethunter之后会用到)
+– 下载地址：http://pan.baidu.com/s/1sjSJ2Ux
+0x03 选择内核包
+arm64 是 64位，armhf32位，选择和你 cpu 结构对应的
+full 是完整版，minimal 是简版，选择你想要的版本
+generic代表通用 kernel-nethunter表示是内核 不是官方指定的选通用就好
+如 nethunter-generic-amd64-kalifs-full-rolling-3.20-20170903-2143.zip 表示这个是amd64位的完整内核包。
+0x04 安装过程
+刷入rec之后重启设备，在开机时按电源键+音量- 就能进入rec界面了（我的rec是其他地方下载的所以会有不一样的，你们看情况来弄哈）
+选择安装zip包 - 选择下载的Nethunter内核包 - 开始
+接下来就是等待刷入内核包完成，这个过程可能会有点久（我等了半小时...）
+完成之后重启系统即可开始食用帅气的Nethunter了
+0x05 结言
+其实在刷入Nethunter之前会觉得Nethunter很高大上，功能很强大，但是其实刷完之后就会发现其实也没什么，就是比普通的安卓系统更方便进行一些渗透的行为，所以在刷入之前请先考虑一下自己是不是真的需要这样的一个安卓系统，如非必要，还是不建议刷入的。
+*本文原创作者：xiyan，本文属FreeBuf原创奖励计划，未经许可禁止转载

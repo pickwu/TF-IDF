@@ -1,0 +1,206 @@
+python3制作简单的ip提取
+这里先介绍一下任务，前一段时间布置下来一项任务，给一个ip文档，将其中山西省的ip筛选出来，要两周内完成任务。由于接下来两周的电工实习，实习完又是各种考试，导致任务一直没时间进行，直到放假了才有多余的时间来做这项任务。下面是我做的笔记简单介绍，不懂的地方欢迎留言！
+准备环境python3，win10系统，当然linux更好，win下需要安装reuqests模块（调用第三方接口进行ip归属地查询需要发起请求）
+C: \Users\ 92039 \Desktop>pip install requests
+Collecting requests
+Downloading requests- 2.18 . 4 -py2.py3-none-any.whl ( 88 kB)
+100 % |████████████████████████████████| 92 kB 533 kB/s
+Collecting chardet< 3.1 . 0 ,>= 3.0 . 2 (from requests)
+Downloading chardet- 3.0 . 4 -py2.py3-none-any.whl ( 133 kB)
+100 % |████████████████████████████████| 143 kB 970 kB/s
+Collecting idna< 2.7 ,>= 2.5 (from requests)
+Downloading idna- 2.6 -py2.py3-none-any.whl ( 56 kB)
+100 % |████████████████████████████████| 61 kB 1.4 MB/s
+Collecting urllib3< 1.23 ,>= 1.21 . 1 (from requests)
+Downloading urllib3- 1.22 -py2.py3-none-any.whl ( 132 kB)
+100 % |████████████████████████████████| 133 kB 848 kB/s
+Collecting certifi>= 2017.4 . 17 (from requests)
+Downloading certifi- 2018.1 . 18 -py2.py3-none-any.whl ( 151 kB)
+100 % |████████████████████████████████| 153 kB 1.2 MB/s
+Installing collected packages: chardet, idna, urllib3, certifi, requests
+Successfully installed certifi- 2018.1 . 18 chardet- 3.0 . 4 idna- 2.6 requests- 2.18 . 4 urllib3- 1.22
+我这里调用阿里的第三方接口进行IP归属地查询,接口地址 http://ip.taobao.com/instructions.php
+接口描述
+1. 请求接口（GET）：
+/service/getIpInfo.php?ip=[ip地址字串]
+2. 响应信息：
+（json格式的）国家 、省（自治区或直辖市）、市（县）、运营商
+3. 返回数据格式：
+{ "code" :0, "data" :{ "ip" : "210.75.225.254" , "country" : "\u4e2d\u56fd" , "area" : "\u534e\u5317" ,
+"region" : "\u5317\u4eac\u5e02" , "city" : "\u5317\u4eac\u5e02" , "county" : "" , "isp" : "\u7535\u4fe1" ,
+"country_id" : "86" , "area_id" : "100000" , "region_id" : "110000" , "city_id" : "110000" ,
+"county_id" : "-1" , "isp_id" : "100017" }}
+其中code的值的含义为，0：成功，1：失败。
+这里大概介绍一下思路，读取文件，定义函数，进行循环，发起请求，接收参数，判断，筛选并写入文件，完成。 运行python文件先写头文件格式，告诉系统运行python3的代码，并且以utf-8编码
+import requests
+def checkip (ip) :
+pass
+import requests
+import requests
+def checkip (ip) :
+URL = 'http://ip.taobao.com/service/getIpInfo.php?ip=' + ip
+r = requests.get( 'URL' ,timeout= 3 )
+print( 'test' )
+ip = '118.81.96.128'
+checkip(ip)
+运行代码结果如下，初步判断代码应该没问题
+C:\Users\92039\Desktop>python 2.py
+test
+import requests
+def checkip (ip) :
+URL = 'http://ip.taobao.com/service/getIpInfo.php?ip=' + ip
+r = requests.get( 'URL' ,timeout= 3 )
+print( 'test' )
+ip = '118.81.96.128'
+checkip(ip)
+import requests
+def checkip (ip) :
+URL = 'http://ip.taobao.com/service/getIpInfo.php?ip=' + ip
+r = requests.get( 'URL' ,timeout= 3 )
+json_data = r.json()
+region = json_data[ u'data' ][ u'region' ]
+print( 'test' )
+ip = '118.81.96.128'
+checkip(ip)
+region = json_data[u'data'][u'region'] 此处代码是按照接口返回的json的格式来写的
+import requests
+def checkip (ip) :
+URL = 'http://ip.taobao.com/service/getIpInfo.php?ip=' + ip
+r = requests.get( 'URL' ,timeout= 3 )
+json_data = r.json()
+region = json_data[ u'data' ][ u'region' ]
+print(region)
+ip = '118.81.96.128'
+checkip(ip)
+C:\Users\92039\Desktop>python 2.py
+山西省
+测试成功
+即便Python程序的语法是正确的，在运行它的时候，也有可能发生错误。运行期检测到的错误被称为异常。大多数的异常都不会被程序处理，而是以错误形式展现 这时候就要进行异常处理 引入try/except def yichang () :
+try :
+x = 1 / 0
+except ZeroDivisionError as err:
+print( '异常：' , err)
+yichang()
+C:\Users\92039\Desktop>python 5.py
+异常： division by zero 如果未做异常处理将直接报错，导致程序无法继续执行部
+import requests
+def checkip (ip) :
+try :
+URL = 'http://ip.taobao.com/service/getIpInfo.php?ip=' + ip
+r = requests.get(URL,timeout= 3 )
+json_data = r.json()
+region = json_data[ u'data' ][ u'region' ]
+print(region)
+except :
+pass
+ip = '118.81.96.128'
+checkip(ip)
+C:\Users\92039\Desktop>python 2.py 山西省 接下来加入if判断
+import requests
+def checkip (ip) :
+try :
+URL = 'http://ip.taobao.com/service/getIpInfo.php?ip=' + ip
+r = requests.get(URL,timeout= 3 )
+json_data = r.json()
+region = json_data[ u'data' ][ u'region' ]
+if region == '山西省' :
+pass
+else :
+pass
+except :
+pass
+ip = '118.81.96.128'
+checkip(ip)
+然后需要加入打开文件部分的代码 当做文件处理时，需要获取一个文件句柄，从文件中读取数据，然后关闭文件句柄。 file = open( "a.txt" )
+data = file.read()
+file.close()
+这里有两个问题。一是可能忘记关闭文件句柄；二是文件读取数据发生异常，没有进行任何处理 然而with可以很好的处理上下文环境产生的异常 with open ( "a.txt" ) as f:
+data = f.read()
+with open( 'ips.txt' ) as f:
+ips = f.read().split( "
+" )
+for ip in ips:
+print(ip)
+ips.txt中写入了3个ip 222.31.41.253 #山西省
+202.12.15.52 #日本
+61.135.169.12 #北京
+运行结果
+C:\Users\92039\Desktop>python 3.py 222.31.41.253
+202.12.15.52
+61.135.169.121 将该模块加入到代码中
+import requests
+def checkip (ip) :
+try :
+URL = 'http://ip.taobao.com/service/getIpInfo.php?ip=' + ip
+r = requests.get(URL,timeout= 3 )
+json_data = r.json()
+region = json_data[ u'data' ][ u'region' ]
+if region == '山西省' :
+print(ip)
+else :
+pass
+except :
+pass
+with open( 'ips.txt' ) as f:
+ips = f.read().split( "
+" )
+for ip in ips:
+print(ip)
+checkip(ip)
+C:\Users\92039\Desktop>python 2.py
+222.31.41.253
+222.31.41.253
+202.12.15.52
+61.135.169.121 因为有两次输出，属于山西省的ip会打印两次，由运行结果可知只有第一个ip属于山西省 接下来要加入写入文件的模块，将属于山西省的ip全部写入一个文件
+with open( 'a.txt' , 'a' ) as fw:
+for i in range( 5 ):
+fw.write( '
+a' )
+原有数据
+1
+2
+3
+4
+运行脚本后 1
+2
+3
+4
+a
+a
+a
+a
+a 补充一下文件操作的知识 文件打开模式 r ，只读模式【默认模式，文件必须存在，不存在则抛出异常】
+w，只写模式【不可读；不存在则创建；存在则清空内容】
+x， 只写模式【不可读；不存在则创建，存在则报错】
+a， 追加模式【可读； 不存在则创建；存在则只追加内容】，文件指针自动移到文件尾。 "+" 表示可以同时读写某个文件 r+， 读写【可读，可写】
+w+，写读【可读，可写】，消除文件内容，然后以读写方式打开文件。
+x+ ，写读【可读，可写】
+a+， 写读【可读，可写】，以读写方式打开文件，并把文件指针移到文件尾。 "b"表示以字节的方式操作，以二进制模式打开文件，而不是以文本模式。 rb 或 r+b
+wb 或 w+b
+xb 或 w+b
+ab 或 a+b 注：以b方式打开时，读取到的内容是字节类型，写入时也需要提供字节类型，不能指定编码
+将写入文件的2行代码加入
+import requests
+def checkip (ip) :
+try :
+URL = 'http://ip.taobao.com/service/getIpInfo.php?ip=' + ip
+r = requests.get(URL,timeout= 3 )
+json_data = r.json()
+region = json_data[ u'data' ][ u'region' ]
+if region == '山西省' :
+with open( 'a.txt' , 'a' ) as fw:
+fw.write( '
+' + ip)
+else :
+pass
+except :
+pass
+with open( 'ips.txt' ) as f:
+ips = f.read().split( "
+" )
+for ip in ips:
+checkip(ip)
+运行脚本
+C :\ Users \92039\ Desktop > python 2 .py
+会在桌面创建一个a.txt文档，结果为 222.31.41.253
+这是一个简单的ip提取器，没有加入多线程，我是python小白，很多地方还不了解，在写这个脚本时候读取文件和写入文件都是直接去百度上现学现买的，不完美之处欢迎大家提出！

@@ -1,0 +1,103 @@
+*本文中涉及到的相关漏洞已报送厂商并得到修复，本文仅限技术研究与讨论，严禁用于非法用途，否则产生的一切后果自行承担。
+一、概述
+安天应急处理中心在2018年1月4日，针对Google公司的Project Zero等安全团队披露出的英特尔等处理器芯片存在非常严重的安全漏洞，发布了A级漏洞风险通告，并提醒该漏洞演化为针对云和信息基础设施的A级网络安全灾难。相关漏洞利用了芯片硬件层面执行加速机制的实现缺陷实现侧信道攻击，可以间接通过CPU缓存读取系统内存数据。漏洞Meltdown（熔毁）因“融化”了硬件的安全边界而得名，漏洞Spectre（幽灵）因其手段的隐蔽性而得名。
+该漏洞是一个足以动摇全球云计算基础设施根基的漏洞，其意味着任何虚拟机的租户或者入侵了成功一个虚拟机的攻击者，都可以通过相关攻击机制去获取完整的物理机的CPU缓存数据，而这种攻击对现有虚拟化节点的防御机制是无法感知的。同时由于该漏洞的机理，导致其存在各种操作系统平台的攻击方式，因此尽管这一漏洞本身只能读取数据，不能修改数据，但由于其获取的数据中有可能包括口令、证书和其他关键数据，包括能够完整Dump内存镜像，因此这个漏洞比一般性的虚拟机逃逸对云的危害更大。尽管当前全球主要云服务商均在积极应对这一漏洞的影响，但鉴于这些云服务体系的庞大而复杂，以及大面积补丁本身所面临的复杂度和风险，漏洞利用POC已经发布并验证成功，因此这次漏洞修补已经成为一场时间赛跑。在这个过程中，攻击者所获取到的数据，将会沉淀出对于关键数据和隐私泄露、登陆凭证被窃取导致连锁攻击等次生灾害。
+鉴于大量政企机构和行业进行了私有云的建设，而私有云的安全防御和补丁升级可能更弱。因此后续需要深度注意利用该漏洞在私有云中进行的攻击。
+同时，该漏洞对于攻击桌面节点同样有巨大的攻击力，其大大提升了以浏览器等为攻击入口的攻击成功率。包括使传统的使用非超级用户来降低网络风险的安全策略失效。
+当前已经公布的漏洞POC对Intel系列CPU有效，但鉴于相关执行加速机制是现代处理器的通用技术，因此所有处理器均需要分析相关风险。
+安天在第一时间向管理部门提交威胁通报，并根据管理部门的要求正在进一步做深度的分析验证和应对工作。并在1月4日发出了公开漏洞通告。鉴于相关漏洞机理较为复杂，涉及到体系结构、操作系统，特别是CPU的核心运行机制，为使主管部门和用户深入了解漏洞细节，做好防护，安天组织内部公益翻译和技术团队对披露这两个漏洞的长篇关键论文文献《Meltdown》和《Spectre》进行了翻译，并在1月4日发布了《Meltdown》的初稿，《Spectre》也在紧张翻译工作中。
+二、漏洞介绍
+针对英特尔处理器涉及到两种攻击方法，分别为Meltdown和Spectre，Meltdown涉及CVE编号CVE-2017-5753和CVE-2017-5715，而Spectre涉及CVE编号CVE-2017-5754。
+Meltdown破坏了位于用户和操作系统之间的基本隔离，此攻击允许程序访问内存，因此其他程序以及操作系统的敏感信息会被窃取。这个漏洞“熔化”了由硬件来实现的安全边界。允许低权限用户级别的应用程序“越界”访问系统级的内存，从而造成数据泄露。
+Spectre则是破坏了不同应用程序之间的隔离。问题的根源在于推测执行（speculative execution），这是一种优化技术，处理器会推测在未来有用的数据并执行计算。这种技术的目的在于提前准备好计算结果，当这些数据被需要时可立即使用。在此过程中，英特尔没有很好地将低权限的应用程序与访问内核内存分开，这意味着攻击者可以使用恶意应用程序来获取应该被隔离的私有数据。
+三、影响范围
+本次安全事件影响到的范围很广，包括：
+处理器芯片：英特尔为主、ARM、AMD，对其他处理器同样可能存在相关风险。
+操作系统：Windows、Linux、macOS、Android
+云服务提供商：亚马逊、微软、谷歌、腾讯云、阿里云等
+各种私有云基础设施。
+桌面用户可能遭遇到结合该机理组合攻击。
+四、漏洞分析
+4.1 CPU缓存验证缺陷
+分支预测[6]和乱序执行[7]，是一种CPU优化技术，CPU会执行一些可能在将来会执行的任务。当分支指令发出之后，无相关优化技术的处理器，在未收到正确的反馈信息之前，是不会做任何处理；而具有优化技术能力的新型处理器，可以预测即将执行的指令，会预先处理一些指令所需的数据，例如将下一条指令所需要访问的内存提前加载到CPU缓存中，这就避免了执行具体指令时再去读内存，从而加快了CPU的执行速度，具体流程如下所示：
+图 1 CPU 优化执行
+指令3如果出现问题（如指令3是一个除0或者是一个非法的操作），会触发CPU的异常处理，具体情况如下
+图 2 CPU异常指令执行
+对于具有预测执行能力的新型处理器，在实际CPU执行过程中，指令4所需的内存加载环节不依赖于指令3是否能够正常执行，而且从内存到缓存加载这个环节不会验证访问的内存是否合法有效。即使指令3出现异常，指令4无法执行，但指令4所需的内存数据已加载到CPU缓存中，这一结果导致指令4即使加载的是无权限访问的内存数据，该内存数据也会加载到CPU缓存中，因为CPU是在缓存到寄存器这个环节才去检测地址是否合法，而CPU分支预测仅仅是完成内存到CPU缓存的加载，实际指令4并没有被真正的执行，所以他的非法访问是不会触发异常的。
+图 3 CPU数据访问权限和地址合法性检查
+如上图所示CPU缓存的这个过程对于用户是不可访问的，只有将具体的数据放到CPU的寄存器中用户才可操作，同时用户态程序也没有权限访问内核内存中的数据，因此CPU采用这种逻辑是没有问题的，但是如果有方法可以让我们得到CPU缓存中的数据，那么这种逻辑就存在缺陷。
+4.2 边信道攻击缓存
+CPU缓存通常在较小和较快的内部存储中缓存常用数据，从而隐藏慢速内存访问的延迟，缓存侧信道攻击正是利用CPU缓存与系统内存的读取的时间差异，从而变相猜测出CPU缓存中的数据，结合前边的缓存缺陷部分内容，产生如下的结果：
+图 4 漏洞原理图
+注：简单来说，就是CPU缓存中的数据，在用户态和内核态都是无法正常访问的，除非当CPU缓存中的数据保存到寄存器中时，会被正常的读取；除此之外，是可以通过边信道的方式读取CPU的缓存的。
+基于如上介绍的漏洞原理信息，通过CPU缓存验证缺陷，并利用边信道攻击技术可猜测CPU缓存中的数据，继而访问主机的完整内存数据，造成用户敏感信息泄露。
+4.3 漏洞验证
+根据《Spectre Attacks: Exploiting Speculative Execution∗》报告中包含的PoC代码，编译后生成可执行文件，在使用Intel处理器的Windows 7 64位操作系统实验环境下进行测试。
+具体验证细节如下：
+在内存中申请一段空间，写入如下字符串：
+利用这个机制获取数据
+图 5 获取内存中的数据
+获取系统ntdll.dll导出函数内存空间数据，下图为ntdll.dll的导出函数NtQuerySystemInformation的地址空间数据。
+图 6 系统ntdll.dll的导出函数NtQuerySystemInformation的地址空间数据
+通过如上方法获取该地址空间数据：
+图 7 获取该地址空间数据
+通过实验数据证明，该漏洞确实存在，且可被用于获取当前进程内存数据。
+五、检测与防御方法
+5.1 漏洞检测方法
+Windows客户，通过使用微软公司发布的检测PowerShell脚本，能够判断Windows系统是否受漏洞影响。
+首先，需要安装相应的PowerShell模块，对应命令：PS> Install-Module SpeculationControl[5]
+其次，需要调用相应脚本，对应命令：PS> Get-SpeculationControlSettings[5]
+其中，开启的保护会显示为True，未开启的保护则会显示为False，如下图所示：
+图 5 微软漏洞检测工具运行情况
+5.2 载荷应对
+安天升级了AVL SDK威胁检测引擎，支撑安天自身产品和使用安天引擎用户对相关POC的检测能力。
+安天产品IEP升级了主防机制，对相关POC进行拦截。
+安天智甲终端防御系统可以对英特尔Spectre(幽灵)的POC进行检测，无论是Windows系统还是国产中标麒麟系统。
+图 9安天智甲终端防御系统针对利用处理器芯片漏洞在Windows平台系统均可有效防御
+图 10安天智甲终端防御系统针对利用处理器芯片漏洞在Linux/国产操作系统均可有效防御
+六、应对建议
+了解相关漏洞的权威文献是阅读论文《Meltdown》和《Spectre Attacks: Exploiting Speculative Execution∗》，安天已经在创意安天论坛公益翻译提供了对Meltdown的中文译本。
+地址：http://bbs.antiy.cn/forum.php?mod=viewthread&tid=77670&extra=page%3D1
+https://spectreattack.com/spectre.pdf
+对本漏洞的有效应对核心是大规模的有效的补丁工作，包括提供热补丁。
+鉴于该漏洞可以获取完整的内存内容，所以建议相关云设施在完成补丁修复后，应提醒用户修改登陆口令并更新证书。
+目前Linux内核开发人员已经发布了针对Meltdown攻击方式的补丁，详情见：
+https://lwn.net/Articles/738975/
+Google部分产品已经针对这些攻击方式做出了修补，但是在部分情况下还需要用户采取额外的步骤确保产品受保护，针对安卓也将在1月5日推出补丁更新以限制对ARM处理器的所有已知变种攻击。详情见：
+https://support.google.com/faqs/answer/7622138
+微软发布了几个更新来缓解这些漏洞，建议用户在安装操作系统或固件更新之前，请确认防病毒应用程序对其兼容，并且建议用户应用所有可用的Windows操作系统更新，包括2018年1月的Windows安全更新。详情见：
+https://support.microsoft.com/en-us/help/4073119/windows-client-guidance-for-it-pros-to-protect-against-speculative-exe
+其他厂商也将要或已部分推出针对这些攻击方式的补丁，英特尔也提出正在与包括AMD、ARM以及各大操作系统厂商进行合作，以制定行业规范方法，及时、建设性的解决这个安全问题。
+目前部分厂商已针对此漏洞做出反馈：
+VMware：
+https://www.vmware.com/us/security/advisories/VMSA-2018-0002.html
+AMD：
+https://www.amd.com/en/corporate/speculative-execution
+Red Hat：
+https://access.redhat.com/security/vulnerabilities/speculativeexecution
+Nvidia：
+https://forums.geforce.com/default/topic/1033210/nvidias-response-to-speculative-side-channels-cve-2017-5753-cve-2017-5715-and-cve-2017-5754/
+Xen：
+https://xenbits.xen.org/xsa/advisory-254.html
+ARM：
+https://developer.arm.com/support/security-update
+Amazon：
+https://aws.amazon.com/de/security/security-bulletins/AWS-2018-013/
+Mozilla
+https://blog.mozilla.org/security/2018/01/03/mitigations-landing-new-class-timing-attack/
+附录：参考资料
+[1] 《Kernel-memory-leaking Intel processor design flaw forces Linux, Windows redesign》
+https://www.theregister.co.uk/2018/01/02/intel_cpu_design_flaw/
+[2] 《Google: Almost All CPUs Since 1995 Vulnerable To "Meltdown" And "Spectre" Flaws》
+https://www.bleepingcomputer.com/news/security/google-almost-all-cpus-since-1995-vulnerable-to-meltdown-and-spectre-flaws/
+[3] 《Meltdown and Spectre》
+https://spectreattack.com/
+[4] GitHub上用户ID为turbo提供的PoC代码下载地址
+https://github.com/turbo/KPTI-PoC-Collection
+[5] 微软提供的检测方法
+https://support.microsoft.com/en-us/help/4073119/windows-client-guidance-for-it-pros-to-protect-against-speculative-exe
+[6] 分支预测
+https://baike.baidu.com/item/%E5%88%86%E6%94%AF%E9%A2%84%E6%B5%8B/9252782?fr=aladdin
+[7] 乱序执行
+https://baike.baidu.com/item/%E4%B9%B1%E5%BA%8F%E6%89%A7%E8%A1%8C/4944129
+*本文作者：Antiylab，转载请注明来自FreeBuf.COM

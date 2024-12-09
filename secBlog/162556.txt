@@ -1,0 +1,14 @@
+Adobe推出了一个紧急修补程序，修复了两个严重的远程执行漏洞，包括朝鲜利用的CVE-2018-4878漏洞。
+上周，韩国互联网与安全局（KISA）警告说，北韩的黑客使用了Flash零日漏洞（CVE-2018-4878）。
+根据KISA发布的警告，该漏洞影响最新的Flash Player 28.0.0.137及更早版本。
+通过欺骗受害者打开包含特制Flash文件的文档，网页或电子邮件进行攻击。
+“在Adobe Flash Player中发现了一个零日漏洞。攻击者可能能够说服用户打开包含Flash文件的Microsoft Office文档，网页或垃圾邮件，“韩国CERT发布的咨询报告中写道。
+研究人员Simon Choi介绍，自2017年11月中旬以来，北韩一直在利用Flash Player zero-day。攻击者利用零日漏洞攻击参与朝鲜研究活动的韩国人。
+在Twitter上Choi共享的图片中，黑客利用这个漏洞传播恶意软件，显示这个漏洞已经通过恶意的Microsoft Excel文件传播。
+思科和FireEye都进行了而调查，并警告称，他们一直在追踪的北韩的黑客组织。这个组织被被FireEye称为TEMP.Reaper，被思科称为Group 123，在2017年非常活跃。
+Adobe用一个紧急补丁解决了这个漏洞，该漏洞还修复了奇虎360 Vulcan团队的研究人员发现的另一个远程代码执行漏洞CVE-2018-4877。
+“Adobe发布了针对Windows，Macintosh，Linux和Chrome操作系统的Adobe Flash Player安全更新。这些更新解决了可能导致在Adobe Flash Player 28.0.0.137及更早版本中远程执行代码的关键漏洞。成功的利用让攻击者控制受影响的系统。“Adobe公告称。
+“Adobe知晓CVE-2018-4878的被用于针对Windows用户的有限的针对性攻击。这些攻击利用通过电子邮件分发嵌入式恶意Flash内容的Office文档。“
+这两个漏洞对于所有支持的操作系统都很重要的，只有Adobe Flash Player Desktop Runtime的Linux版本幸存。
+自Flash发布以来，已经有超过1000个漏洞。如今很多Web浏览器默认不再支持Flash，但用户通常为了方便而重新启用它。
+* 参考来源：SecurityAffairs，作者Sphinx，转载注明来自Freebuf.COM

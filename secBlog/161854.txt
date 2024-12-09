@@ -1,0 +1,41 @@
+CVE-2017-8570 这个漏洞影响office所有发行版本，攻击者会诱导用户点击打开利用了该漏洞的恶意office文件，可以直接获取到和当前登录用户相同的代码执行权限。考虑到office作为主流办公软件的地位，可以看到该漏洞的危害性高以及影响面大。
+漏洞介绍
+2017年7月，微软在例行发布的补丁中修复了多个Microsoft Office漏洞，其中的 CVE-2017-8570 漏洞为一个逻辑漏洞，该漏洞为Microsoft Office的一个远程代码执行漏洞。直到近日，该漏洞PoC才被公开并出现真实攻击事件。该漏洞与零日漏洞 CVE-2017-0199 相似，并绕过了 CVE-2017-0199 的安全补丁。
+漏洞危害
+攻击者可以欺骗用户运行含有该漏洞的Office文件导致获取和当前登录用户相同的执行权限，从而执行恶意程序进行信息窃取或勒索。
+影响版本
+· Microsoft Office 2007 Service Pack 3 · Microsoft Office 2010 Service Pack 2 (32-bit editions) · Microsoft Office 2010 Service Pack 2 (64-bit editions) · Microsoft Office 2013 RT Service Pack 1 · Microsoft Office 2013 Service Pack 1 (32-bit editions) · Microsoft Office 2013 Service Pack 1 (64-bit editions) · Microsoft Office 2016 (32-bit edition) · Microsoft Office 2016 (64-bit edition)
+攻击过程
+整个攻击过程如下：
+1) 攻击者批量发送钓鱼邮件 2) 受害者打开邮件附件 3) 漏洞执行成功、下载执行木马程序
+攻击过程示意图
+解决方案
+瀚思科技（HanSight）该漏洞17年7月发布之后一直密切关注并收集该漏洞的利用手段和发生的真实攻击事件，目前已通过HanSight TI（瀚思威胁情报）可以及时更新相关IOC并通过HanSight Enterprise （瀚思大数据安全分析平台）帮助瀚思客户实时监测生成告警，并提供相应的处置建议。
+瀚思科技（HanSight）产品威胁检测截图
+防护策略建议
+1. 建议用户及时更新Office 2017年7月补丁。
+https://portal.msrc.microsoft.com/en-US/security-guidance/advisory/CVE-2017-8570
+2. 部署HanSight TI（瀚思威胁情报）和HanSight Enterprise （瀚思大数据安全分析企业版），接入邮件服务器和终端访问日志流量，按处置建议及时处理告警。
+3. 该类型漏洞通常通过邮件传播利用，不要打开来源未知的邮件的附件，包括.doc .docx .rtf .ppsx等Office文档。
+IP相关IOC
+· 145.239.23.7 · 192.185.122.46 · 192.185.91.152 · 192.189.25.16 · 192.254.236.83 · 5.39.53.40
+域名Domain IOC
+文件Hash IOC（SHA256）
+· 623124dff4b4df0dfbae4cfde62094239aa532e4d7859d736688e5c8bcd59d0a · 71dbc122c226edb7842a958aa03145c56a179aed3434fce5857975e4bbe1e180 · d0cc021a598d05643aa19b89c89d75da0946fd1719ca58458b21ef9a3bbd1a9c · 940a329807475c760b83aabbb3f29279e277c37459abd7b3e756920f707498c0 · e00e1b1ee024faf5f0f4e254027ab8debd5120241018bffd8182c02614f8c108 · e87d5636d6321ce7fc8fde2298c0f73234ab41a1c76dcf7fe66008a79597080e · 5332891d548dde83c5a5b535968cd76c3d766adcf923ecd36a03f20282aae239 · a72ef784ced60c267e2707a5bbb79d72a6c2e3d44e1b11977f4360f74073ffc0 · 8b78ae4d6bd275277296b762205be1eb6c7ed180d37ee1c2ea64ff1cb45bed5b · 8ef2374e7e7f925b7e3613db53f8d1eadfcad17a168da6e3b42c875974b9b317 · e09aee1dad24a57fea4eb53d1472ada0deb887d36fca06676633f31da841b374 · e1f86e349941f1e36c61d10bc7671c04f04d2a72898a6afe0d242204c1b64441 · 364cde98617702ba0d50d829fff308c0813319c58e169ed8cc534a33884a91ce · ccdbf61aa3452de3f86ff6d09cd2929fb136010e659e32c93dbb18182d66d0e3 · f5ade9ec4d4d6046525633c49ce8edcf70e5afa3f6ad1928b99d7da964b8abd8 · 3953d1003892822134881db459ac602c0f6711f9cd8c511dbd7b90a1877d5809 · 3b6096ae90769969b5435f8c8df4d1bd1f2a8c7c2de1d49745ae3f6774ccef83 · 564408d99bc1c4effcf506cf5fa611633ac62188fc545d1aae93b4a6965c4a9f · 547213a871f776f9f799e81db92a2399380134ecc0f7570c72a9c3a9ef70f155 · befaab16eabdb8164bbac3597db837c99d593cf7805cdfbc0c3dab226ceca081 · 644f894afa88c312c6343733d2f19c12e0b7b8dd0db455058e17b88974d1efaa · ed70a4f3a05605bcbe4b516f7fe9f6d3538124278c2314dca9edc82ddc0d7402
+附详细攻击过程
+钓鱼邮件截图
+只要受害者点击打开文档，漏洞就会触发并可以执行任意恶意程序。
+PoC示例如下：
+PoC示例
+漏洞PoC样本包含两个对象，一个Package对象和一个OLE2Link对象。
+Package对象含有一个恶意脚本，通过该脚本可执行任何其他恶意程序（如从网上下载病毒、木马、后门、勒索软件并执行），该脚本会释放到%tmp%目录下，漏洞触发后会调用并执行该脚本。
+Package对象
+Package对象释放在%tmp%目录下的文件
+而OLE2Link对象则包含漏洞触发代码：
+OLE2Link对象
+该漏洞通过Composite Moniker将File Moniker定义为一个New Moniker对象，通过调用letFile对象绕过 CVE-2017-0199 的安全补丁（CLSID黑名单过滤方法，过滤htafile对象和对象，但没有过滤letFile对象），然后将释放在%tmp%目录下的脚本文件加载并执行。
+漏洞PoC执行调用栈：
+调用栈
+漏洞执行成功后下载的病毒目前检测率并不高：
+漏洞相关病毒检测
+*本文作者：13521679667，转载请注明来自FreeBuf.COM

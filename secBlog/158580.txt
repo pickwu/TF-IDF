@@ -1,0 +1,124 @@
+0x1 概况
+年底了，离发年终奖的日子又近了一些，金融圈的“TA”却先到了。当你美滋滋地在屏幕前查询余额时，电脑中“TA”那双贪婪的眼睛可能也在美滋滋地看着你。“TA”就是金融行业臭名昭著的Ursnif银行木马。
+Ursnif银行木马也叫Gozi银行木马，最早出现于2007年，并一直活跃于金融行业。Ursnif功能强大，尤其自2010年其代码泄漏后，该木马逐渐涵盖了键盘记录器、收集剪贴板信息、截屏并上传、盗取邮箱及浏览器存储的密码、重启与破坏操作系统、收集计算机信息、删除文件、上传与下载、vnc、hook浏览器收发包函数、窃取网银认证信息等等十余种功能。据报道，Ursnif于今年10月份曾对日本金融行业发动攻击，旨在窃取目标用户的敏感信息，并且目前其攻击活动范围出现扩展迹象。
+无独有偶，腾讯安全御见情报中心近期也发现Ursnif银行木马在国内频繁活动。该木马通过邮件传播，一旦用户打开邮件附件的宏文档并启用宏功能，Ursnif木马就会自动下载到用户电脑并运行，最终试图窃取用户的邮箱密码、网银帐号密码等敏感信息。此外，一旦黑客下发特定指令，用户电脑还将面临操作系统被破坏等危机。
+（图1：邮件附件中的宏文档）
+0x2 技术分析
+1. 恶意word文档行为分析
+打开邮件附件中的request.doc文档，电脑会弹出启用宏功能提示。当启用宏，并运行宏里的代码后，mshta.exe会执行网上的一段脚本。对脚本进行UrlDecode解码后，脚本内容显示如下：
+（图2：UrlDecode后的脚本）
+该脚本执行后会下载和运行versusb.pfx以及利用powershell执行hxxp://cash4lcd.com/Stat.counter地址处的的一段脚本，而Stat.counter中的脚本会下载和执行1300.exe。
+（图3：Stat.counter中的脚本）
+2. versusb.pfx行为分析
+该pe文件中函数较少，主要作用是为了隐藏真正的payload。当其运行后会先解密出一段shellcode，为了便于理解，将此shellcode命名为shellcode1，该shellcode会加载和运行payload。
+（图4：versusb.pfx OEP特点）
+（图5：versusb.pfx OEP函数结尾部分会解密shellcode1）
+（图6：跳转到shellcode1执行，shellcode1 oep的rva为405e0）
+将shellcode1 dump出来后，分析后发现此shellcode会加载真正的payload。
+（图7：Shellcode1 OEP特点）
+在shellcode1 oep函数结尾处会自加载payload1，为了方便理解，将dump出来的payload1取名为payload1.exe。
+（图8：shellcode1 oep函数结尾处解密和加载payload1.exe）
+3. payload1.exe行为分析
+Payload1.exe的主要作用是进行木马的安装，即设置开机自启动项，以及将带真正木马功能的payload2.dll注入到explorer等进程。经过分析发现该木马其实是Ursnif银行木马，开源地址为https://github.com/gbrindisi/malware/tree/master/windows/gozi-isfb
+（图9：payload1 OEP特点）
+Payload1.exe运行后会对“.bss”段进行解密，很多明文字符串隐藏在其中。
+（图10：解密bss段）
+接着会利用枚举设备的方法检测是否在虚拟机或vbox中，在获取“explorer.exe”进程id时会将进程id异或一个dword值进行存储。
+（图11：检测是否在虚拟机或vbox中）
+（图12：检测虚拟机后的部分逻辑）
+（图13：获取explorer进程的id）
+Payload1.exe通过扫描system32目录下的dll文件，并进行时间对比，利用满足一定条件的dll的名称拼凑出3个随机字符串，一个当作开机自动项注册表值，一个为“%appdata%\ Microsoft”目录下的目录名，一个为payload1.exe的备份文件名，比如在本次分析过程中3个值分别为“brcoider”、“CmluxRes”、“api-Prov.exe”。
+（图14：获取3个随机名的部分逻辑）
+（图15：获取3个随机字符串及生成随机注册表项）
+（图16：利用上述3个随机名生成的开机自启动项）
+（图17：安装时将自身复制到这个位置）
+接着会进行提权判断及解密payload2.dll
+（图18：提权判断及提权）
+（图19：解密得到payload2.dll）
+（图20：安装、自删除、注入）
+（图21：自删除时用到的批处理）
+（图22：远线程注入时，进行进程名hash比较）
+被注入的进程的进程名及对应hash如下所示。
+Hash 进程名 01D2C689h iexplore.exe 0F5095F11h firefox.exe 0A9A98FEh chrome.exe 3BDB0689h opera.exe 0B176A6Eh explorer.exe
+（图23：创建远线程的方式注入，线程函数其实是“RTlExitUserThread）
+4. payload2.dll行为分析
+木马主要功能都在payload2.dll中，涉及到的功能有键盘记录器、收集剪贴板信息、截屏或将截屏做成gif文件并上传、盗取邮箱及浏览器密码、重启与破坏操作系统、收集计算机信息、删除文件、上传与下载、vnc、hook浏览器收发包函数、盗取认证信息等。
+payload2.dll主要以hook的方式收集信息，被注入到其它进程中的payload2.dll会用Pipe的方式与被注入explorer到进程中的payload2.dll进行通信。Payload2.dll与payload1.exe中的基础函数大致一样，也会对“.bss”段进行解密，也会使用自定义的crc函数对进程名算hash，进行hash比较而不是直接进行字符串比较。
+（图24：payload2.dll OEP特点）
+（图25：取配置项，包括c2）
+（图26：解密后的ini，经整理后如图所示）
+（图27：左侧为payload1.exe的crc函数，右侧为payload2.dll的crc函数）
+（图28：键盘记录器原理）
+（图29：收集剪贴板信息原理）
+（图30：截屏原理，同样是用BitBlt函数）
+（图31：重启）
+（图32：IAT Hook CryptGetUserKey）
+（图33：iat hook 创建进程的相关函数）
+（图34：创建PipeServer线程用于接收其它进程收集到的数据）
+（图35：盗取邮箱密码）
+（图36：注入对比图，左为payload1.exe，右为payload2.dll）
+（图37：宿主进程处理来自其它进程的各种命令）
+（图38：乱写文件的方式破坏操作系统）
+Hook Explorer进程中的函数，主要是为了方便获取证书等信息以及将dll注入浏览器等相关进程。Hook 浏览器进程中的函数主要是为了截获网络通信时的http协议，便于盗取银行认证等信息。
+（图39：payload2.dll根据所在进程名执行相关的hook）
+进程 Hook的函数 Explorer.exe Kernelbase.dll!RegGetValueW
+KERNEL32.DLL! CreateProcessA
+KERNEL32.DLL! CreateProcessW
+ADVAPI32.DLL!CreateProcessAsUserW ADVAPI32.DLL!CreateProcessAsUserA
+ADVAPI32.DLL！CryptGetUserKey CHROME.exe WS2_32.DLL!closesocket
+WS2_32.DLL!Recv
+WS2_32.DLL!WSARecv
+WS2_32.DLL!WSASend
+SSL_Read(虚函数)
+SSL_Write(虚函数)
+SSL_Close(虚函数)
+KERNEL32.DLL！LoadLibraryExW firefox.exe NSPR4.DLL!PR_Read
+NSPR4.DLL!PR_Write
+NSPR4.DLL!PR_Close
+NSS3.DLL!PR_Read
+NSS3.DLL!PR_Write
+NSS3.DLL!PR_Close opera.exe WS2_32.DLL!closesocket
+WS2_32.DLL!Recv
+WS2_32.DLL!WSARecv
+WS2_32.DLL!WSASend
+SSL_Read(虚函数)
+SSL_Write(虚函数)
+SSL_Close(虚函数) iexplore.exe/ microsoftedgecp.exe WININET.DLL！InternetReadFile
+WININET.DLL！InternetWriteFile
+WININET.DLL！InternetReadFileExA
+WININET.DLL！InternetReadFileExW
+WININET.DLL！HttpSendRequestA
+WININET.DLL！HttpSendRequestW WININET.DLL！InternetQueryDataAvailable WININET.DLL！InternetConnectA
+WININET.DLL！InternetConnectW
+WININET.DLL！HttpQueryInfoA
+WININET.DLL！HttpQueryInfoW
+WININET.DLL！HttpOpenRequestW WININET.DLL！InternetSetStatusCallback
+5. 1300.exe简单分析
+经过分析发现此文件的payload与versusb.pfx的payload基本是一致的，只是使用的隐藏技术稍有不同。
+（图40：1300.exe中的字符串特点）
+0x3 安全建议
+腾讯电脑管家安全专家建议用户特别警惕来历不明的邮件，勿随意点开其中的附件，保持电脑管家的正常开启，可有效拦截此类病毒攻击。
+附录：IOC
+C2
+responsibleworktermsthe.net
+mogolik.at/assets
+hofungo.at/assets
+injoom.cn/assets
+karilor.at/assets
+keep-drop.at/assets
+incomes.at/assets
+inorato.cn/assets
+wawa-go.at/assets
+gopool.at/assets
+URL
+http://potomuchtosrazuskazaleb.com/AFK/lima.php?utma=versusk
+http://sukiebuchnieohuelivobos.com/AFK/lima.php?utma=versusb
+http://ebanatibliatskazalebatvas.com/AFK/lima.php?utma=versusa
+可执行文件
+2C7C44B6F5DF8AF5CF44EF88F9F1BAD1 DD60A3558CA8578F183838331B3E633A 8B64198342354332179DC210E968F361
+参考
+https://researchcenter.paloaltonetworks.com/2017/02/unit42-banking-trojans-ursnif-global-distribution-networks-identified/
+https://securityintelligence.com/gozi-banking-trojan-upgrades-build-to-inject-into-windows-10-edge-browser/
+https://www.cybereason.com/blog/labs-using-behavioral-analysis-to-detect-the-ursnif-banking-trojan
+https://github.com/gbrindisi/malware
+*本文作者：腾讯电脑管家；转载请注明来自 FreeBuf.COM

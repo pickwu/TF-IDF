@@ -1,0 +1,97 @@
+上周通过一个例子让大家大致了解了sqlmap 如何添加以及修改payload，本周就让我们通过完整地学习sqlmap与payload有关的xml文件下的payload文件，我们都知道sqlmap有6大探测注入类型的技术，分别是
+U: UNION query SQL injection（可联合查询注入）
+E: Error-based SQL injection（报错型注入）
+B: Boolean-based blind SQL injection（布尔型注入）
+T: Time-based blind SQL injection（基于时间延迟注入）
+S: Stacked queries SQL injection（可多语句查询注入）
+Q：Inline queries（嵌套查询注入）通过参数--technique来指定sqlmap使用的探测技术，默认情况下会测试所有的方式。简单说下5大探测技术的思想为下面讲payload做铺垫。
+1.UNION query SQL injection（可联合查询注入）
+联合查询简单来说就是通过union关键字将多条查询语句拼接在一起，并且把查询结果作为一个结果以一个表格的形式输出到页面，需要注意的是查询语句要符合1.相同列数2.相似的数据类型3.相同的编码。示例语句：-1' union select 1,(select user()),(select version())--+，如果 查询结果无法返回到页面，则就需要考虑盲注。
+2.Error-based SQL injection（报错型注入）
+报错注入的核心思想是通过数据库的“人性化的报错定位机制”将我们要查询的数据通过报错的方式直接回显到页面上来，示例语句：' and (extractvalue(1,concat(0x7e,(select user()),0x7e)))--+，当然如果报错的数据不能回显到页面上来，就无法使用报错注入，这时候我们就可以考虑是否存在盲注。
+3.Boolean-based blind SQL injection（布尔型注入）
+布尔盲注的核心思想就是通过判断两种不同的页面状态来进一步推断注入语句是否被执行以及数据是否存在。示例语句：1' and database() regexp '^1' --+，当我们输入的注入语句无法通过回显以及报错的方式来获取数据，这时候就可能存在盲注，通过判断有跟没有、对或错来判断regexp 是否匹配到数据了。
+4.Time-based blind SQL injection（基于时间延迟注入）
+如果在测试的时候发现都不存在前面三种所说的注入，那就有可能是时间盲注，时间盲注的特点是无回显，无报错，也没有多种页面状态。这时候就需要通过增加sleep()函数来判断注入语句的执行，而布尔则是根据页面的对错来判断。示例语句：1' and sleep(5)--+ 如果sleep则说明存在时间盲注
+5.Stacked queries SQL injection（可多语句查询注入）
+多语句查询注入也叫做堆叠查询，与联合查询有点相似，都可以多条语句查询，堆叠查询的关键是分号(;)比较直观的就是如果分号被过滤或者无法绕过就无法注入，当然还有一些数据库引擎不支持，权限不足等限制，实际工作中遇到的也很比较少，这里就不做过多讨论。
+6.Inline queries（内联查询注入）
+碰到的比较少，这里暂不做过多讨论。
+sqlmap根据6大类型探测技术生成的payload就放在sqlmap源码中\xml\payloads文件中，根据探测技术分为6个后缀为.xml的文件,每个xml文件分别存放每种注入技术的payload。
+sqlmap的payloads文件：
+step1：
+首先我们来了解下xml是什么，xml就是可扩展标记语言，标准通用标记语言的子集，简单来说就是sqlmap用xml语言来定义多个不同的标签组成一个payload的模板，每个标签有设置不同的等级，通过这样的方式可以实现灵活组合和调用payload。所以我们就必须先了解sqlmap定义的每个标签的意思和作用。
+step2：
+标签的意思和作用可以直接通过在sqlmap源码的\xml文件夹中的boundaries.xml文件以及\xml\payloads文件夹下的.xml文件的注释中查看,通过查询xml文件中的注释，我们知道sqlmap上的boundaries.xml定义的 <boundary 以及payload文件下的xml定义的 <test 标签均与sqlmap的payload有密切关系。
+<boundary 定义了sqlmap注入语句的边界问题，包括注入的发包数量等级，使用的查询从句，注入的位置，使用的特殊字符，前缀，后缀等。为我们清晰地划分了sqlmap注入时的所需要的各个模块等级。
+而 <test 则定义了比较细致完整的测试实例，俗称payload。
+由上面的 <boundary 和 <test 相结合我们可以得到如下测试语句。
+最终的payload = where + boundary.prefix+test.payload+boundary.suffix，影响最终payload的生成主要由 <clause,<where 标签决定的，当且仅当某个boundary元素的where节点的值包含test元素的子节点where的值，clause节点的值包含test元素的子节点的clause的值时候，该boundary才能和当前的test匹配生成最终的payload。经过测试发现除了这两个文件决定最终payload的生成，还包括sqlmap使用的注入方式以及payload使用的查询语句有关。如果把这两个文件比作两个集合，生成的payload比作两个集合的映射，则这两个集合之间的映射关系是多对多的关系。
+#step2.1：
+下面我们就具体来这两个文件下，具体每个标签的作用，首先来看 boundaries.xml文件吧，下图所示的是一个完整的 <boundary 模板里面分别定义了 <level,<clause,<where,<ptype,<prefix,<suffix 六个标签。
+<level 标签:
+Sub-tag: <level From which level check for this test. Valid values: 1: Always (<100 requests) 2: Try a bit harder (100-200 requests) 3: Good number of requests (200-500 requests) 4: Extensive test (500-1000 requests) 5: You have plenty of time (1000 requests)
+<level 标签就是我们使用sqlmap注入时候--level的命令，这个标签分别定义了1-5个等级的发包数量，默认是1，表示做最少的检测，level越高，检测的数量越高。level等于2时会检测cookie字段是否有注入，等于3时会检测User-Agent、Host、Referer等HTTP的头部字段是否有注入。
+<clause 标签:
+Sub-tag: <clause In which clause the payload can work. NOTE: for instance, there are some payload that do not have to betested as soon as it has been identified whether or not the injection is within a WHERE clause condition. Valid values: 0: Always 1: WHERE / HAVING 2: GROUP BY 3: ORDER BY 4: LIMIT 5: OFFSET 6: TOP 7: Table name 8: Column name 9: Pre-WHERE (non-query) A comma separated list of these values is also possible.
+该标签说明了sqlmap使用的条件从句，其中always表示测试所有
+<where 标签:
+Sub-tag: <where Where to add our '<prefix <payload<comment <suffix' string. Valid values: 1: When the value of <test's <where is 1. 2: When the value of <test's <where is 2. 3: When the value of <test's <where is 3. A comma separated list of these values is also possible.
+该标签定义了payload写入的位置详见 <test 的解释
+<ptype 标签:
+Sub-tag: <ptype What is the parameter value type. Valid values: 1: Unescaped numeric #数字型，输入语句中的参数不需要加入 2: Single quoted string #单引号的字符型 3: LIKE single quoted string #like+单引号 4: Double quoted string #双引号 5: LIKE double quoted string #like+双引号
+举个栗子来说：假设如下查询语句 ?id=1' union SELECT * FROM Persons WHERE City='Beijing'--+ 其中?id=1后面的单引号是由前缀标签定义的，--+是由后缀标签定义的，而中间语句所要使用的字符则是由 <ptype 标签定义的，简单来说就是参数的类型。
+<prefix 标签:
+Sub-tag: <prefix A string to prepend to the payload.ad.
+注入语句的前缀定义了注入中常用到闭合或者注释的字符，例如 右括号)，单引号加右括号')，两个右括号))等等。
+<suffix 标签:
+Sub-tag: <suffix A string to append to the payload.
+顾名思义就是定义了SQL注入的语句的后缀，比如说常见的注释符、也可能是另外的sql语句看具体情况。
+#step2.2：
+一个完整的test payload模板：部分截图如下
+里面定义了比 <boundary 更多的标签，同时 <test 里面也包含了boundary标签的内容
+Sub-tag: <title Title of the test..
+<title 这个没什么好解释的就是每个payload的标题
+Sub-tag: <stype SQL injection family type. Valid values: 1: Boolean-based blind SQL injection 2: Error-based queries SQL injection 3: Inline queries SQL injection 4: Stacked queries SQL injection 5: Time-based blind SQL injection 6: UNION query SQL injection
+<stype 说明了每个payload的注入类型，分别就是我们上述所说的6种sqlmap常用的注入类型。
+Sub-tag: <level From which level check for this test. Valid values: 1: Always (<100 requests) 2: Try a bit harder (100-200 requests) 3: Good number of requests (200-500 requests) 4: Extensive test (500-1000 requests) 5: You have plenty of time (1000 requests)
+<level 为每个payload的发包数量的等级，与boundary中的level的定义一致。
+Sub-tag: <risk Likelihood of a payload to damage the data integrity. Valid values: 1: Low risk 2: Medium risk 3: High risk
+<risk 为每个payload的风险等级，等级越高对数据库的造成的破坏越大。
+Sub-tag: <clause In which clause the payload can work. NOTE: for instance, there are some payload that do not have to be tested as soon as it has been identified whether or not the injection is within a WHERE clause condition. Valid values: 0: Always 1: WHERE / HAVING 2: GROUP BY 3: ORDER BY 4: LIMIT 5: OFFSET 6: TOP 7: Table name 8: Column name 9: Pre-WHERE (non-query) A comma separated list of these values is also possible.
+<clause 为每个payload使用的sql查询从句与boundary中的clause定义一致。
+Sub-tag: <where Where to add our '<prefix <payload<comment <suffix' string. Valid values: 1: Append the string to the parameter original value 2: Replace the parameter original value with a negative random integer value and append our string 3: Replace the parameter original value with our string
+<where 为每个payload <prefix <payload<comment <suffix 要插入的位置
+Sub-tag: <vector The payload that will be used to exploit the injection point.
+<vector sql注入模板
+Sub-tag: <request What to inject for this test.
+<request sql注入的请求测试
+Sub-tag: <payload The payload to test for.
+<payload SQL注入的request请求中payload
+Sub-tag: <comment Comment to append to the payload, before the suffix.
+<comment 一般在payload之后前缀之前
+Sub-tag: <char Character to use to bruteforce number of columns in UNIONquery SQL injection tests.
+<char 在union查询时字符串使用的列数
+Sub-tag: <columns Range of columns to test for in UNION query SQL injection tests.
+<columns union查询时用来判断列数
+Sub-tag: <response How to identify if the injected payload succeeded.
+<response 通过SQL注入的response返回包，一般用来判断注入是否成功，
+Sub-tag: <comparison Perform a request with this string as the payload and compare the response with the <payload response. Apply the comparison algorithm. NOTE: useful to test for boolean-based blind SQL injections.
+<comparison 通常用在boolean_blind.xml文件中的布尔盲注用来做比较，判断页面状态
+Sub-tag: <grep Regular expression to grep for in the response body. NOTE: useful to test for error-based SQL injection.e.
+<grep 通常用于报错注入的时候判断
+Sub-tag: <time Time in seconds to wait before the response is returned NOTE: useful to test for time-based blind and stacked queries SQL injections.
+<time 时间盲注和堆叠查询使用
+Sub-tag: <union Calls unionTest() function. NOTE: useful to test for UNION query (inband) SQL injection.
+<stype 可以注入成功的union语句
+Sub-tag: <details Which details can be infered if the payload succeed.
+<details sqlmap输出payload的详情,有三个子节点分别是 <dbms 、 <dbms_version 、 <dbms_version
+Sub-tags: <dbms What is the database management system (e.g. MySQL).
+<dbms 子节点表示数据库类型
+Sub-tags: <dbms_version What is the database management system version (e.g. 5.0.51).
+<dbms_version 子节点表示数据库版本
+Sub-tags: <os What is the database management system underlying operating system.
+<os 子节点表示操作系统的类型
+step3：
+当然sqlmap的注入除了需要payload还有一些其他的xml文件，如下图所示
+想要了解每个标签的作用效果，我们可以通过sqlmap丰富的指令指定使用的xml文件，如果没有指令可以指定xml我们可以手动通过增加、修改、删除xml文件下的元素，来缩小范围，这样我们就能知道每个标签的作用效果。

@@ -1,0 +1,23 @@
+*本文中涉及到的相关漏洞已报送厂商并得到修复，本文仅限技术研究与讨论，严禁用于非法用途，否则产生的一切后果自行承担。
+Spectre/Meltdown事件似乎已经进入了第二阶段——各厂商纷纷推出自己的修复方案。然而事情似乎并没有想象中那么顺利，工控系统供应商Wonderware表示Meltdown补丁影响了工控系统的稳定性，而SolarWinds则通过测试发现，补丁造成CPU使用率飙升。
+Meltdown补丁导致工控系统崩溃
+Meltdown补丁影响了工控系统的稳定性。
+工控系统供应商Wonderware承认，Redmond的Meltdown补丁使其Historian产品不稳定。 Wonderware公司支持网站的声明说：“微软更新KB4056896导致Wonderware Historian不稳定，无法通过SMC访问DA/OI服务器。
+Wonderware公司透露，相关补丁已经导致Studio 5000，FactoryTalk View SE和RSLinx Classic出现问题，而这些是在制造业中被广泛使用的产品。网络安全漏洞管理员Kevin Beaumont表示：“这可能是因为RPC [远程过程调用]相关变更导致的。
+Spectre/Meltdown补丁对SolarWinds的AWS基础架构有重大影响
+SolarWinds在自家Amazon Web Services基础设施安装Spectre / Meltdown补丁后分析发现主机的性能严重下降。
+在重启亚马逊PV实例后，CPU使用率猛增至25％左右，这与打补丁前的状态大相径庭。
+该公司还监测其EC2实例的性能，注意到亚马逊正在推出崩溃补丁。
+公司同样观察了EC2实例的性能变化，好消息是在亚马逊推出补丁之后，问题得到了改善。
+“AWS能够使用Meltdown补丁修复HVM实例，无需重新启动实例。从我们所观察到的情况来看，这些补丁在us-east-1的1月4日00:00 UTC左右开始执行，在us-east-1的EC2 HVM实例20:00 UTC左右完成。 “
+总的来说，Kafka集群的数据包速率降低了40％，而Cassandra的CPU使用率则猛增了25％。
+亚马逊部署补丁后，CPU利用率下降。公司于2018年1月12日发布了更新。
+“截至今天上午10:00，我们注意到我们的实例CPU使用率降低了一步。目前还不清楚是否有其他补丁，但CPU水平似乎正在恢复到HVM之前的补丁水平。“该公司表示。
+小心你下的是假补丁
+Meltdown和Specter漏洞同样引起了黑客的关注，在漏洞推出不久已经有黑客开始使用这两个漏洞进行钓鱼攻击。
+Malwarebytes报道称，有黑客正在利用SmokeLoader病毒攻击用户。
+病毒来自一封邮件，伪装的地址是德国联邦信息安全办公室，Malwarebytes还发现了与之相关的一个域名。这些域名和邮件实际上跟德国联邦信息安全办公室没有关系，黑客以这个机构来伪装自己，让用户安装恶意软件。
+网站提供了一个信息页面，提供Meltdown和Spectre补丁的链接，而实际用户下载的是一个zip文件(Intel-AMD-SecurityPatch-11-01bsi.zip)，里面包含病毒。
+用户下载运行后，SmokeLoader就会运行，它能够下载运行其他的payload。研究人员发现它会连接多个域名，发送加密信息。
+黑客往往会利用热点事件进行病毒传播，提醒各位读者从官方渠道下载补丁。
+* 参考来源：TheRegister等，作者Sphinx，转载注明来自Freebuf.COM

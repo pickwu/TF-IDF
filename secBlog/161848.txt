@@ -1,0 +1,37 @@
+*本文原创作者：yuegui_2004，本文属FreeBuf原创奖励计划，未经许可禁止转载
+在不使用VPN的情况下如何保证在浏览网页数据的时候更安全更隐私呢？Socks proxy和SSH将会给你答案。
+在进入正题之前我们首先需要了解一下Socks proxy，什么是Socks proxy？
+Socks 服务器通常是作为一个代理服务器，充当一个中间代理的角色，与客户端以及真正的服务端建立TCP连接，然后负责对客户端与服务端之间的流量进行路由和转发。一个socks代理服务器能够与任何一种网络协议进行工作，今天我们将使用SSH协议，而今天我们要使用的是Socks version 5， 该版本的socks加强了安全和UDP协议的支持。socks服务器在客户端与真正的服务器之间仅仅进行流量传输的工作，不进行任何额外的工作，充分保证了数据的安全性。
+那么socks proxy是如何工作的呢？
+首先需要在你本地安装一个socks客户端，我使用的是windows操作系统，因此socks客户端选择的是PuTTY，浏览器使用的是Firefox。
+socks客户端首先与socks服务器建立连接，socks协议要求对连接请求进行认证。你通过代理服务器向外部的服务端发送请求，外部服务器只知道proxy服务器的存在，这就是为什么socks proxy在隐私方面做的很好的。
+接下来就如何利用SSH协议建立Socks proxy进行详细说明。
+首先是需要准备的服务器和环境：
+VPS（Virtual PrivateServer），需要准备一台运行Linux操作系统的服务器，并且能够SSH登陆； Firefox 浏览器 PuTTY，SSH登陆客户端
+Mac OS X/Linux中建立SSH Tunnel
+服务器和环境都准备好之后，接着就是建立SSH Tunnel。需要根据客户端机器操作系统类型来选择建立SSH Tunnel的方式。如果是Mac OS X或者Linux用户，则使用下面的方法。
+打开SSH客户端，输入以下命令来建立tunnel：
+ssh -D 1026 -f -C -q-N name@IP
+上述命令参数说明如下：
+-D：这个参数是告诉SSH在指定端口上建立SOCKS proxy，这里的指定端口是1026； -f：使SSH命令在后台运行； -C：对所有数据进行压缩； -q：使用安静模式运行命令，告警和诊断信息将不被输出； -N：告诉SSH一旦tunnel建立不允许执行远程命令，防止被人恶意利用；
+最后需要将name@IP替换成sudo用户名和VPS的IP地址。
+命令会在后台运行，可以通过ps aux|grep ssh查看进程是否有在正常运行。
+如果需要关闭进程，杀掉运行的进程即可：
+sudo kill 2016
+windows中建立SSH Tunnel
+在windows中可以在PuTTY中进行配置，建立SSH Tunnel。
+启动PuTTY，选择Session，在Host Name中输入VPS的IP地址，端口默认22，也可以指定其他端口，需要根据服务端的ssh服务端口来指定，Connect Type选择SSH，然后重命名当前配置并保存session。
+接着在PuTTY左边的树型菜单中选择Connection-->SSH-->Tunnels，在Source port中输入1025到65536中的任意一个数字，点击Add，就能在Forwareded Ports中看到添加的端口信息，选择Dynamic：
+最后点击Open，会弹出一个新窗口需要输入登陆VPS服务器的用户名和密码，输入正确的用户名密码之后，就能登陆到VPS上并成功创建tunnel。
+需要关闭tunnel的话非常简单，只需要关闭PuTTY窗口即可。
+配置Firefox使用SSHTunnel
+Tunnel已经成功建立，接下来就是配置Firefox利用建立的SSH Tunnel浏览网页。
+启动Firefox，点击右上角的选项卡，并选择"选项"菜单：
+滚动到"选项"页的最底部，选择设置网络代理，在连接设置窗口，选择"手动代理配置"，在SOCKS Host中填写localhost或者127.0.0.1，端口填写上面设置的12345，协议选择默认的SOCKS v5，点击OK即可。
+这样一个socks proxy就搭建完成了，接下来我们看看效果。在chrome浏览器（没有使用socks代理）中打开百度，输入ip点击搜索，可以看到显示的IP为当前网络环境的公网IP地址；
+接着在Firefox中打开百度输入ip点击搜索，可以看到显示的ip地址发生了变化，变成了我配置的socks proxy所在的公网IP地址。
+到此，尽管访问网页的流量被加密转发了，并且对于目标服务器来说访问源IP改变了，但是DNS查询的时候记录的仍然是你本身所在的网络，并没有做到完全的保密。这种情况也是有解决方案的。
+打开Firefox浏览器，地址栏中输入about:config进入浏览器的内部设置，在使用该配置的时候要非常的谨慎，配置不当可能会使浏览器无法正常使用。在弹出的告警对话框中点击"我了解此风险!"进入下一个页面。
+在顶部的搜索栏中输入"network.proxy.socks_remote_dns"，然后双击该配置项，配置就发生了变化，状态由默认变成了已修改，值由false(默认值)变成了true。配置生效后，Firefox就会使用代理转发DNS请求而不是在本地解析。
+上面这种方式实现的socks proxy只是一种简单的代理方式，只能保证在浏览器中的上网行为被保护起来了，通过其他方式访问互联网的行为（例如APP）无法通过socks proxy保护数据安全。如果需要所有互联网访问被保护起来，就需要使用VPN了。
+*本文原创作者：yuegui_2004，本文属FreeBuf原创奖励计划，未经许可禁止转载

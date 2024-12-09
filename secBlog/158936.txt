@@ -1,0 +1,39 @@
+本期任务：使用python脚本实现端口扫描。
+准备工具：选项分析器：optparse；网络库：socket
+问题引入：
+1. 端口扫描器扫描效果如何？
+答：下图是效果演示，扫的是IP地址为192.168.10.128这台主机上的80,21,25,135,443,445,7001,7002这几个端口。
+2. 端口扫描器的扫描流程？
+答：
+(1).输入目标主机名和要扫描的常用端口列表。
+(2).通过目标主机名得到目标的网络IP地址。
+(3).将列表里面的每一个端口去连接目标地址。
+(4).确定端口上运行的特殊服务，发送特定数据，并读取特定应用程序返回的标识。
+3. 端口扫描器在代码上的设计步骤？
+答：在代码层面上，我们一共设计了3个函数，分别是主函数main()，端口扫描函数portScan()和连接函数connScan()。主函数采用了选项分析器optparse模块来获取用户的输如的主机名和端口列表，并将其发送到portScan数，postScan数获取用户输入的IP，并取出端口列表中的每一个端口，发送到connScan函数中去。最后connScan函数通过建立socket套接字，采用TCP的形式连接端口和IP并送请求和垃圾数据以判断端口的状态。
+收集器制作开始:
+1. 主函数的设计采用选项分析器optparse模块
+optparse是一个功能强大，易于使用的选项分析器，专门用来处理命令行的参数。
+使用它之前我们需要实例化一个optparse对象。
+import optparse parser=optparse.OptionParser('usage%prog'+'-H -p ')
+接下来，我们需要添加上命令参数，-H用来指定主机名，-p用来指定端口列表。
+parser.add_option('-H',dest='tgthost',type='string',help='specify target host') parser.add_option('-p',dest='tgtport',type='string',help='specify target port[s] by comma') (options,args)=parser.parse_args()
+其中，dest用来保存参数的值，该值可以作为options的属性被访问。type用来指定输入参数的类型，如字符串类型就是'string'，help用来指定在帮助中显示的信息。
+设定完了这些，optparse还会自动生成命令行的帮助信息：
+获取到了主机名和IP地址后，程序跳转到portScan函数并传入参数。
+tgthost=options.tgthost tgtports=str(options.tgtport).split(',') portScan(tgthost,tgtports) #跳到portScan()函数
+2. portScan()函数的设计
+portScan用来获取主机名的IP地址，并逐个将其发送到connScan函数中去。
+其中，socket.gethostbyname(hostname)是域名解析，如：socket.gethostbyname('www.baidu.com')会返回百度的IP地址，而socket.gethostbyaddr(ip_address)会返回一个元组，第一个元素是主机名。
+tgtIP=gethostbyname(tgthost) tgtName=gethostbyaddr(tgtIP) for tgtport in tgtports: connScan(tgthost,int(tgtport))
+3. connScan()函数的设计
+connScan采用了socket模块来建立TCP的套接字，用来发送TCP的请求。
+import socket connSkt=socket(AF_INET,SOCK_STREAM) #建立TCP的套接字 connSkt.connect((tgthost,tgtport)) #连接IP地址和对应的端口 connSkt.send('ViolenPython\r
+') #发送垃圾数据 result=connSkt.recv(100) #设置接收数据的容量
+4. 完整的代码
+#-*-coding:utf-8-*- import optparse import socket from socket import * def connScan(tgthost,tgtport): try: #尝试去建立端口的连接并发送垃圾数据 connSkt=socket(AF_INET,SOCK_STREAM) connSkt.connect((tgthost,tgtport)) connSkt.send('ViolenPython\r
+') result=connSkt.recv(100) print '[+]%d/tcp open'%(tgtport) #如果没有出错，打印端口开放，并把接收到的banner信息打印出来 if str(result): print '[ %d banner]'%(tgtport)+str(result) connSkt.close() except: #如果出错，则打印端口关闭 print '[-]%d/tcp closed'%(tgtport) def portScan(tgthost,tgtports): try: tgtIP=gethostbyname(tgthost) except: print "[-] Cannot resolve '%s': Unknow host"%(tgthost) return try: tgtName=gethostbyaddr(tgtIP) print '
+[+] Scan Result for:'+tgtName[0] except: print '
+[+] Scan Result for:'+tgtIP setdefaulttimeout(1) for tgtport in tgtports: # print 'Scanning port '+tgtport connScan(tgthost,int(tgtport)) def main(): parser=optparse.OptionParser('usage%prog'+'-H <target host> -p <target port>') parser.add_option('-H',dest='tgthost',type='string',help='specify target host') parser.add_option('-p',dest='tgtport',type='string',help='specify target port[s] by comma') (options,args)=parser.parse_args() tgthost=options.tgthost tgtports=str(options.tgtport).split(',') if (tgthost == None) | (tgtports[0] == None): #判断是否有ip和端口参数，没有则输出帮助信息并退出 print '[-] You must specify a target host and port[s].' print parser.usage exit(0) portScan(tgthost,tgtports) #跳到portScan()函数 if __name__ == '__main__': main()
+小结:
+好了，一个轻量级的只需45行代码的端口扫描器就制作完成啦，本期的扫描器采用的是TCP的全连接扫描，小伙伴们可以尝试开发出其他的扫描方式哈，附上思维导图供大家参考，我们下期见。

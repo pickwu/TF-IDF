@@ -1,0 +1,10 @@
+黑客组织Shadow Brokers影子经纪人泄露的NSA工具中，最着名的可能要数EnternalBlue了，它催生了像WannaCry，Petya这样影响广泛的高危险性勒索病毒。最近，还发现了一款名为WannaMine的新型Monero加密挖掘蠕虫，其同样也是利用了EternalBlue的漏洞得以传播。
+近期，RiskSense的安全研究员Sean Dillion对影子经纪人泄露的三个NSA工具（EnternalRomance，EternalChampion和EnternalSynergy）源码进行了修改。此前，他还将EternalBlue漏洞移植到了Windows 10上。
+Dillion目前已在其GitHub repo公布了相关源码，其中还包括一个免责声明，并解释“该软件纯粹是为了学术研究和开发有效的防御技术而创建的，他不会用它来攻击系统“。
+修改后的源码旨在利用漏洞CVE-2017-0146和CVE-2017-0143。利用该漏洞攻击者对目标Windows系统做远程代码执行和控制操作。
+据称，修改后的NSA工具几乎可以在所有现有的有Windows版本上工作，包括Windows Server，Windows XP，Windows 7，Windows Vista，Windows 8等的32位或64位的版本。
+该列表中还包括了微软最新的主流操作系统Windows 10，它被认为是安全的，因为它提供了所有的更新和安全补丁。但是，对于那些使用去年3月发布的补丁的较老Windows 10版本，威胁仍然存在。
+让人无语的是，微软甚至放弃了对它们的支持，比如受影响版本Windows 10 Anniversary Update（14393）。
+利用模块也可能会给企业带来麻烦，企业在软件更新时犹豫不决，主要考虑的是兼容性方面的问题。
+想要了解更多关于修改的NSA利用模块，可以访问Dillion’s repo。
+*参考来源：fossbytes，FB小编 secist 编译，转载请注明来自FreeBuf.COM

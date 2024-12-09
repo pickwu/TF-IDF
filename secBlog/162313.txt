@@ -1,0 +1,33 @@
+在企业安全整体建构中，除了各种防守和加固，及时升级，代码安全审计等，安全监控项的处理外，还有一个个很重要的方面，就是安全扫描和渗透测试方面，这方面也有大量的安全产品和开源工具。本文立足于对安全扫描方面分享下自己实际的做法和经验，以抛砖引玉和大家一起探讨。
+安全扫描在企业安全中很重要的一环，虽然你花了大价钱买了FW，WAF，IDS,IPS,但是你可以觉得你已经花了这么多钱了，应该没有什么问题了。实际上不是这样的。笔者曾遇到过很多大的国家项目花了好几百万搞了设备采购，但是买了后就放了放着了，基本的配置也都没有做好，当然这是我们传统厂商的锅，没有好好做服务，当然也许甲方觉得那样搞会麻烦，故意让他们这么做的。所以安全不管要有大量投入、采购，更重要是管理。配置要与时俱进，安全要与时俱定，要动态反馈才能做到万无一失。说了这么都就是为了说明，设备是不靠谱的，配置和管理以及人都是不靠谱的。那怎么才能知道靠不靠谱，才心里有底呢？
+举一个我们日常生活中例子，大家离家出门时候，怎么确认你们家的锁是锁上的并且锁是靠谱的呢？
+为了确保门是锁的呢？其实很简单，就是锁好了，拉一下，推一下不就知道了。如果你是强迫症患者，肯定都时常这么做。而且还要拍张照，确保你是尝试推过门了。 那么怎么确保你锁是靠谱的呢，除了你花大价钱买什么B级锁，C级锁心外，其实还可以请个开锁匠（听说淘宝可以买写工具，自己试）的试试看能不能快速打开？
+企业安全也一样，为了确保你所有服务器端口（门）都是锁着，你需要用端口扫描（推门）来做；为了确保你业务，防火墙什么设备是靠谱的，你需要用渗透测试（尝试开锁），测试没问题就是才能放心。开锁和渗透测试的问题今天咱们不讲，今天就说说端口扫描的事情。推门测试需要买次锁门后都要做，同样端口扫描都要每天都做，才能确保你的服务器都是安全的，你防火墙，你的设备是都是起作用的，才能心里有底。
+懂点安全的，甚至IT界的人都应该知道端口扫描方面nmap敢说第二，没人敢说第一了，所以今天我们就用nmap作为扫描器，结合我们脚本做结果过滤，得到我们关心的信息。
+1、 确保服务器上装了nmap 并能正常执行
+Centos 通：
+yum install nmap
+ubuntu通过：
+apt-get install nmap
+其他发行版略。。。
+2、 确保服务器上装了perl，我们脚本基于perl，选择perl主要是perl强大的正则处理可以省大量精力和时间。
+3、 好了直接上脚本：
+#!/usr/bin/env perl use warnings; use strict; my $filename=shift @ARGV; open my $IN,'<',$filename or die $!; my @ip=<$IN>; my $out; $out=(split /./,$filename)[-1] unless defined $out and $out eq ""; $out=(split /./,$filename)[-2]; $out.=".csv"; my $port=q(80,8080,3306,9200,6379,11211,21,22); my @resul; my $host; print "Start scan."; my %result; open my $OUT,'>',$out or die $!; for (@ip) { chomp; next if /(#|$)/; $host=$_; my $result=`nmap -T3 -sV -p $port $_ `; @resul= split //ms,$result; for(@resul) { chomp; next if /^$/; next if /Starting Nmap/; next if /Nmap scan report/; next if /PORT/; next if /filtered/; next if /Host is up/; next if /Service detection performed/; next if /Nmap done:/; next if /service unrecognized/; next if /SF/; next if /Service Info/; my $info="$host $_"; $info =~s/s+/,/g; $info =~s//tcp//g; print $OUT $info.""; } print "scan $_ ok!"; } close $OUT;
+基本过程就是调用nmap 扫描列表文件中的80,8080,3306,9200,6379,11211,21,22等常见的危险端口，取出了多余的信息提示内容和filtered（表示端口是防火墙禁止访问的）状态信息。然后把信息写入一个csv文件中。
+4、脚本保存为scalport.pl ，并给予执行权限chmod u+x scalport.pl
+创建一个ip列表文件（一个ip一行）all.ip
+执行 ./scalport.pl all.ip 开始扫描
+结果保存为all.csv
+扫描过程比较长，尤其是all.csv当ip较多时候，建议用 screen 执行
+4、 扫描结果及其再搜索
+处理后的结果入上图，一般来说结果显示为open 并且显示服务名称（比如Tomcat 或者 Mysql） 或者nginx 并有版本显示的需要处理，我们可以用命令再次结果基础在此搜索，分类列出需要处理的IP。
+perl -lne 'print if /open/ and /ssh/' all.csv x.x.x.x,51366,open,ssh,OpenSSH,5.3,(protocol,2.0)
+此台需要封禁sshd端口。
+perl -lne 'print if /open/ and /mysql/' all.csv
+x.x.x.x,3306,open,mysql MySQL 5.6.19
+此台Mysql需要封禁端口
+perl -lne 'print if /open/ and /http/' all.csv x.x.x.x,8080,open,http,Apache,Tomcat/Coyote,JSP,engine,1.1 x.x.x.x,80,open,http,nginx 1.9.4
+此两台tomcat和nginx 需要屏蔽版本信息。
+6、加入cron定期执行,例如：
+10 17 * * * /data/script/scalport.pl &> /data/list.txt
+后续完善和拓展，可以把扫描结果每天通过邮件发邮箱，每天处理。针对扫描过程过长的问题等，可以作为进一步扩展用。

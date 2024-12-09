@@ -1,0 +1,52 @@
+2018年1月在微软发布了新的安全补丁,其中修补了首个office 0day漏洞（CVE-2018-0802）, 该漏洞的技术原理类似于潜伏了17年的漏洞(CVE-2017-11882）, 是由于office公式编辑器组件EQNEDT32.EXE，对字体名的长度没有进行长度检验, 导致攻击者可以通过构造畸形的字体名,执行任意代码。
+江民安全实验室发现该漏洞与2017年11月微软发布修复的CVE-2017-11882漏洞密切相关，安装过CVE-2017-11882漏洞补丁的用户将受到CVE-2018-0802漏洞的威胁, 受攻击用户打开恶意的Office文档时，无需交互，就可能执行恶意代码从而导致电脑被控制。江民病毒监测中心发布预警公告提醒用户采取应对措施。
+漏洞介绍
+威胁类型：任意代码执行
+威胁等级：高
+漏洞名称：CVE-2018-0802
+受影响系统及应用版本：
+Microsoft Office 2007 Service Pack3
+Microsoft Office 2010 Service Pack2 (32-bit editions)
+Microsoft Office 2010 Service Pack2 (64-bit editions)
+Microsoft Office 2013 Service Pack1 (32-bit editions)
+Microsoft Office 2013 Service Pack1 (64-bit editions)
+Microsoft Office 2016 (32-bitedition)
+Microsoft Office 2016 (64-bitedition)
+补丁下载地址：
+https://portal.msrc.microsoft.com/en-US/security-guidance/advisory/CVE-2018-0802
+漏洞分析
+CVE-2018-0802为CVE-2017-11882的补丁绕过漏洞，类型为栈溢出，根本原因为微软在CVE-2017-11882的补丁中没有修复另一处拷贝字体FaceName时的栈溢出。本次漏洞在未打补丁的版本上只会造成crash，但在打补丁的版本上可以被完美利用。下面我们通过poc样本来分析CVE-2018-0802漏洞。
+图1 漏洞程序版本信息
+与CVE-2017-11882一样，本次漏洞的触发数据位于所提取OLE对象的“Equation Native”流内。
+图2样本构造的数据
+Equation Native 数据结构
+据网上公开的资料，整个“EquationNative”的数据构成为：
+EquationNative StreamData = EQNOLEFILEHDR + MTEFData
+在漏洞利用文档中，该结构如下所示：
+图3 EQNLEFILEHDR头结构数据
+图4 MTEFData结构
+图5 MTEFData数据
+程序在初始化一个LOGFONT结构体时, 未对用户输入的字体名进行长度校验,直接进行copy发生溢出, 漏洞函数:
+图6 漏洞触发的函数
+LOGFONT 结构体指针由调用sub_421E39的sub_421774函数传入, 结构体存在于sub_421774的函数栈上, 所以可以导致栈溢出,覆盖返回地址,劫持执行流。
+图7 溢出函数
+分析过程中在sub_421774函数发现一处疑似递归的地方，sub_421774先是调用了漏洞函数sub_421E39去初始化一个LOGFONT结构体，然后调用相关API，传入这个结构体，从系统获取到一个字体名称保存到Name。随后，它将获取到的Name和用户提供的lpLogFont作对比，如果不一致则调用sub_4115A7函数, 这个函数间接调用CVE-2017-11882 的漏洞函数, 如果没有安装CVE-2017-11882这个补丁程序将在这里崩溃 ，之后会再根据a3指定的条件来继续调用或者不调用自身，而a3为sub_421E39函数的第3个参数， 这里调用自身时传入的第三个参数为0, 并且传入的lpLogFont为从系统的获取的Name所以不会发生二次溢出且不会继续递归，所以函数可以正常返回。
+图8 函数调用流程
+漏洞利用
+通过分析我们发现, 在sub_421774函数中发生溢出, 溢出原因是因为在初始化LOGFONT结构体的lfFaceName字段时发生溢出，通过漏洞分析中的图2可以看出该结构体存在于函数栈距离返回地址(0xAC+0x4)的位置, 而lfFaceName的字段在LOGFONT结构体的偏移为0x1c, 如下图, 所以要覆盖返回地址需要填充(0xAC+0x4-0x1c)的数据。
+图9 LOGFONT结构体
+通过查看程序的保护属性， 发现程序开启了ALSR保护, 单并未开启数据执行保护，值得一提的是,字体名的源缓冲区指针作为溢出函数的第一个参数传入,并且函数使用stdcall调用协议, 也就是说当函数返回后, 字体名的源缓冲区的地址将保存在栈顶, 此时我们只要能执行一个ret指令就可以跳转到字体名的源缓冲区的内存上执行。此时我们只需要绕过ALSR找到一个地址可靠的ret指令即可。有必要说一下ALSR并不是完全的地址随机化， ALSR只会以0x10000为单位， 进行随机， 假设我们返回地址为0xc014e2，那么如果在0xc00000到0xc0ffff的内存地址内找到一个ret指令，并且能做到只覆盖返回地址的低地址的2个字节, 因为是字符串copy所以范围缩小到0xc00000到0xc000ff。
+通过查找找到0xc00025这个地址
+根据之前的结论在覆盖返回值之前有(0xAC+0x4-0x1c = 0x94)大小的空间, shellcode的大小必须小于等于0x94， 这也足够了, shellcode布局:
+图9 shellcode布局
+函数两次返回,返回到字体名的源缓冲区执行代码, 元缓冲区为我们构造的shellcode , shellcode 被执行, 漏洞被触发
+图10 漏洞触发后的场景
+处理方案：
+一、及时更新补丁
+补丁下载地址：
+https://portal.msrc.microsoft.com/en-US/security-guidance/advisory/CVE-2018-0802
+二、通过注册表禁用此模块，可通过修改注册表，禁用以下COM控件的方式进行缓解，其中XX.X为版本号
+在运行中输入：
+reg add "HKLM\SOFTWARE\Microsoft\Office\XX.X\Common\COMCompatibility\{0002CE02-0000- 0000-C000-000000000046}" /v"Compatibility Flags" /t REG_DWORD /d 0x400
+reg add"HKLM\SOFTWARE\Wow6432Node\Microsoft\Office\XX.X\Common\COMCompatibility\{0002CE02-0000-0000-C000-000000000046}" /v"Compatibility Flags" /t REG_DWORD /d 0x400
+三、江民防病毒软件补丁库已加入了（CVE-2018-0802）漏洞，江民防病毒网关及江民病毒威胁预警系统，已及时更新特征库，可以对该漏洞进行防护。

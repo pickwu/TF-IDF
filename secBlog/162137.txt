@@ -1,0 +1,76 @@
+安全资讯
+恶意安卓组件致游戏传播恶意广告，450万用户受影响 点击率 315
+美国情报界的全球威胁评估 点击率 237
+个人发展与七大能力管理 点击率 209
+数据跨境流动政策认知与建议 点击率 184
+Ransomware Hero to Receive FBI Award 点击率 155
+安全技术
+你的剪切板被强制复制 点击率 535
+DedeCMS最新版(20180109)任意用户密码修改漏洞分析 点击率 509
+2017年安全行业年度报告汇总 点击率 497
+谁动了我的金矿：深扒黑产挖矿进阶之路 点击率 487
+2017年度安全报告––供应链 点击率 480
+比特币交易记录仍然能暴露你的身份[论文] 点击率 477
+软路由实现流量拦截 点击率 441
+千倍速一句话密码爆破工具 点击率 435
+SecWiki周刊（第204期) 点击率 429
+CrossRat远程控制软件的分析 点击率 427
+恶意软件逆向 - Burpsuite Keygen 点击率 407
+SigKill: 一键绕过App签名验证 点击率 367
+Python安全和代码审计相关资料收集 点击率 364
+基础科普：蓝牙安全的从0到5 点击率 331
+Web安全-逻辑漏洞讲解 点击率 321
+各种加密代理协议的简单对比 点击率 319
+基于反病毒软件、代理、DNS和HTTP日志的威胁检测技术 点击率 314
+冷门知识 — NoSQL注入知多少 点击率 313
+Windows 提权命令指南 点击率 298
+wget 缓冲区溢出漏洞分析（CVE-2017-13089） 点击率 296
+kDriver-Fuzzer：基于ioctlbf框架编写的驱动漏洞挖掘工具 点击率 292
+Ver-observer： 探测框架及依赖版本的命令行工具 点击率 251
+2017年网络诈骗趋势研究报告（全文） 点击率 247
+xlog：轻量web日志扫描工具 点击率 244
+Enumerating remote access policies through GPO 点击率 243
+injectify: Perform advanced MiTM attacks on websites 中间人脚本攻击 点击率 239
+深度学习PHP webshell查杀引擎demo 点击率 235
+Operation PZChao: a possible return of the Iron Tiger APT 点击率 233
+TheMoon : 一个僵尸网络的老皇历和新变种 点击率 226
+Lotus Blossom 团伙对东南亚国家联盟的攻击的分析 点击率 224
+Deemon:自动化CSRF安全检测框架 点击率 224
+全球云服务商 IP 地址分析报告 2H 2017 点击率 219
+2018中国区块链行业白皮书 点击率 217
+WEB访问日志自动化分析浅谈 点击率 207
+2017年度ITOT一体化的工业信息安全态势报告（2017） 点击率 207
+Flash 0 Day In The Wild: Group 123 At The Controls 点击率 207
+APTSimulator: APT 受害者环境模拟工具 点击率 203
+DDG.Mining.Botnet：一个瞄准数据库服务器的挖矿僵尸网络 点击率 190
+IEEE European Symposium on Security and Privacy 2018 (EuroS&P) 论文接收列表 点击率 186
+PHP代码安全杂谈 点击率 183
+VERMIN: Quasar RAT and Custom Malware Used In Ukraine 点击率 182
+Android Hook技术防范漫谈 点击率 180
+embedded-device-lab：利用qemu模拟物联网漏洞的测试环境 点击率 174
+Reviving DDE: Using OneNote and Excel for Code Execution 点击率 172
+企业安全项目-测试环境内网化 点击率 172
+GPS欺骗（一）—无人机的劫持 点击率 164
+IE沙箱拖拽安全策略解析 点击率 162
+Malicious Traffic Collection 浏览器Exploit Packs恶意样本流量数据 点击率 161
+A Walk-Through Tutorial, with Code, on Statically Unpacking the FinSpy VM 点击率 159
+A tool I have found incredibly useful whenever creating custom shellcode 点击率 159
+Automating Apache mod_rewrite and Cobalt Strike Malleable C2 Profiles 点击率 159
+starc: Simple high-interactive client honeypot 点击率 154
+web-traffic-forecasting: Kaggle 网站流量预测比赛代码 点击率 154
+深入研究的套路之黑客与区块链 点击率 152
+FinSpy VM Part 2: VM Analysis and Bytecode Disassembly 点击率 151
+Very flexible Host IDS designed for Windows 点击率 151
+Drive-by Download Must Die 浏览器漏洞利用检测 点击率 150
+mal_getter: Tool for dropping malware from EK 恶意网页提取样本程序 点击率 147
+谷歌的零信任安全架构实践 点击率 120
+Android平台挖矿木马研究报告 点击率 118
+代码审计“吃鸡”辅助外挂黑色产业链 点击率 114
+浅谈情报的实践与落地 点击率 103
+Ransom Where? Malicious Cryptocurrency Miners Takeover, Generating Millions 点击率 102
+面向千万级用户的运维事件管理之路 点击率 89
+开源HIDS OSSEC部署与扩展使用 点击率 85
+Cisco Adaptive Security Appliance Remote Code Execution and Denial of Service Vu 点击率 67
+SecWiki 专注安全领域最新资讯、专题和导航，做高质量聚合与评论。
+-----微信ID：SecWiki----- SecWiki，5年来一直专注安全技术资讯分析！ SecWiki：https://www.sec-wiki.com
+本期原文地址: SecWiki周刊(第205期)

@@ -1,0 +1,43 @@
+非常简单的小制作，适合新手以及初学者 入门学习，也请各位大神多多指点。自己测了下稍微有些偏差，显示鞋码比我实际鞋码大了一号，各位大大有没有意见我改正下。下面是具体的制作过程和代码。
+1.原理
+鞋码匹配仪，利用超声波测距的原理。通过使用超声波遇到障碍返回的特性，计算超声波放出与返回的时间计算来测定障碍与超声波模块的距离。
+鞋码匹配仪的固有大小已知，在脚放入时，大小会发生改变 使用已知距离对改变后的距离做差获得脚的尺寸，再通过尺寸与距离的转换得到正确的鞋码（此处使用标准鞋码）。
+2. 所需元器件（某宝能买到 挺便宜的）
+· 超声波模块 1个 · TPYBoard v102板子 1块 · 四位数码管 1个 · micro USB数据线 1条 · 杜邦线 若干
+3. 超声波模块工作原理
+(1) 采用IO口TRIG触发测距，给最少10us的高电平信号。 (2) 模块自动发送 8 个 40khz 的方波，自动检测是否有信号返回。 (3) 有信号返回，通过 IO 口 ECHO 输出一个高电平，高电平持续的时间就是超声波从发射到返回的时间。测试距离=(高电平时间*声速(340M/S))/2。
+如下图接线，VCC 供 5V电源， GND 为地线，TRIG 触发控制信号输入，ECHO 回响信号输出等四个接口端。
+4. 控制四位数码管显示数字
+（2）a、b、c、d、e、f、g、dp（h）是“段选”针脚，用法和1位数码管一致，用来显示具体的数值。
+数码管（位选）
+TPYBoard v10x开发板
+1
+X3
+2
+X4
+3
+X5
+4
+GND(鞋码匹配用不到四位所以该脚拉低)
+数码管（段选）
+TPYBoard v10x开发板
+a
+X6
+b
+X7
+c
+X8
+d
+Y9
+e
+Y10
+f
+Y11
+g
+Y12
+dp(h)
+留空(此脚为小数点的控制脚悬空即可)
+5. 接线图
+6. 源代码
+import pyb from pyb import Pin from pyb import Timer from machine import SPI,Pin Trig = Pin('X2',Pin.OUT_PP) Echo = Pin('X1',Pin.IN) num=0 flag=0 run=1 def start(t): global flag global num if(flag==0): num=0 else: num=num+1 def stop(t): global run if(run==0): run=1 start1=Timer(1,freq=10000,callback=start) stop1=Timer(4,freq=2,callback=stop) sizecc = [35,36,37,38,39,40,41,42,43,44,45,46,47]#280-47 -5 while True: if(run==1): Trig.value(1) pyb.udelay(100) Trig.value(0) while(Echo.value()==0): Trig.value(1) pyb.udelay(100) Trig.value(0) flag=0 if(Echo.value()==1): flag=1 while(Echo.value()==1): flag=1 if(num!=0): #print('num:',num) distance=num/1000*34000/2 print('Distance') print(distance,'mm') cc = (int)((distance-215)/5) if cc<0: cc=0 elif cc>12: cc=12 print(sizecc[cc],'cc') flag=0 run=0
+*本文作者：bodasister，转载请注明来自FreeBuf.COM

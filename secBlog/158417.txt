@@ -1,0 +1,20 @@
+近期，Fortinet（飞塔）主机终端安全防护软件FortiClient，被曝在Windows登录界面处存在权限提升漏洞（CVE-2017-7344 ），可被攻击者利用，绕过Windows系统锁屏，或以匿名方式进入Windows系统。
+FortiClient是集攻击防护、漏洞检测、病毒查杀、远程安全登录为一体的终端防护软件，其远程安全登录功能中使用了SSL/IPSec VPN方式，为客户提供安全可靠的虚拟专用网络接入。
+漏洞介绍
+利用该漏洞，在Windows操作系统锁屏出现登录界面时，攻击者可通过其实现本地或无网络级别身份验证（NLA）的RDP环境（远程桌面连接）远程攻击。
+CVE编号：CVE-2017-7344 远程利用：是 影响级别：高 造成危害：权限提升，绕过Windows系统锁屏，或以匿名方式进入Windows系统 利用方式：在勾选“登录前启用VPN”（Enable VPN before logon）状态时，无需默认配置信息，无需有效证书，只需一个无效证书，或攻击者在客户端提供的被盗笔记本电脑中的无效证书即可。 影响版本：FortiClient Windows 5.6.0 \ FortiClient Windows 5.4.3和之前版本 利用描述：默认情况下，在登录进入系统之前，FortiClient允许用户在登录界面处连接到某个VPN网络。本地或远程攻击者可以利用该漏洞绕过系统锁屏，无需合法账户信息进入系统，并获取Windows系统权限。
+漏洞利用
+漏洞环境
+以下为Windows 7专业版本 64位英文操作系统，系统中装有存在漏洞的FortiClient 5.4.2.0860版本软件，如下所示：
+用FortiGate防火墙在FortiClient中创建VPN连接，或尝试连接任何具有无效证书的域，如expired.badssl.com：
+勾选FortiClient中“系统登录前启用VPN”（Enable VPN before logon）功能：
+退出系统登录状态，此时该系统环境为即为一个存在漏洞的测试环境。
+测试步骤
+在系统登录界面，选择VPN配置文件并输入任意密码，证书会显示无效，当连接对话框跳出来之后，点击“View Certificate（查看证书）”：
+然后来到“Details"（详细信息）栏下，选择”Copy to file“（复制到文件）：
+接下来，会出现导出文件的”Browse“（浏览）窗口：
+点击”Browse“（浏览）按钮，选择至”C:\Windows\System32“，在其中找到cmd.exe，右键”Run as administrator"以管理员身份运行，就这样我们有了一个屌炸天的系统shell了！用它来添加一个用户名密码为pwn/pwn的系统账户：
+用该账户可实现成功的系统登录：
+漏洞参考
+Fortinet PSIRT Advisory: FG-IR-17-070 CERT-FR: CERTFR-2017-AVI-471 SecurityFocus: BID 102176 Mitre: CVE-2017-7344
+*参考来源：securite，freebuf小编clouds编译，转载请注明来自FreeBuf.COM

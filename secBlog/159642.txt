@@ -1,0 +1,128 @@
+*本文中涉及到的相关漏洞已报送厂商并得到修复，本文仅限技术研究与讨论，严禁用于非法用途，否则产生的一切后果自行承担。
+近日，针对 Google公司的 公司的Project Zero等安全团队披露出的英特尔等处理器芯片存在非常严重的安全漏洞。这次的漏洞分别起名Meltdown(崩溃)和Spectre(幽灵)。这两个漏洞允许黑客窃取计算机的全部内存内容，包括移动设备、个人计算机、以及在所谓的云计算机网络中运行的服务器。
+作为战斗第一线的救火队员，最近几天被两个漏洞折磨的头晕脑胀，为了更好的给客户提供服务，翻遍了中外网站大部份相关热文，现整理出下面10多类应急方案，与各位一线兄弟共勉，希望对大家有所帮助。
+漏洞危害
+对多租户下的云服务体系影响比较大，攻击者在云平台通过本地的普通的访问权限就可以读取云平台的敏感信息，为进一步获得更高的权限和获得机密数据提供了可能。
+该漏洞的危害还在于攻击者可以通过该漏洞远程发起攻击，当目标设备访问远程服务器的网页时，攻击者可以通过恶意js脚本来获得目标设备上的敏感信息，如保存在内存中的密码Cookie等。
+这些缺陷几乎影响到所有电脑和移动设备，但不一下是严重风险，目前还没有证据说明，黑客已经撑握利用这些缺陷的方法。
+一些主流的杀毒软件程序与补丁程序不兼容，从而会导致台式或冬笔记本电脑停止响应并显示“蓝屏死机”。
+杀毒软件厂商对此反馈修改其产品，更好的与更新后的操作系统兼容。微软近期在博客中称，只会向那些杀毒软件提供商已向其证实安全补丁不会导致客户电脑崩溃的Windows用户提供补丁更新，因此，Windows自动更新机制不会推送该补丁，如果用户需要应用相关补丁的话需做好充分的测试及回退措施。
+Spectre没有简单的解决方案，可许要重新设计处理器；Meltdown解决这个问题所需要的软件补丁可能会使计算机运行速度下降30%。
+处置建议
+敏感数据和运算尽可能在独立的安全芯片上运行，使得普通权限的执行环境和高权限的执行环境从物理上隔离起来。
+及时升级补丁，特别是公有云平台。由于云服务体系的庞大、复杂，云服务厂家应尽早地进行漏洞修补，避免关键数据和隐私的泄露、登陆凭证被窃取导致连锁攻击等次生灾害。
+目前基于软件补丁只是做了临时隔离，如TLB隔离等，但是未来将会有一些绕过技术会出现，更换硬件才是彻底修复这个问题的关键，以及针对此漏洞进行风险的安全评估。
+2.1 INTEL
+目前已经开始提供软件和固件更新以减轻这些漏洞。最终用户和系统管理员应该检查操作系统供应商和系统制造商，并尽快应用所有更新。
+对于使用这些漏洞攻击安全的恶意软件，必须在系统上本地运行。英特尔强烈建议用户遵循良好的安全措施，以防范恶意软件，因为这也有助于防止可能的漏洞利用。
+威胁环境不断演变。英特尔致力于打造产品的安全性和可靠性，并与安全研究人员和业内其他人士进行建设性的合作，以帮助保护用户的敏感信息。
+2.2 AMD
+下面的表格详细介绍了具体变体研究以及 AMD 的回复细节。
+Google Project Zero （ GPZ ） 技术详细 变体 1 边界检查旁路 由软件 / 操作系统更新解决，由系统供应商和制造商提供。性能影响可以忽略不计。 变体 2 分支目标注入 AMD 体系结构的差异意味着这个变体的开发风险几乎为零。到目前为止，在 AMD 处理器上还没证明对 Variant 2 的漏洞。 变体 3 恶意数据缓存加载 由于 AMD 体系结构的差异导致的 AMD 零漏洞。
+2.3 ARM
+以下已经确认产品受到这些漏洞的影响。
+Processor 变体 1 变体 2 变体 3 变体 3a Cortex-R7 Yes* Yes* No No Cortex-R8 Yes* Yes* No No Cortex-A8 Yes (under review) Yes No No Cortex-A9 Yes Yes No No Cortex-A15 Yes (under review) Yes No Yes Cortex-A17 Yes Yes No No Cortex-A57 Yes Yes No Yes Cortex-A72 Yes Yes No Yes Cortex-A73 Yes Yes No No Cortex-A75 Yes Yes Yes No
+由于Cortex-R的常见使用模式是在非开放环境中，应用程序或进程受到严格控制，因此无法被利用。
+应用Arm提供的所有内核补丁：
+https://git.kernel.org/pub/scm/linux/kernel/git/arm64/linux.git/log/?h=kpti
+2.4 华为
+以下已经确认产品受到这些漏洞的影响。
+BH621 V2 DH626 V2 XH310 V3 2488 V5 RH2268 V2 CH222 CH220 V3 9008 X6000 RH2488 V2 RH5885 V3 RH1288 V2 BH622 V2 DH628 V2 XH321 V3 XH320 RH2285 V2 CH240 CH222 V3 9016 DH310 V2 RH5885 V2 RH5885H V3 RH2265 V2 BH640 V2 XH310 V2 XH620 V3 XH620 RH2285H V2 CH242 CH225 V3 9032 DH320 V2 RH1288A V2 5288 V3 FusionServer G5500 CH121 XH311 V2 XH622 V3 2488 V5 RH2288 V2 CH121 V3 CH226 V3 XH321 V5 DH321 V2 RH2288A V2 RH8100 V3 CH242 V5 CH140 XH320 V2 XH628 V3 XH621 V2 RH2288E V2 CH121L V3 CH242 V3 CH140L V3 DH620 V2 RH1288 V3 1288H V5 CH221 CH220 XH321 V2 X6000 V3 RH2485 V2 RH2288H V2 CH140 V3 CH121 V5 DH621 V2 RH2288 V3 2288H V5
+软件版本和修复情况
+产品名称 受影响的版本 已解决的产品和版本 CH121 V3 V100R001C00SPC250之前的版本 V100R001C00SPC250 [1] CH121L V3 版本在V100R001C00SPC150之前 V100R001C00SPC150 [1] CH140 V3 V100R001C00SPC170之前的版本 V100R001C00SPC170 [1] CH140L V3 版本在V100R001C00SPC150之前 V100R001C00SPC150 [1] CH220 V3 V100R001C00SPC250之前的版本 V100R001C00SPC250 [1] CH222 V3 V100R001C00SPC250之前的版本 V100R001C00SPC250 [1] CH225 V3 版本在V100R001C00SPC150之前 V100R001C00SPC150 [1] CH226 V3 V100R001C00SPC170之前的版本 V100R001C00SPC170 [1] 1288H V5 V100R005C00SPC107之前的版本 V100R005C00SPC107 [2] 2288H V5 V100R005C00SPC107之前的版本 V100R005C00SPC107 [2]
+注意：
+[1]将BIOS升级至V382版本，将iBMC升级至V268版本。除了这两个组件外，还需要升级操作系统供应商提供的操作系统补丁。 [2]将BIOS升级至V055版本，将iBMC升级至V270版本。除了这两个组件外，还需要升级操作系统供应商提供的操作系统补丁。
+2.5 IBM
+针对 Power Systems 客户端完全缓解此漏洞涉及将修补程序安装到系统固件和操作系统。固件修补程序为此漏洞提供了部分修复，并且是操作系统修补程序有效的先决条件。这些将可用如下：
+POWER7 +，POWER8和POWER9平台的固件补丁在1 月9 日发布，将在 POWER7 + 之前提供有关支持的代的进一步通信，包括固件补丁和可用性。
+Linux操作系统补丁程序于 1 月 9 日开始提供。AIX 和 i 操作系统补丁程序将于 2 月 12 日开始提供。信息将通过 PSIRT提供。
+建议客户应该在数据中心环境和标准评估实践的环境中审查这些补丁，以确定是否应该应用这些补丁。目前已确认IBM存储设备不受此漏洞的影响。
+2.6 Cisco
+已经确认以下产品受到这些漏洞的影响。
+产品 思科 Bug ID 固定版本可用性 路由和交换 - 企业和服务提供商 思科 800 工业集成多业务路由器 CSCvh31418
+统一计算 思科 UCS B 系列 M2 刀片服务器 CSCvh31576 修复挂起 思科 UCS B 系列 M3 刀片服务器 CSCvg97965 （ 18-FEB-2018 ） Cisco UCS B 系列 M4 刀片服务器（ B260 ， B460 除外） CSCvg97979 （ 18-FEB-2018 ） Cisco UCS B 系列 M5 刀片服务器 CSCvh31577 （ 18-FEB-2018 ） Cisco UCS B260 M4 刀片服务器 CSCvg98015 （ 18-FEB-2018 ） 思科 UCS B460 M4 刀片服务器 CSCvg98015 （ 18-FEB-2018 ） 思科 UCS C 系列 M2 机架服务器 CSCvh31576 修复挂起 思科 UCS C 系列 M3 机架服务器 CSCvg97965 （ 18-FEB-2018 ） Cisco UCS C 系列 M4 机架式服务器（ C460 除外） CSCvg97979 （ 18-FEB-2018 ） 思科 UCS C 系列 M5 机架式服务器 CSCvh31577 （ 18-FEB-2018 ） 思科 UCS C460 M4 机架式服务器 CSCvg98015 （ 18-FEB-2018
+思科已确认这些漏洞不会影响以下产品：
+路由和交换 - 企业和服务提供商，思科1000系列互联电网路由器。
+2.7 Windows Server服务器
+建议的操作
+1) 应用Windows操作系统更新。 2) 进行必要的配置更改以启用保护。 3) 从OEM设备制造商应用适用的固件更新。 4) 在服务器启用保护（Hyper-V主机、远程桌面服务主机RDSH、不可信代码的物理主机或虚拟机）
+使用这些注册表项在服务器上启用缓解措施，并确保重新启动系统以使更改生效：
+修改注册表设置
+reg添加“HKEY_LOCAL_MACHINE \ SYSTEM \CurrentControlSet \ Control \ Session Manager \ Memory Management”/ vFeatureSettingsOverride / t REG_DWORD / d 0 / f reg添加“HKEY_LOCAL_MACHINE \ SYSTEM \CurrentControlSet \ Control \ Session Manager \ Memory Management”/ vFeatureSettingsOverrideMask / t REG_DWORD / d 3 / f reg添加“HKLM \ SOFTWARE \ Microsoft \ WindowsNT \ CurrentVersion \ Virtualization”/ v MinVmVersionForCpuBasedMitigations / tREG_SZ / d“1.0”/ f 如果这是Hyper-V主机：完全关闭所有虚拟机。 重新启动服务器以使更改生效。
+禁用此修复程序
+reg添加“HKEY_LOCAL_MACHINE \ SYSTEM \CurrentControlSet \ Control \ Session Manager \ Memory Management”/ vFeatureSettingsOverride / t REG_DWORD / d 3 / f reg添加“HKEY_LOCAL_MACHINE \ SYSTEM \CurrentControlSet \ Control \ Session Manager \ Memory Management”/ vFeatureSettingsOverrideMask / t REG_DWORD / d 3 / f
+重新启动服务器以使更改生效。
+不需要改变MinVmVersionForCpuBasedMitigations。
+Windows Server，版本1709（服务器核心安装）
+http://download.windowsupdate.com/d/msdownload/update/software/secu/2018/01/windows10.0-kb4056892-x86_delta_45f3a157eb4b4ced11044f6c462f21ec74287cb5.msu
+Windows Server 2016
+http://download.windowsupdate.com/d/msdownload/update/software/secu/2018/01/windows10.0-kb4056890-x86_delta_ae277fcd1c944c58250231266a9a5d73ea5a6114.msu
+Windows Server 2012 R2
+http://download.windowsupdate.com/d/msdownload/update/software/secu/2018/01/windows8.1-kb4056898-v2-x86_f0781f0b1d96c7b12a18c66f99cf94447b2fa07f.msu
+Windows Server 2008 R2
+http://download.windowsupdate.com/d/msdownload/update/software/secu/2018/01/windows6.1-kb4056897-x64_2af35062f69ce80c4cd6eef030eda31ca5c109ed.msu
+2.8 Windows客户端
+操作建议：
+在安装操作系统或固件更新之前，请确认您正在运行受支持的防病毒应用程序。有关兼容性信息，请与防病毒软件供应商联系。 应用所有可用的Windows操作系统更新，包括2018年1月的Windows安全更新。 应用设备制造商提供的适用固件更新。
+注意：
+安装Windows 2018年1月版安全更新的客户将无法获得所有已知的针对此漏洞的保护。除了安装1月份的安全更新之外，还需要更新处理器微代码或固件，具体可联系设备商。
+2.9 VMware
+版本的补丁，此修补程序针对CVE-2017-5715进行了修复，但未针对CVE-2017-5753进行修复。
+VMware ESXi 6.5
+下载： https://my.vmware.com/group/vmware/patch
+VMware ESXi 6.0
+下载：https://my.vmware.com/group/vmware/patch
+VMware ESXi 5.5
+下载：https://my.vmware.com/group/vmware/patch
+VMware Workstation Pro，Player 12.5.8
+下载：https://www.vmware.com/go/downloadworkstation
+VMware Fusion Pro /Fusion 8.5.9
+下载：https://www.vmware.com/go/downloadfusion
+2.10 CitrixXenServer
+Citrix XenServer 7.3：CTX230790 - https://support.citrix.com/article/ctx230790
+Citrix XenServer 7.2：CTX230789 - https://support.citrix.com/article/ctx230789
+Citrix XenServer 7.1 LTSRCU1：CTX230788 - https://support.citrix.com/article/ctx230788
+2.11 Mozilla
+已经发布了上述两个与时间相关的缓解措施，分别是Firefox57.0.4，Beta和Developers Edition58.0b14，以及“2018-01-04”及以后版本的Nightly59.0a1。Firefox 52 ESR不支持SharedArrayBuffer，风险较小; 的performance.now()缓解将包括在2018 1月23日定期的FirefoxESR 52.6释放。
+2.12 Red Hat
+运行受影响版本的红帽产品的红帽客户建议客户立即应用适当的更新。所有受影响的产品都应该使用修补程序来减轻所有3个变体; CVE-2017-5753（变体1）， CVE-2017-5715（变体2）和CVE-2017-5754（变体3）。
+2.13 Ubuntu
+截至2018年1月07日选择各种版本内核进行测试，首轮将针对x86_64，解决CVE-2017-5754、CVE-2017-5715和CVE-2017-5753。当前可用的内核如下，后续还有更多的测试结果公布。
+Package Version Series linux 4.4.0-108.131 Xenial 16.04 linux 4.13.0-24.28 Artful 17.10 linux-aws 4.4.0-1047.56 Xenial 16.04 linux-aws 4.4.0-1009.9 Trusty 14.04 linux-azure 4.13.0-1004.6 Xenial 16.04 linux-euclid 4.4.0-9021.22 Xenial 16.04 linux-gcp 4.13.0-1005.8 Xenial 16.04 linux-hwe-edge 4.13.0-24.28~16.04.1 Xenial 16.04 linux-kvm 4.4.0-1015.20 Xenial 16.04 linux-lts-xenial 4.4.0-108.131~14.04.1 Trusty 14.04 linux-oem 4.13.0-1014.15 Xenial 16.04
+目前CPU执行利用可能会通过定时副通道攻击泄漏信息，并且这可能会在Web浏览器JavaScript引擎中被利用。如果用户被诱骗打开特制网站，攻击者可能会利用此漏洞从其他域获取敏感信息，绕过同源限制。
+Firefox的漏洞安全问题影响Ubuntu版本：
+Ubuntu 17.10 Ubuntu 17.04 Ubuntu 16.04 LTS Ubuntu 14.04 LTS
+通过将系统更新到以下软件包版本可以解决：
+a) Ubuntu 17.10：
+火狐 57.0.4 +build1-0ubuntu0.17.10.1
+b) Ubuntu 17.04：
+火狐 57.0.4 +build1-0ubuntu0.17.04.1
+c) Ubuntu 16.04 LTS：
+firefox 57.0.4 + build1-0ubuntu0.16.04.1
+d) Ubuntu 14.04 LTS：
+火狐 57.0.4 +build1-0ubuntu0.14.04.1
+2.14 SUSE
+SUSE发布了以下更新：
+SLES 12 SP3
+1) kernel-default-4.4.103-6.38.1 2) kernel-firmware-20170530-21.16.1 3) ucode-intel-20170707-13.8.1 4) qemu-2.9.1-6.9.2
+SLES 12 SP2
+1) kernel-default-4.4.103-92.56.1 2) kernel-firmware-20170530-21.16.1 3) ucode-intel-20170707-13.8.1
+SLES 12 SP1-LTSS
+1) kernel-default-3.12.74-60.64.69.1 2) ucode-intel-20170707-13.8.1
+SLES 12-LTSS
+1) ucode-intel-20170707-13.8.1
+SLES 11 SP4
+1) kernel-default-3.0.101-108.21.1 2) microcode_ctl-1.17-102.83.6.1
+SLES 11 SP3-LTSS
+1) microcode_ctl-1.17-102.83.6.1
+SUSE CaaS平台
+2) kernel-firmware-20170530-21.16.1 3) qemu-2.9.1-6.9.2
+英特尔称，苹果、亚马逊、谷歌和微软等公司几乎未发现安全升级对运行产生的影响，但补丁升级的稳定性还需要时间进行验证。
+由于这些问题都在底层物理CPU的优化功能中，因此缓解这些问题必然会导致CPU性能的降低。这种性能影响取决于许多因素，包括工作负载和CPU模型。建议客户在安装这些修补程序后监视其系统负载。
+关于漏洞原理部分已经满天飞，在此不做详细说明。下面附上是漏洞影响有兴趣可以关注。
+漏洞影响
+漏洞风险等级为严重，影响广泛：
+Ø 近20年的Intel, AMD, Qualcomm厂家和其它ARM的处理器受到影响； Ø 因为此次CPU漏洞的特殊性，包括Linux, Windows, MacOS、Android、iOS等在内的操作系统平台参与了修复； Ø Firefox, Chrome, Edge、Internet Explorer 11等浏览器也发布了相关的安全公告和缓解方案； Ø 影响许多大牌云计算平台，如Amazon EC2、Microsoft Azure、 Google Compute Engine、腾讯以及阿里云等。
+已知的受影响的intel处理器列表（数据来自intel官网）：
+1. Intel® Core™ i3 processor (45nm and 32nm) 2. Intel® Core™ i5 processor (45nm and 32nm) 3. Intel® Core™ i7 processor (45nm and 32nm) 4. Intel® Core™ M processor family (45nm and 32nm) 5. 2nd generation Intel® Core™ processors 6. 3rd generation Intel® Core™ processors 7. 4th generation Intel® Core™ processors 8. 5th generation Intel® Core™ processors 9. 6th generation Intel® Core™ processors 10. 7th generation Intel® Core™ processors 11. 8th generation Intel® Core™ processors 12. Intel® Core™ X-series Processor Family for Intel® X99 platforms 13. Intel® Core™ X-series Processor Family for Intel® X299 platforms 14. Intel® Xeon® processor 3400 series 15. Intel® Xeon® processor 3600 series 16. Intel® Xeon® processor 5500 series 17. Intel® Xeon® processor 5600 series 18. Intel® Xeon® processor 6500 series 19. Intel® Xeon® processor 7500 series 20. Intel® Xeon® Processor E3 Family 21. Intel® Xeon® Processor E3 v2 Family 22. Intel® Xeon® Processor E3 v3 Family 23. Intel® Xeon® Processor E3 v4 Family 24. Intel® Xeon® Processor E3 v5 Family 25. Intel® Xeon® Processor E3 v6 Family 26. Intel® Xeon® Processor E5 Family 27. Intel® Xeon® Processor E5 v2 Family 28. Intel® Xeon® Processor E5 v3 Family 29. Intel® Xeon® Processor E5 v4 Family 30. Intel® Xeon® Processor E7 Family 31. Intel® Xeon® Processor E7 v2 Family 32. Intel® Xeon® Processor E7 v3 Family 33. Intel® Xeon® Processor E7 v4 Family 34. Intel® Xeon® Processor Scalable Family 35. Intel® Xeon Phi™ Processor 3200, 5200, 7200 Series 36. Intel® Atom™ Processor C Series 37. Intel® Atom™ Processor E Series 38. Intel® Atom™ Processor A Series 39. Intel® Atom™ Processor x3 Series 40. Intel® Atom™ Processor Z Series 41. Intel® Celeron® Processor J Series 42. Intel® Celeron® Processor N Series 43. Intel® Pentium® Processor J Series 44. Intel® Pentium® Processor N Series
+*本文作者：2cat，转载请注明来自 FreeBuf.COM

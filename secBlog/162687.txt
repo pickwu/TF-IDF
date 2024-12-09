@@ -1,0 +1,36 @@
+CSS相信大家不会陌生，在百度百科中它的解释是一种用来表现HTML（标准通用标记语言的一个应用）或XML（标准通用标记语言的一个子集）等文件样式的计算机语言。那么，它仅仅只是一种用来表示样式的语言吗？当然不是！其实早在几年前，CSS就已被安全研究人员运用于渗透测试当中。这里有一篇文章就为我们详细介绍了一种，使用属性选择器和iFrame，并通过CSS注入来窃取敏感数据的方法。但由于该方法需要iFrame，而大多数主流站点都不允许该操作，因此这种攻击方法并不实用。
+这里我将为大家详细介绍一种不需要iframe且只需10秒，就能为我们有效地窃取CSRF token的方法
+一旦用户的CSRF token被窃取，由于受害者已经在攻击者的网站上，因此攻击者可以继续攻击并完成对用户的CSRF攻击操作。
+背景
+正如原文所描述的那样，CSS属性选择器开发者可以根据属性标签的值匹配子字符串来选择元素。 这些属性值选择器可以做以下操作：
+如果字符串以子字符串开头，则匹配
+如果字符串以子字符串结尾，则匹配
+如果字符串在任何地方包含子字符串，则匹配
+属性选择器能让开发人员查询单个属性的页面HTML标记，并且匹配它们的值。一个实际的用例是将以“https://example.com”开头的所有href属性变为某种特定的颜色。
+而在实际环境中，一些敏感信息会被存放在HTML标签内。在大多数情况下CSRF token都是以这种方式被存储的：即隐藏表单的属性值中。
+这使得我们可以将CSS选择器与表单中的属性进行匹配，并根据表单是否与起始字符串匹配，加载一个外部资源，例如背景图片，来尝试猜测属性的起始字母。
+通过这种方式，攻击者可以进行逐字猜解并最终获取到完整的敏感数值。
+想要解决这个问题受害者可以在其服务器实施内容安全策略（CSP），防止攻击者从外部加载CSS代码。
+无iFrames
+要做到无iFrame，我将使用一种类似于之前我讨论过的方法：我将创建一个弹窗，然后在设置计时器后更改弹出窗口的位置。
+使用这种方法，我仍然可以加载受害者的CSS，但我不再依赖于受害者是否允许iFrame。因为最初的弹出是通过用户事件触发的，所以我并没有被浏览器阻止。
+为了强制重载，我在CSS注入间弹出一个虚拟窗口，如下：
+var win2 = window.open('https://security.love/anything', 'f', "top=100000,left=100000,menubar=1,resizable=1,width=1,height=1") var win2 = window.open(`https://security.love/cssInjection/victim.html?injection=${css}`, 'f', "top=100000,left=100000,menubar=1,resizable=1,width=1,height=1")
+没有后端服务器
+在CureSec的文章中描述了将数据传输到后端服务器，但由于CSRF是针对客户端的攻击，因此如果我们能想出一种不需要服务器的方法，那么就可以为我们节省大量的开销和简化我们的操作。
+为了接收受害者客户端加载资源，我们可以利用Service Workers来拦截和读取请求数据。Service Workers目前只适用于同源请求，在我的演示中受害者和攻击者页面已处于同一源上。
+不过不久后，chrome很可能会合并这个实验性的功能，允许Service Workers拦截跨域请求。
+这样，就可以确保我们在客户端的攻击100%的执行，并强制用户在10秒内点击链接执行CSRF攻击，演示如下：
+Demo
+如上所述，因为我并不想运行一个web服务器，所以我使用service workers拦截和模拟服务器端组件。目前，该演示只适用于Chrome浏览器。
+首先，我创建了一个易受攻击的目标，它存在一个基于DOM的CSS注入漏洞，并在页面放置了一个敏感token。我还对脚本标签添加了一些保护措施，对左尖括号和右尖括号进行了编码。
+<form action="https://security.love" id="sensitiveForm"> <input type="hidden" id="secret" name="secret" value="dJ7cwON4BMyQi3Nrq26i"> </form> <script src="mockingTheBackend.js"></script> <script> var fragment = decodeURIComponent(window.location.href.split("?injection=")[1]); var htmlEncode = fragment.replace(/</g,"&lt;").replace(/>/g,"&gt;"); document.write("<style>" + htmlEncode + "</style>"); </script>
+接下来，我们将强制加载受害者的CSS，并且使用上述方法，可一次窃取（猜解）一个敏感字符。
+在接收端，我已经定义了一个拦截请求的service worker，并通过post-message将它们发送回域，然后我们将token存储在本地存储中以供后续使用。你也可以想象一个后端Web服务器，通过Web套接字或轮询将CSRF token回发给攻击者域。
+目前该测试仅支持CHROME：
+demo
+如果你的浏览器支持的话，只需点击打开页面任意位置，你将看到CSRF token将逐一被猜解出来。
+结语
+有趣的是，反射型CSS注入实际上比存储型CSS注入更致命，因为存储型CSS注入需要一个服务器在受害者渲染之前来更新CSS。
+一段时间以来，CSS注入在严重程度上来回变化。过去IE浏览器是允许用户在CSS中执行Javascript代码的。这个演示也从某种程度上表明了CSS注入，以及在你的域上渲染不受信任的CSS仍会导致严重的安全问题。
+*参考来源：github，FB小编 secist 编译，转载请注明来自FreeBuf.COM

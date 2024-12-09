@@ -1,0 +1,59 @@
+前言
+每周我们都能听到或看到许多关于安全漏洞的预警或报告，虽然看上去大多数的漏洞都千篇一律，但对于我们渗透测试人员而言，其中的一些思路方法和利用点却尤为吸引我们的眼球。最近，知名的内容管理系统Joomla！就被曝出了存在二阶SQL注入漏洞。这里有一篇博文的分析大家可以看看：https://blog.ripstech.com/2018/joomla-privilege-escalation-via-sql-injection/
+在本文中， Savan Gadhiya和Amish Patadiya将尝试帮助我们理解并发现二阶SQL注入方法和利用技术。本文还将演示如何使用SQLmap来利用二阶SQL注入（即不要重复造轮子）。
+什么是二阶SQL注入？
+为了预防SQL注入攻击，而将输入到应用程序中的某些数据进行了“转义（escape）”，但是这些数据却又在“未被转义（Unescaped）”的查询窗体中重复使用。此时，攻击者可能注入的是一个PAYLOAD，这样就会构成一个SQL查询语句并被执行，这就是所谓的二阶SQL注入。
+了解更多：https://portswigger.net/kb/issues/00100210_sql-injection-second-order
+下面，让我们来通过Joomla中二阶SQL注入的例子来更进一步的理解[CVE-2018-6376]。
+详情
+受影响Joomla！版本：<= 3.8.3 and >= 3.7.0
+危害：可将低权限用户（Manager）提升为更高的的用户权限（Administrator’或‘ Super Administrator’）。
+注入检测
+现在，我们已经搭建好了一个版本为3.8.3的Joomla！平台用于测试如下图所示：
+我们创建了具有“Super Users”权限的用户“amish”，以及具有“Manager”权限的另一个用户"savan"，如下所示：
+我们的目标是将“Manager”权限的用户提升为“Super Administrator”权限。因此现在我们以用户'savan'的身份登录。下图显示了用户'savan'的仪表盘，并 且我们也可以看到Super User’当前也处于登录状态：
+从漏洞报告中我们知道，受影响的实例是位于配置文件资料更新页中。下图显示了用户'savan'的配置文件更新页面：
+让我们使用 BURP Suite来拦截配置文件更新请求。如下所示，表单数据的POST请求发向了以下地址：
+http://<IP/domain>/joomla/administrator/index.php?option=com_admin&view=profile&layout=edit&id=645
+受影响的参数是‘forms[params][admin_style]‘，我们将下面的有效载荷插入到受影响的参数中，如下所示：
+PAYLOAD: ‘ (单引号)
+成功提交此请求后，配置文件更新页将显示参考消息“已保存的项目”，如下图所示：
+以上并没有显示任何异样，因为该页面并没有使用被注入的PAYLOAD构造SQL查询并执行。让我们访问下面的URL，使用注入的有效载荷构造SQL查询，并执行，如下图所示：
+http://<IP/domain>/joomla/administrator/index.php
+查看源代码我们可以得知，PAYLOAD的插入并不容易实施SQL注入攻击。下图显示了文件'/administrator/components/com_admin/controllers/profile.php'的代码片段，其中突出显示了“编辑配置文件”功能的路径：
+当用户更新配置文件详细信息时，应用程序将检索所有参数并返回JForm对象，如下图所示：
+下图显示应用程序将检索到的用户信息存储到数据库中：
+上面我们已经确认用户输入并未被构造用于SQL查询，因此PAYLOAD插入实例并不容易实施攻击，让我们在受影响的页面来利用它。如下图所示，我们插入以下字符串作为PAYLOAD，以查看SQL语句是如何被构造的：
+PAYLOAD: test
+通过仪表盘上显示的错误信息我们可以看到，错误信息中仅显示了PAYLOAD的第一个字符。
+接着,我们做了进一步的尝试。我们注入了另一个payload‘AND sleep(5);–‘ 并刷新了仪表盘。如下图所示，我们得到了同样的结果：
+如果此时我们查看数据库，就会发现我们输入的PAYLOAD已被存储在了数据库中：
+在确认payload被正确存储后，下面让我们来验证受影响的代码是如何构造SQL查询的。受影响的实例来自‘administrator/templates/hathor/postinstall/hathormessage.php’文件。如下图所示，代码的第40行主要是从‘admin_style’参数获取用户的输入值并传递给‘adminstyle’变量。在第47行，代码直接使用用户提供的输入来构建SQL查询。这里我们把它看成是一个数组，因此索引值为0的存储值将被用于构造查询。这也就是为什么在错误信息中，只能看到第一字符的原因。
+现在我们已经知道了PAYLOAD会被视为一个数组，索引值为0的存储值将被用于构造查询。因此，让我们尝试提供一个数组‘[“test1″,”test2″,”test3”]’作为PAYLOAD。这么做的目的是测试第0个索引（即“test1”）是否会被用于构造SQL查询。但结果还是令我有点失望，错误信息依旧只显示了第一个字符“[”，这意味着程序将整个PAYLOAD视为了一个字符串，如下所示：
+到这我已经有点怀疑人生了，难道这并不是SQL注入的可利用实例吗？
+灵光一现，我们想到了一个方法，即改变参数名提供数组‘admin_style’的第0个索引。如下图所示，我们使用'jform [params] [admin_style] [0]'更改了参数名称，并将相同的PAYLOAD注入到了'admin_style'的第0个索引中：
+PAYLOAD: AND sleep(5);–
+现在我们可以看到，虽然PAYLOAD并没有被执行，但错误消息中已经可以完整显示我们的PAYLOAD内容。
+我们接着注入以下PAYLOAD来获取目标数据库名称，我们获取到了数据库名称为'joomla'如下图所示：
+Payload: extractvalue(0x0a,concat(0x0a,(select database())))
+现在我们来实现我们的终极目标，即以超级管理员的权限访问应用程序。以下PAYLOAD将为我们获取到超级管理员用户“amish”的session id，如下图所示：
+Payload: extractvalue(0x0a,concat(0x0a,(select * from joomla_session where username=’amish’)))
+成功获取session id后，我们就可以模拟超级管理员用户访问应用了。
+自动化利用
+当在实际的渗透环境中，我们不可能每次都手动进行测试，这样会消耗我们大量的时间。那么，如何让我们的测试实现自动化呢？
+这里就不得不提sql注入的扫描神器SQLMap了。SQLMap为我们提供了专门针对二阶注入的查询开关，我们只需提供可能存在二阶注入的目标URL地址即可。
+注意/限制：由于这是二阶SQL注入，所以我们不能使用多个线程来自动检查每个查询的输出。
+如果我们直接将该实例提供给SQLMap，可能无法正常运作。为了解决这个问题，我们需要创建一个sqlmap可以将其PAYLOAD注入并顺利获取数据的查询。我们构造了以下PAYLOAD，作为请求中‘jform[params][admin_style][0]’参数的值，并使用SQLMap '-r'开关来解析请求，如下图所示：
+PAYLOAD: extractvalue(0x0a,concat(0x0a,(select @@version where 1=1 *)))
+这里的‘*’代表SQLMap注入PAYLOAD的位置，例如：
+extractvalue(0x0a,concat(0x0a,(select @@version where 1=1 AND 5231=5231 )))
+))) extractvalue(0x0a,concat(0x0a,(select @@version where 1=1 AND 5231=1623 )))
+))) extractvalue(0x0a,concat(0x0a,(select @@version where 1=1 OR 7231=7231 )))
+))) extractvalue(0x0a,concat(0x0a,(select @@version where 1=1 order by 1 — )))
+))) extractvalue(0x0a,concat(0x0a,(select @@version where 1=1 union all select NULL,NULL,NULL,’21231231232′)))
+如下图所示，SQLMap现在使用以下命令检测注入并提取所有数据库名称：
+sqlmap -r 1.txt –dbms MySQL –second-order “http://<IP/domain>/joomla/administrator/index.php” -D “joomla” –dbs
+通过Sqlmap我们可以轻松提取到更多的数据。
+防护措施
+为了避免该类漏洞对你的影响，请务必升级你的Joomla！至3.8.5版本（截至本文发布时的最新版本）。Joomla！也提供了代码层的修复方案，如下：
+*参考来源：notsosecure，FB小编 secist 编译，转载请注明来自FreeBuf.COM

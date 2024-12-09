@@ -1,0 +1,43 @@
+*本文中涉及到的相关漏洞已报送厂商并得到修复，本文仅限技术研究与讨论，严禁用于非法用途，否则产生的一切后果自行承担。
+最近，我向智能玩具厂商ToyTalk提交了两个APP相关的漏洞并获得了$1750美金奖励，目前，漏洞已被成功修复，在此我打算公开详细的漏洞发现过程，以便其他APP开发人员将这种脆弱性威胁纳入开发过程的安全性考虑范围。
+漏洞发现背景
+ToyTalk是一家由皮克斯前高管创建的人工智能玩具初创公司，它们设计的智能玩具具备视觉跟踪、语音识别和网络扩展功能，能让儿童通过APP与玩具之间进行语音交流和行为反应识别，激发儿童与虚拟人物的谈话能力，更好地实现与玩具之间的互动乐趣。
+ToyTalk于2015年7月推出了一款名为“托马斯和他的朋友们与你聊天 ”（Thomas & Friends Talk To You）”的付费APP，能让儿童与知名卡通人物“小火车托马斯”（Thomas the Tank Engine）互动聊天，它允许儿童在 8 次多多岛故事之旅中，与托马斯及其朋友培西、高登、亨利、詹姆斯、爱德华、托比、“胖总管”托芬海先生（Sir Topham Hatt）进行双向对话。
+为了测试ToyTalk玩具产品的安全性，以及接入家庭网络环境带来的安全风险，我决定对“托马斯和他的朋友们与你聊天 ”APP进行一些分析研究。由于ToyTalk产品都使用相同的代码库，而且这款托马斯对话APP很容易安装和删除，方便测试，也能有代表性。另外，ToyTalk的其它产品，如Hello Barbie（哈啰芭比）和Barbie Hello Dreamhouse （芭比梦幻之家）也可能存在相同漏洞。
+漏洞情况
+#漏洞1： - 缺乏身份验证机制，攻击者能很容易地假冒成一个儿童与托马斯玩具进行对话 #漏洞2：- 可假冒support@toytalk.com或其它注册用户，发送注入HTML恶意钓鱼链接的邮件
+APP工作原理分析
+“托马斯和他的朋友们与你聊天 ”的APP启动后，要求输入提供一个家长的电子邮件地址，以确认使用APP提供的语音识别功能，当提交了电子邮件地址之后，APP进入运行界面。
+刚开始，你可能会觉得该APP暴露的攻击面非常有限，因为它需要提供与玩具对话的确认权限。
+接下来，我要对该APP进行网络浏览拦截分析。而且在分析中发现，该APP与其它应用不同，它提供了一个与客户端进行认证的证书，也就是说，APP和它的WEB服务器之间也会存在一个相互认证的过程。基于此，我们要先来看看客户端证书和相关密码验证的工作机制。
+通过逆向后我们发现，以下两个函数比较有意思：
+public void setSslClientCertificate(String filename, String passphrase) { InputStream file = null; try { KeyStore store = KeyStore.getInstance("PKCS12"); file = this.mContext.getResources().getAssets().open(filename); store.load(file, passphrase.toCharArray()); this.mClientCertificate = KeyManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm()); this.mClientCertificate.init(store, new char[0]); } catch (Exception e) { Log.OMG(e); } finally { Utils.close(file); } }
+public void setSslCaCertificate(String filename, String passphrase) { InputStream file = null; try { KeyStore store = KeyStore.getInstance("BKS"); file = this.mContext.getResources().getAssets().open(filename); store.load(file, passphrase.toCharArray()); this.mCaCertificate = TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm()); this.mCaCertificate.init(store); } catch (Exception e) { Log.OMG(e); } finally { Utils.close(file); } }
+之后，我没有继续逆向寻找密码传入函数，而是使用以下具备frida hook功能，可以转储密码和文件名的Python脚本来深入：
+import frida import sys def on_message(message, data): print message device = frida.get_device_manager().enumerate_devices()[-1] pid = device.spawn(["com.toytalk.thomas"]) print (pid) session = device.attach(pid) ss = ''' Java.perform(function () { var MyClass = Java.use("com.toytalk.library.HttpRequester"); MyClass.setSslCaCertificate.overload("java.lang.String","java.lang.String").implementation = function(a,b){ send(a); send(b); return this.setSslCaCertificate.overload("java.lang.String","java.lang.String").call(this,a,b); } MyClass.setSslClientCertificate.overload("java.lang.String","java.lang.String").implementation = function(a,b){ send(a); send(b); return this.setSslCaCertificate.overload("java.lang.String","java.lang.String").call(this,a,b); } }) ''' script = session.create_script(ss) script.load() script.on('message', on_message) device.resume(pid) #session.detach() sys.stdin.read()
+高兴的是，可以从apk中提取出正确的认证证书文件，并能用于执行中间人攻击（MITM），而有趣的是，文件toytalk.12没有使用任何密码保护。
+现在，我们就可以使用客户端证书了，但仍需绕过证书锁定（Certificate Pinning）。虽然有几种方式可以实现，但最简单的方法是从apk中删除证书，重建程序然后重新安装。把客户端证书导入Burpsuite，实现了证书锁定功能禁用，之后，我们就可以进入大多数APP程序测试的第一步-流量拦截。
+漏洞分析
+漏洞1 - 缺乏身份验证机制
+该APP程序还提供了一个不太明显的功能，就是其捕获的对话音频文件会存储在线，可备家长后续进行重放收听，该功能与用于之前授权同意的电子邮箱地址绑定，虽然该邮箱地址只在父母执行密码重置时才用得到。
+当"speak" 按钮被按下时，APP会把捕获的音频文件以以下POST请求方式发送到远端Web服务器中：
+虽然其中的发送内容涉及很多变量值，但通过把当前用户ID更改为其它用户ID后，就能把音频文件发送到指定的用户账户名下，这将会允许一些恶意攻击者向儿童父母发送一些淫秽音频信息。
+在这种情况下，虽然用户ID是一个随机的全局惟一标识符（GUID），但我们可以根据邮箱地址等已知线索来发现一些有效的用户ID信息。
+另外，运行ToyTalk代码库的"strings"命令后，也有一点蛛丝马迹可循：
+所以，根据上图信息，一旦客户端证书被安装到浏览器中后，通过访问地址：
+就能下载到一个包含用户ID的文件。有用户ID信息在手，就能更改POST请求中的ID信息，将对话音频发送到任何注册了该APP的邮箱地址中去。该漏洞可以通过要求提供正确的设备ID以及关联用户ID来修复解决。我们还没测试设备ID是否能以其它方法获取，但要向某个用户账号添加一个设备ID，貌似需要访问到关联的邮箱地址才行。
+漏洞报送进程
+2017.8.14 - 向ToyTalk报告漏洞 2017.11.16 - 被分类为一般漏洞并被初次修复，变为closed状态 2017.11.29 - ToyTalk再次测试发现漏洞仍然存在，并重置为reopen状态 2017.12.8 - 完全修复漏洞 2017.12.18 - 漏洞赏金发放并关闭漏洞报告
+漏洞2 - 可向ToyTalk邮件中注入恶意HTML框架
+在以上漏洞1提交过后没几天，我的朋友建议我可以研究一下ToyTalk的邮箱注入机制。在使用诸如“Thomas And You”等APP应用注册设备时，它会将一封电子邮件发送到用户提供的邮箱地址中， 由于该电子邮件中包含了用户信息（设备名称），如果攻击者利用漏洞1方法获取到受害者的用户ID之后，那么，接下来可以修改电子邮件HTML中包含的设备名称，以该受害者用户ID为可信发件人，向其它受害者发送恶意钓鱼邮件，或任意更改过的邮件内容。
+为了向受害者发送钓鱼邮件，攻击者先要用邮箱在该APP上进行注册，利用该注册邮箱地址，再用漏洞1方法获取到受害者用户ID，用以后续进行钓鱼邮件发送。
+也即，首先，攻击者用受害者注册过的邮箱地址，执行以下请求，以获取到相应的受害者用户ID：
+GET /v3/account/<email address> HTTP/1.1 User-Agent: Dalvik/2.1.0 (Linux; U; Android 7.1.1; ONEPLUS A3003 Build/NMF26F) Host: api.2.toytalk.com Connection: close
+然后，再以该用户ID为可信发件人，用以下POST方式，向其它受害者发送包含钓鱼链接的恶意邮件内容：
+POST /v3/account/<accountid>/email/consent?device_id=asdf&device_name=TEST%20DEVICE"</br>%20<a%20href="http://google.com">click%20here</a>&application=Thomas+And+You&always HTTP/1.1 Content-Type: text/plain Content-Length: 0 User-Agent: Dalvik/2.1.0 (Linux; U; Android 7.1.1; ONEPLUS A3003 Build/NMF26F) Host: api.2.toytalk.com Connection: close
+以上只是一个简单的PoC示例，它利用<a>标签将HTML链接注入到邮件内容框架中，但如果花时间调整，也可以精心制作出一个更具迷惑性的钓鱼邮件来，例如，某位家长可以假冒support@toytalk.com邮件来欺骗其它家长的用户名密码信息。下图就是我们假冒toytalk官方发送的包含钓鱼链接的邮件内容：
+漏洞报送进程：
+2017.12.4 - 提交漏洞 2017.12.12 - 官方致谢 2017.12.18 - 官方修复漏洞 2017.12.18 - 发布赏金并关闭漏洞报告
+总结
+整体来说，两个漏洞的利用方式都存在一定的受限条件，但也侧面说明了大量APP在开发过程中忽视了全面的安全考虑。
+*参考来源：digitalinterruption，freebuf小编clouds编译，转载请注明来自FreeBuf.COM

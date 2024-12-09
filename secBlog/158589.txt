@@ -1,0 +1,41 @@
+* 本文作者：Shad0wpf_，本文属FreeBuf原创奖励计划，未经许可禁止转载
+使用Burp对安卓应用进行渗透测试的过程中，有时候会遇到某些流量无法拦截的情况，这些流量可能不是HTTP协议的，或者是“比较特殊”的HTTP协议(以下统称非HTTP流量)。遇到这种情况，大多数人会选择切换到Wireshark等抓包工具来分析。下面要介绍的，是给测试人员另一个选择——通过Burpsuite插件NoPE Proxy对非HTTP流量抓包分析，并可实现数据包截断修改、重放等功能。
+## NoPE Proxy简介
+NoPE Proxy插件为Burpsuite扩展了两个新的特性：
+1. 一个可配置的DNS服务器
+这个DNS服务器将所有的域名解析到Burp所在主机或其它预先配置好的主机，帮助我们轻松的将所有手机流量发送到Burp。
+2. 非HTTP协议截断代理
+Burp的监听器开启允许invisable流量，这些就能使用Burp截断HTTP流量，Burp无法处理的非HTTP流量，通过NoPE Proxy插件处理。
+## 项目地址
+Github：https://github.com/summitt/Burp-Non-HTTP-Extension
+## 安装
+NoPE Proxy项目Github [Relaases](https://github.com/summitt/Burp-Non-HTTP-Extension/releases)页面下载最新版本的NopeProxy.jar文件，在Burp的Extender中安装，安装完成后Burpsuite新增一个Tab。
+## 使用演示
+### 演示环境
+测试工具：Win 10 + VMware 14 + Kali 2017.3 + Burpsuite 1.7.30
+物理机为Win 10，通过VMware运行Kali虚拟机，Kali通过NAT网络访问互联网，Kali的IP为192.168.211.100。在Kali上开启Burpsuite（我在Windows下测试NoPE Proxy插件无法抓包，没细查原因）。
+测试对象：夜神模拟器6.0(Android版本4.4.2) + 四川移动掌上营业厅
+安卓4.4之后的版本无法将所有流量通过配置的代理服务器传输。
+四川移动掌上营业厅在账号登陆时，Burpsuite无法拦截请求短信验证码的数据包。
+### 手机端配置
+为了抓取HTTPS流量，手机端需要导入Burpsuite证书，导入方法参考[这篇文章](http://www.freebuf.com/articles/terminal/113940.html)
+证书导入后，配置手机代理，
+### DNS服务配置
+选择需要监听的网卡，填写序号，然后点击绿色按钮开始运行DNS服务端。
+### Burp Proxy设置
+所有端口开启Invisible。
+### 手机端设置
+安卓的设置中，修改手机的代理服务器，填写Burp监听IP和端口，DNS服务器填写之前设置的192.168.211.100。
+### 开启流量监听
+NoPE Proxy的DNS History标签下，点击Port Monitor按钮，开始流量监听。
+手机端打开APP，NoPE开始接收到DNS解析请求并将所有域名解析到Burpsuite地址。
+手机端切换到账号登陆界面，填写手机号获取短信验证码。
+请求地址为wap.sc.10086.cn，右边的监流量监听发现获取短信时的通信端口为18080。
+切换到NoPE Server的Server Config标签，添加流量记录中发现的地址和端口。
+再次发送获取短信验证码请求，可以看到NoPE Proxy已拦截到该请求内容。
+TCP流量数据重放。
+TCP流量历史记录
+Automated
+## 结语
+对安卓手机APP测试遇到Burpsuite无法拦截的流量时，可以试试NoPE Proxy插件，说不定会有意想不到的收获。
+* 本文作者：Shad0wpf_，本文属FreeBuf原创奖励计划，未经许可禁止转载

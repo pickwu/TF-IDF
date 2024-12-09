@@ -1,0 +1,20 @@
+DVHMA（Damn Vulnerable Hybrid Mobile App）是一个安卓端的混合模式APP，故意包含大量漏洞。其功能就是帮助安全研究员合法地对他们的工具或技术进行渗透测试，帮助开发人员更好地了解混合移动APP开发过程中常见的安全问题。
+一、功能范围
+这个APP的开发目的是研究混合APP开发过程中的安全问题，例如安全地使用Apache Cordova或SAP Kapsel。目前，DVHMA的主要关注点是深入了解利用JavaScript到Java bridge的注入漏洞。
+二、安装
+前提
+安装Android SDK ；
+安装Apache Cordova6.3.0及以上版本。
+另外，假定我们对Apache Cordova的构建系统已经有了基本的了解。
+搭建DVHMA
+1. 设置环境变量
+export ANDROID_HOME=<Android SDK Installation Directory> export PATH=$ANDROID_HOME/tools:$PATH export PATH=$ANDROID_HOME/platform-tools:$PATH
+2. 编译DVHMA
+cd DVHMA-Featherweight cordova plugin add ../plugins/DVHMA-Storage cordova plugin add ../plugins/DVHMA-WebIntent cordova platform add android cordova compile android
+3. 在模拟器中运行DVHMA
+cordova run android
+三、DVHMA的“家族背景”
+DVHMA原本是ZertApps（http://www.zertapps.de/）项目的一部分。ZertApps是由德国政府资助的研究和教育合作项目，现由英国谢菲尔德大学的软件保障与安全研究小组开发并维护。
+其核心开发人员是Achim D. Brucker与Michael Herzberg。
+下载地址戳：此处。
+*参考来源：github，FB小编柚子编译，转载请注明来自FreeBuf.COM

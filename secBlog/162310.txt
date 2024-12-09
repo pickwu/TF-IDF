@@ -1,0 +1,14 @@
+一、更换kali更新源
+为什么要更换Kali更新源呢？原因在于Kali内的许多工具都要在国外下载，于是国内有些厂商以及研究院便将下载后软件放在自己的网站中，供国内Kali用户下载使用。
+输入命令 leafpad /etc/apt/soureces.list
+在弹出的的文档中输入国内的更新源。
+下面我推荐几个国内源给大家：
+#阿里云（限速1M） deb http://mirrors.aliyun.com/kali kali-rolling main non-free contrib deb-src http://mirrors.aliyun.com/kali kali-rolling main non-free contrib #清华大学 #deb http://mirrors.tuna.tsinghua.edu.cn/kali kali-rolling main contrib non-free #deb-src https://mirrors.tuna.tsinghua.edu.cn/kali kali-rolling main contrib non-free #还有其他的就不推荐了，自己百度
+二、安装 open-vm-tools
+Kali在2.0及之前的版本中安装VMware-tools是可以正常使用的，但是在2016 rolling版本中，VMware-tools不再适用（自己的经验和网友的评论都是这样）。自己在2016版本中安装VMware-tools，虽然像之前版本那样提示安装成功（有enjoy出现），但无法实现所述的功能，也就是并不起作用。于是一番寻找后，结果便是：在rolling版本中，需要安装替代的open-vm-tools工具。
+安装步骤：
+（1）执行apt-get update以同步源索引。如果不执行这个步骤则无法在线更新和安装软件！
+（2）执行apt-get install open-vm-tools-desktop fuse安装open-vm-tools。PS：在下载完成自动安装时会弹出一系列安装选项提示，按照默认的一路ENTER即可（和安装VMware-tools时有点像）。
+（3）执行reboot或点击“重启”图标以重启系统。
+说明：自己在安装VMtools发现没用，我建议在线安装的方法，成功率更高，也更方便。
+至此，open-vm-tools安装完毕，可以实现客户机分辨率的实时调整，即随意调整窗口大小。

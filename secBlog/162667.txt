@@ -1,0 +1,10 @@
+谷歌近日宣布，2018 年 7 月计划发布 Google Chrome 68，自那时起，将把 Chrome 上所有 HTTP 站点都标记为“不安全”。
+谷歌做出这个决定的原因是：现在越来越多的网站所有者都采用了 HTTPS 头，且大量流量都开始加密传输。根据 Google 的数据，Top 100 的网站中已经有 81 个默认使用 HTTPS。此外，Android 和 Windows 上超过 68％ 的 Chrome 流量、Chrome 操作系统和 Mac 上超过 78％ 的 Chrome 流量目前都通过 HTTPS 发送。
+事实上，谷歌的安全计划更为宏大，将 URL 地址栏中的所有 HTTP 站点标记为为“不安全”只是计划的一部分。
+今年 1 月下旬谷歌发布的 Chrome 56 版本新特性是安全计划的第一步。Chrome 56 规定，如果网页包含密码或支付卡相关的字段，那么 Google 就会把该 HTTP 页面标记为“不安全”。
+第二步是伴随 Chrome 62 发布的新特性： Google 将把在私密浏览窗口中打开的所有 HTTP 页面标记为“不安全”。
+而 2018 年 7 月份即将发布的 Chrome 68 则是计划的最后一个阶段，谷歌将把所有 HTTP 站点标记为“不安全”。
+当然，Google 的新界面将帮助用户了解网站的安全程序，并在默认情况下继续将网络转向安全的 HTTPS 网站。此外，在今天的声明中谷歌还表示，为开发人员提供 Lighthouse 应用程序改进版本，帮助检查网站 HTTPS 相关设置。
+谷歌并不是唯一一个将 HTTP 页面标记为不安全的厂商， Mozilla 在 2017 年 12 月也开始了类似计划，以 Firefox 为铺垫，把所有的 HTTP 站点标记为“不安全”。
+与谷歌不同的是，Mozilla 采取新计划时并没有宣布最后期限。不过 Mozilla 此举的主要理由跟谷歌一样：HTTPS 的使用率在增长，因此需要设置“默认 HTTP不安全”（ "HTTP-not-secure-by-default"）策略。
+*参考来源：bleepingcomputer，AngelaY 编译整理，转载请注明来自 FreeBuf.COM。

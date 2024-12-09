@@ -1,0 +1,32 @@
+亚信安全发布的2018年安全威胁预测中曾提及，本年度，商业电子邮件攻击（BEC）事件会持续增长，并最终导致全球超过90亿美元的损失。BEC攻击主要依赖于社会工程学，向特定目标发送钓鱼邮件，达到攻击目的。
+近日，我们发现了一些携带LokiPWS stealer载荷的BEC攻击，攻击者IP大多来自于尼日利亚。此次攻击中，黑客选取邮件作为攻击向量，同时伪造发件人地址，起到欺骗的目的。
+【发动BEC攻击的电子邮件】
+该邮件附件MTS-509EASH4.rar解压缩后，我们可以看到其是一个可执行程序，文件名是MTS-509EASH4.exe
+【邮件附件是可执行的exe文件】
+该文件属性如下图所示，从图中我们可以看到，该恶意程序有详细的文件信息，目的是欺骗用户信任该程序。
+Virustotal上的检测情况
+MTS-509EASH4.exe恶意程序分析
+该文件是用VB编写的
+该程序在运行后会主动获取以下浏览器的隐私信息
+%APPDATA%\Mozilla\Firefox\profiles.ini %APPDATA%\Mozilla\Firefox\Profiles\wdfh4559.default\key3.db %APPDATA%\Mozilla\Firefox\Profiles\wdfh4559.default\cert8.db %APPDATA%\Mozilla\Firefox\Profiles\wdfh4559.default\SIGNONS3.TXT %APPDATA%\Mozilla\Firefox\Profiles\wdfh4559.default\signons2.txt %APPDATA%\Mozilla\Firefox\Profiles\wdfh4559.default\SIGNONS.TXT %APPDATA%\Mozilla\Firefox\Profiles\wdfh4559.default\signons.sqlite %APPDATA%\Mozilla\Firefox\Profiles\wdfh4559.default\secmod.db %APPDATA%\Mozilla\Firefox\Profiles\wdfh4559.default\signons3.txt %APPDATA%\Mozilla\Firefox\Profiles\wdfh4559.default\signons.txt %APPDATA%\Mozilla\Firefox\Profiles\wdfh4559.default\logins.json %APPDATA%\Mozilla\Firefox\Profiles\wdfh4559.default\signons.sqlite-wal
+其会链接到以下地址 www.{blocked}.cf
+我们发现该C&C站点仍然活跃
+在该网站目录下，我们发现了Loki PWS 的C&C panel
+关于Loki这款盗号木马的C&C控制端代码，网上已经有泄漏，详细信息请参考链接：https://github.com/runvirus/LokiPWS
+其中，fre.php正是木马客户端连接C&C的入口
+下图是C&C panel的主界面，PvqDq929BSx_A_D_M1n_a.php 这个文件是Loki PWS 的典型特征。
+【C&Cpanel的主界面】
+Bot客户端的信息
+通过控制台可以向Bot下发指令
+Loki盗取的密码
+木马客户端的一些统计信息
+有意思的是最新的变种还有盗取比特币账户的功能
+根据对被入侵主机的日志分析发现黑客的IP位于尼日利亚
+此前，安全公司 Check Point曾经公布过关于尼日利亚黑客针对能源，矿产等基础设施行业的网络攻击行动。
+BEC攻击主要依赖于社会工程学，我们可以从以下几方面着手，预防BEC攻击：
+1、企业可以通过员工培训来减少BEC带来的损失； 2、可以采取多重验证手段，如电话验证等，抵抗BEC攻击； 3、使用Web网关可以有效监测社会工程学诈骗和伪造行为。
+参考资料：
+https://www.sans.org/reading-room/whitepapers/malicious/loki-bot-information-stealer-keylogger-more-37850
+https://blog.checkpoint.com/2017/08/15/get-rich-die-trying-case-study-real-identity-behind-wave-cyberattacks-energy-mining-infrastructure-companies/
+https://www.bleepingcomputer.com/news/security/lone-nigerian-hacker-behind-attempted-hacks-at-4-000-organizations/
+*本文作者：亚信安全，转载请注明来自FreeBuf.COM

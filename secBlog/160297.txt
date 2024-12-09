@@ -1,0 +1,114 @@
+0x1 概况
+腾讯安全御见情报中心近期在监测CVE－2017－8759漏洞利用情况时，捕获到一款名为jLog（Java Keylogger）的盗号木马。在未修复此漏洞的机器上，用户一旦打开攻击者精心构造的恶意文档，就会触发漏洞，下载运行木马。
+值得注意的是，该木马的利用方式较为新颖。以往利用此漏洞的木马通常会在漏洞触发时利用mshta程序执行hta脚本，以下载和执行“EXE版”的木马母体。而在此次发现中，攻击者却直接将具有木马功能的jar包藏在了c#代码中。
+(木马运行流程图)
+Jar包由java语言编译生成，在运行时由JAVA运行环境中的java.exe以命令行方式拉起，相对于“EXE版”的木马，java.exe成为了“Jar版”木马天然的白利用载体，隐蔽性更高，杀毒软件更难发现。Java程序的另一个特性是跨平台运行，即同一jar包在windows、linux、mac等系统上都能运行。此外，该木马能够收集计算名、用户名、cpu、网络、国家、操作系统等信息，具有键盘记录器、截屏上传和盗取Firefox、Chrome浏览器密码等功能。
+0x2 木马行为分析
+1. 恶意word文档行为分析
+该恶意word文件中除了一个“链接对象”外，没有其它任何内容。在未修复CVE-2017-8759漏洞的机器上双击打开此word文档时，word程序在解析此“链接对象“时会触发漏洞，从而导致链接对象中的恶意代码下载并执行起来。“链接对象”指向的url为hxxps://a.pomfe.co/sqwkim.png。
+（文档中的链接对象）
+（word程序下载“链接对象”中的png文件）
+“链接对象”中的png文件为精心构造的用于触发漏洞的文件，后缀虽然为png但并不是真正的图片文件。png文件中存储着一段混淆过的c#源代码，漏洞触发时该代码会被c#编译器csc.exe编译并执行。
+（png文件中的c#源代码）
+2. png文件中的C#源码分析
+将此c#源码编译成dll文件，再用反编译软件打开，发现主要功能都在InteropNS.agFR类的构造函数中。此dll的主要作用是将存储的jar文件释放到临时目录，并即时编译另一段c#代码用来加载释放的jar文件。
+（buffer中存储的jar文件）
+（释放buffer中的jar到临时目录）
+（第二段c#代码的类名为“CJ3MS”）
+（即时编译第二段c#代码，调用”CJ3MS“类的构造函数）
+（”CJ3MS”函数的作用就是创建进程，即拉起上文释放的jar文件）
+3. 木马本尊jar文件分析
+上文释放的jar随机文件名为tmp1A9C.jar。反编译此jar文件后，发现有混淆，明文字符串都被加密。
+（jar文件目录结构）
+Jar的入口点函数为com.Nimex.Initializer的main函数，从”MF“文件可以看出该jar运行时依赖jdk 1.8版本，也就是说如果jdk版本低于1.8或没安装jdk，该木马就运行不起来。
+（MF文件）
+（加密的字符串）
+1） com.Nimex.Initializer类分析
+在此类的构造函数中会获取系统的名称，后续会对系统进行win/sunos/nix/mac等判断，可见该木马支持多平台。
+（获取系统名称）
+（判断是否是sunos）
+（判断是否是nix）
+（判断是否是win）
+（判断是否是mac）
+在main函数中会对资源进行解密，从而得到木马配置项。木马配置项的值以base64编码，后续图中会加上解密出的值。
+（解密资源）
+（解密后的配置项）
+当配置项“STARTUP”的值为“true”时，会将jar复制到“path”配置项所指的目录，即tmp目录、appdata目录或“我的文档”目录。同时将依赖的库下载到对应的lib目录,最后重新拉起自己。
+（根据STARTUP项复制自身到指定目录）
+（复制jar到新目录）
+（将依赖的库下载到lib目录）
+（lib目录下的所有下载的库）
+（运行新目录下的备份jar）
+当“STARTUP”的值为“false”时会隐藏lib目录
+（隐藏lib目录，并下载依赖库）
+接着向hxxps://jlog.pw/dev/php/api/v1/api.php这个url POST数据来查询是否需要更新。Post内容为appid=%1s&method=UpdateStub&key=5a0vUVI4DGJmOJnTFbPJJovoYKYUxaTDkT8fPRjsx3PmMdgrp6a8uGxsqvmYGgC1，appid的值来源于配置项中的“ID”
+（查询更新）
+(判断是否有更新)
+如果不需要更新就执行b类的main函数。
+（不需要更新）
+如果有更新就将配置项存储在木马运行目录下的tmp文件里，并拉起更新程序。
+（存储配置项到tmp文件）
+（拉起update.jar）
+2） com.Nimex.b类分析
+此类继承于org.jnativehook.keyboard.NativeKeyListener，可见具有键盘记录器的功能。经过详细分析后发现3种收信方式的实现都在此类中，分别是邮箱收信、ftp收信、web收信。截屏上传的功能也在此类中。
+（继承自NativeKeyListener）
+键盘记录器用的是开源库jnativehook，开源地址：https://github.com/kwhat/jnativehook
+（jnativehook库简介）
+（键盘记录器回调函数）
+b类的main函数中同样会解密“res”得到配置项，接着会开启一个线程，线程函数为“run”。
+（解密”res”，开启线程）
+Run函数中会根据“setup”配置项决定使用哪种收信方式，本次分析的木马”setup”项的值为“SMTP”，也就是使用邮箱收信。
+（run函数中根据”setup”的值，提取其它配置项）
+Run函数会收集计算机名、当前用户名、国家、cpu信息、主板信息、网络ip信息、jdk版本信息、内存信息、操作系统信息等。
+（收集计算机相关信息）
+如果是windows系统，还会从“bin”资源中解密出一个exe，并执行此exe.执行完后会读取”%Appdata\gOQn2EaBrG.tmp”中的内容，并和收集的计算机信息一起发送到收信服务器。
+（解密“bin”中的exe）
+（执行bin.exe，读取“.tmp”文件中的内容）
+（将收集的信息发送给服务器）
+（邮箱方式收信）
+（ftp方式收信）
+（web方式收信）
+根据”HIDEFILE”项决定是否隐藏文件：
+（是否隐藏文件）
+（利用attrib命令隐藏文件）
+根据“STARTUP“项决定是否开机自启动，根据” KEYNAME”项决定开机自启动注册表项的名称。
+（是否开机自启动）
+（添加开机自启动注册表）
+根据“WEBVIS”项决定访问网页，windows下访问网页的部分命令为“rundll32 url.dll,FileProtocolHandler…”
+（是否访问网页）
+（访问网页的方式）
+线程函数末尾会创建一个timer,timer的作用是发送上线信息、上传一张截屏信息等
+（创建timer）
+（timer函数）
+（发送上线信息）
+(上传截屏信息)
+0x3 溯源分析
+进入攻击者的发信邮箱，发现了攻击者在投放木马时的几封测试邮件。通过发信时主题关键字” jLog - System Details ”进行关联分析，发现该木马叫“jLog”，即Java Keylogger，介绍页链接为https://hackforums.net/showthread.php?tid=5749332
+（jLog介绍页）
+（jLog功能简介）
+通过“jLog”的功能简介发现该木马还有盗取浏览器信息的功能，但在分析该木马样本时一直未发现有此功能，怀疑从资源中释放的“bin.exe”可能就是用来盗取浏览器信息的。在分析此样本时bin资源未配置到木马中。
+收信邮箱密码未保存在配置项中，因此从发信邮箱进行分析。从测试邮件中，发现了攻击者访问木马服务器时的截图。测试邮件也暴露了攻击者的国家和ip信息。攻击者所在国家为“Algeria ” (阿尔及利亚)，ip为105.98.7.227(阿尔及利亚) 。从ip进行关联分析，发现攻击者曾用两台计算机进行过测试，计算机名分别为”DGSN2014 ”和“Elwazir-PC ”。攻击者利用”DGSN2014 ”这台电脑进行“洗信”的行为，以及利用利用“Elwazir-PC ”这台电脑访问木马后台网页的行为都被记录了下来。
+（发信邮箱曾经的登陆地址，精确到城市）
+（12月初的测试邮件）
+（测试邮件暴露了攻击者的ip及计算机名）
+（测试邮件中的截屏，木马后台页面）
+（测试邮件中收集到的攻击者“洗信”时的按键信息）
+（攻击者在尝试利用盗取的账号登陆facebook）
+（攻击者在尝试登陆另一个账号）
+对发信邮箱中的邮件进行分析，发现该邮箱曾是WordPress盗号木马的收信邮箱，从2017年到1月29日到2017年10月4日到共盗取了112个WordPress的账号。使用WordPress可以快速创建个人免费网站或博客，因此推测攻击者可能会利用WordPress进行水坑攻击或从事挖矿等非法行为。
+（盗取的WordPress账号和密码）
+0x4 安全建议
+通过分析发现，目前该木马主要活跃在阿拉伯国家阿尔及利亚，由于java程序在运行时依赖java运行环境，在JDK或JRE未安装或安装版本不正确的情况下，jar包都不能运行。但我们也不能掉以轻心，在强对抗环境下，这或将成为今后木马的一种发展趋势。
+腾讯电脑管家安全专家建议用户特别警惕来历不明的邮件，勿随意点开其中的附件，也不要随意打开网上下载下来的可疑文档，保持电脑管家的正常开启，可有效拦截此类病毒攻击。
+附录：IOC
+Email:
+esco6066@gmail.com（发信邮箱） hamzab57@gmail.com(收信邮箱)
+C2:
+hxxps://jlog.pw/dev/php/api/v1/api.php
+Url:
+hxxps://a.pomfe.co/sqwkim.png hxxp://jlog.pw/products/jlog-panel/lib/updater.jar hxxps://puu.sh/v3E9n.jar hxxps://puu.sh/v3E9o.jar hxxps://puu.sh/v3E9b.jar hxxps://puu.sh/v3E9d.jar hxxps://puu.sh/v3E9A.jar hxxps://puu.sh/v3E9j.jar hxxps://puu.sh/v3E9m.jar hxxps://puu.sh/v3E9w.jar hxxps://puu.sh/v3E9x.jar hxxps://puu.sh/vhda4.dll
+恶意文档md5:
+acc6bbe8742e42200b68f5c3a1116a3c
+可执行文件md5:
+126632625EFBDF01B1193EBA2D358230
+*本文作者：腾讯电脑管家，转载请注明来自 FreeBuf.COM。

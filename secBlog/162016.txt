@@ -1,0 +1,29 @@
+PS：在这之前也就是上一篇介绍了MaterialDesign一些滑动删除、标题栏的悬浮效果等，如果没看过第一篇的小火鸡可以看一下，因为这篇是接着上一篇写的，有一些东西上一篇写过了这里就不在重复了（MaterialDesign应用技术一），这篇也是上一篇的升级版，在我们日常写界面的时候，都想简单并且界面美观，这就少不了动画效果，MaterialDesign我们一般用到的动画，里面都有，不用我们自己写，在这个强大的库里，他都能够做什么呢，让我们来简单看一下。
+上滑 顶部背景图片缓慢消失，标题悬浮 在标题 上栏加入布局，放一些搜索框 输入框TextInputEditText的使用
+1:上滑 顶部背景图片缓慢消失，标题悬浮
+1.1：CoordinatorLayout中设置
+前面的添加依赖，在上一篇中已经说过，在这就不在重复了，协调者布局中这次又加入了一个新的布局CollapsingToolbarLayout（折叠工具栏布局），很明显上面的效果图中的工具栏上滑的同时把图片折叠进去了，这是一个动画效果，如果不是MaterialDesign库的强大，这都是我们自己写。我们来分析一下效果图中都用到了什么，只看带颜色的有文字，和一个苹果背景图、还有一个悬浮按钮（吸附在CollapsingToolbarLayout的右下角）。我们来分析一下主要代码
+最外层-->里层还是：CoordinatorLayout-->AppBarLayout-->CollapsingToolbarLayout。竟然折叠的部分是toolbar和背景图片，这就理所应当的把这两个空间写在CollapsingToolbarLayout中，因为上面协调者布局和appbar布局很简单，这里就不在写了，只贴出折叠布局代码（里面的注释有贴出后加的，用该代码时要注意语法）。这里可以看出我在ImageView中加入了高度180dp，这里是一定要加上的，否侧toolbar的会出现以下几种错误，1:文字不显示。2：只显示标题栏。3：图片过大充满整个屏幕。当然这些问题不是每个人都有的。
+<!--折叠toolbar布局--> <android.support.design.widget.CollapsingToolbarLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:id="@+id/toolbar_layout" app:contentScrim="@color/colorPrimary" app:layout_scrollFlags="scroll|exitUntilCollapsed"> <!--这里ContentScrim是实现上滑后由什么颜色作为标题背景色--> <ImageView android:layout_width="match_parent" android:layout_height="180dp" android:scaleType="fitXY" //图片显示方式，铺满xy轴 android:src="@drawable/img1" /> <android.support.v7.widget.Toolbar android:id="@+id/id_toolbar" android:layout_width="match_parent" android:layout_height="?actionBarSize" /> </android.support.design.widget.CollapsingToolbarLayout>
+写到这才是我们的折叠布局了，还有我们的悬浮按钮FloatingActionButton，标红的是重点。
+<android.support.design.widget.FloatingActionButton android:layout_width="wrap_content" android:layout_height="wrap_content" android:src="@drawable/add" app:layout_anchor="@id/toolbar_layout"//固定在哪个控件 app:layout_anchorGravity="bottom|right"//的具体位置 />
+写到这里基本上完成了，代码少，效果好正是该库的强大，在Activity中的使用基本和上一篇是一样的。对于这个悬浮按钮里面也有很多属性，这里就不在一一写出了，这里只是作为一个辅助，让我们在视觉更舒服所加的。
+2：在标题 上栏加入布局，放一些搜索框
+2.1：布局书写
+这里的布局和上面是一样的，只是把imageview换成了LinearLayout布局，在该布局中写上我们熟悉的输入框和图片按钮即可，
+最外层-->里层还是：CoordinatorLayout-->AppBarLayout-->CollapsingToolbarLayout-->LinearLayout。
+3:输入框TextInputEditText的使用
+在最平常的时候，我们写输入框，要加正则表达式来判断是哪一行出现不符合要求的数据，然后用一个toast来提示用户，这就显得用户体验极差，有的用户还没看完toast就关掉了，而且具体哪一行错误也没有标红，这就很尴尬了，那么今天这个控件也是一个输入框，但是外层加一个布局（TextInputLayout），就可以达到精确到一行提示具体错误。
+TextInputLayout是22.2.0新添加的控件， 要和EditText(或EditText的子类）结合使用，并且只能包含一个EditText(或EditText的子类）。
+一般情况下，EditText获得光标的时候hint会自动隐藏，这样不是很友好。这时候TextInputLayout则是显示错误，TextInputLayout是LinearLayout的子类，用于辅助显示提示信息。当EditText获取得光标的时候，EditText的hint会自己显示在上方，并且有动画过渡。
+现在仅仅是过度效果，还没有加提示信息，用法很简单，但注意一点TextInputLayout只能包含一个TextInputEditText，如果写用户名和密码那就写两个TextInputLayout，哦，对了这个最外层布局倒和协调者布局没多大关系，随便一个线性布局即可。
+<android.support.design.widget.TextInputLayout android:id="@+id/id_inputtext" android:layout_width="match_parent" android:layout_height="wrap_content"> <android.support.design.widget.TextInputEditText android:layout_width="match_parent" android:layout_height="wrap_content" android:hint="用户名" /> </android.support.design.widget.TextInputLayout>
+这里要注意的是Id是加在 TextInputLayout上，在Activity中获取也是获取的layout，那么怎么获取edittext输入的数据呢，有方法的。
+viewById.getEditText().addTextChangedListener(this);
+获取里面的text文本并且添加文本变化监听，这里要实现三个方法
+public void afterTextChanged(Editable s) //内容改变后调用
+这两个方法简单demo上都用不到，这里就不过多解释了。
+@Override public void beforeTextChanged(CharSequence s, int start, int count, int after) { } @Override public void onTextChanged(CharSequence s, int start, int before, int count) { }
+这里我们重点看afterTextChanged方法,这里只给第一个控件加上了该监听(对比)。
+@Override public void afterTextChanged(Editable s) { if(s.length()<4){ viewById.setError("必须大于4位"); viewById.setErrorEnabled(true); }else { viewById.setErrorEnabled(false); } }
+完，

@@ -1,0 +1,37 @@
+可能有的同学已经收到了GitHub在2018年1月22日推送的CVE-2017-0899漏洞警告了。这个漏洞存在于Paperclip gem之中，是一个高危漏洞，目前Paperclip代码库的v5.2.0版本已经成功修复了这个漏洞。在这篇文章中，我们将会跟大家详细介绍该漏洞的成因，利用方式，漏洞影响，以及可行的修复方案。
+本文将不再给大家介绍关于服务器端请求伪造（SSRF）的内容，如果你之前不了解这个漏洞的话，建议大家自行学习了解。我们这里给大家提供一些参考资料：
+问题描述
+Paperclip代码库引入了一种名叫“IO适配器”的概念，这种模式提供了多种方法来将一份“文件”传递给Paperclip代码库。而本文所要介绍的漏洞将会影响Paperclip的其中两个IO适配器，这两个适配器均能接受URL地址作为附带数据：
+当程序在使用这些适配器时，Paperclip将会以代理的形式从传递过来的URL网站地址中下载指定文件。
+如果提供的文件或附带数据是以‘http://’或‘https://’开头的话，程序将会调用‘http_url_proxy_adapter.rb’。需要注意的是，Paperclip的文档中并没有记载有这种行为，而代码库也并不会执行任何的数据验证以防止受到服务器端请求伪造（SSRF）攻击。
+存在漏洞的Rails代码样本（使用了Paperclip）
+从下面给出的代码段中可以看到，Rails控制器可以接受一个“附件”请求参数，并将数据传递给‘GenericAttachment’模块（该模块需要实现Paperclip的‘has_attached_file’方法）。
+class GenericUploadController < ActionController::Base ..snip.. def create GenericAttachment.create(:attachment=> params[:attachment]) ..snip.. end class GenericAttachment < ActiveRecord::Base has_attached_file :attachment
+漏洞利用PoC
+通常情况下，‘attachment’可以是多种形式的参数，其中可以包含二进制代码或base64编码数据等形式的文件内容。为了触发存在漏洞的适配器，我们需要提交一个URL地址。
+POST /upload HTTP/1.1 Host:example.com ..snip.. — — — WebKitFormBoundaryGB91jEIcBxpCcDww Content-Disposition:form-data; name=”attachment”; http://169.254.169.254/latest/
+URL需要在‘attachment’参数中提交，随后便会被‘http_url_proxy_adapter’解析。接下来程序会请求AWS EC2元数据IP, 169.254.169.254（AWS EC2实例外无法访问），并将数据以附件文件进行存储。这样一来，攻击者将有可能利用应用程序中的其他功能（允许查看文件数据的功能）来恢复这些响应数据，具体需要取决于存在漏洞的应用程序以及支持的数据类型。
+当附带数据（附件）类型为“URI”类型时，程序将会调用‘uri_adapter’这个IO适配器（http_url_proxy_adapter继承了uri_adapter）。下面给出的是存在漏洞的代码段样本：
+class GenericUploadController < ActionController::Base ..snip.. def create GenericAttachment.create(:attachment=> URI(params[:attachment])) ..snip.. End
+跟‘http_url_proxy_adapter’不同的是，‘uri_adapter’的行为是可以在Paperclip的文档【传送门】中找到的。如果用户输入的数据是一条未经验证的URL地址，然后将其设置成一个URI对象，最后以附件数据的形式提交给适配器的话，那么这将有可能触发这个SSRF漏洞。
+漏洞影响
+‘http_url_proxy_adapter’是可以直接通过HTTP请求参数直接调用的，因此所有使用了Paperclip并且没有对用户输入进行验证的应用程序都将有可能受到SSRF攻击。‘uri_adapter’同样可以被利用来执行SSRF攻击，但是这个漏洞在利用过程中必须创建要给URI对象，并在附带数据中进行解析。
+服务器端请求伪造（SSRF）漏洞可以被利用于：
+1. 向内部网络或本地接口中的目标主机发送恶意GET请求； 2. 通过向EC2元数据服务器发送请求来窃取AWS访问令牌； 3. 向没有认证机制的内部网络主机发送请求； 4. 使用存在漏洞的服务器IP向内部可访问的系统发送GET请求； 5. 对内部网络进行端口扫描；
+SSRF漏洞不仅可以帮助攻击者入侵内部网络，而且甚至还可以帮助他们访问目标网络中的个人主机并窃取机密数据。
+漏洞修复方案
+2018年1月23日研究人员向Paperclip项目主分支提交了commit，并移除了‘http_url_proxy_adapter’和‘uri_adapter’，广大用户可以将自己的Paperclip gem更新到v5.2.0版本并修复这个漏洞。
+如果你不想禁用适配器的话，你也可以考虑采用更加严格的URL验证机制。我个人不建议大家自己编写URL验证代码，这里我推荐一个可用的帮助库：【private_address_check】
+不幸的是，仅仅采用URL验证还不足以解决目前的问题。Paperclip的URIAdapter类还会使用OpenURI.open来下载文件内容，而这将允许攻击者绕过你的URL验证检测机制。
+绕过代码样本如下：
+POST /upload HTTP/1.1 Host:example.com ..snip.. — — — WebKitFormBoundaryGB91jEIcBxpCcDww Content-Disposition:form-data; name=”attachment”; http://www.somevalidurl.com
+提交的附件URL将有可能绕过你的URL验证机制，随后Paperclip将会请求访问这个URL并下载文件内容。除此之外，攻击者甚至还可以将链接重定向到内部地址。
+HTTP /1.1302 Moved Temporarily ..snip.. Location:http://169.254.169.254/latest/
+OpenURI.open将会立刻处理重定向，而此时你所部属的验证程序将不会起效。
+你可以按照下列方法修复download_content方法中的漏洞：
+module PaperclipUriAdapterSafe def download_content RoutableUrlValidator.open_http(@target) end end Paperclip::UriAdapter.send(:prepend,PaperclipUriAdapterSafe)
+RoutableUrlValidator包含了URI的验证逻辑以及服务器端重定向的验证逻辑，下面给出的代码段样本可以帮助你了解如何验证重定向并对重定向的次数进行限制：
+def open_http(name, *rest, &block) max_redirect_tries = 3 options = rest.extract_options! options[:redirect] = false rest << options begin uri = validate_and_parse_url(name) open(uri, *rest, &block) rescue OpenURI::HTTPRedirect => redirect name = redirect.uri.to_s retry if (max_redirect_tries -= 1) > 0 raise end end
+总结
+希望这篇文章可以帮助大家对应用程序中URI适配器的安全情况有一个大致的了解，并给大家提供一些有价值的挖洞思路。
+* 参考来源：medium，FB小编Alpha_h4ck编译，转载请注明来自FreeBuf.COM

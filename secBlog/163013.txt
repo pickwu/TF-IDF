@@ -1,0 +1,24 @@
+工具介绍
+Winpayloads是一款Payload生成工具，它使用了metasploits meterpreter Shellcode，不仅能够将用户的IP地址以及相应端口注入到Shellcode之中，并使用ctypes编写一个可执行Shellcode的Python文件，而且还可以进行AES加密然后使用pyinstaller将其编译成Windows可执行文件。
+注意事项：跟以前一样，千万不要把你生成的Payload上传到任何一个在线病毒检测平台。
+功能介绍
+1. 生成无法被检测到的Windows Payload； 2. 易于使用的用户操作界面； 3. 支持向本地Web服务器上传Payload； 4. 支持使用Psexec发送Payload； 5. Payload生成之后，自动运行Metasploit监听器；
+除了上述功能之外，Winpayloads还可以绕过UAC，并实现Payload的持久化感染。当Meterpreter给攻击者返回了反向Shell之后，这些PowerShell文件将会在目标系统中运行。UAC绕过功能是基于PowerShellEmpire开发的，并使用了一份漏洞利用代码来绕过目标系统中本地管理员账户的UAC保护，然后给攻击者提供一个拥有本地管理员权限的反向meterpreter。
+Winpayloads还可以安装一个SimpleHTTPServer来通过网络向允许下载的主机传播Payload，在psexec功能的帮助下，攻击者可以轻而易举地在目标主机中执行Payload。
+演示视频
+简单的视频演示：
+如果你想了解如何生成完全无法检测到的Payload，你可以观看下面这个详细的操作视频：
+安装要求
+1. Kali Linux/Ubuntu/以及其他发行版Linux； 2. Python2.7； 3. 网络连接
+工具的安装命令以及步骤如下代码所示：
+git clone https://github.com/nccgroup/winpayloads.git cd winpayloads
+其中的setup.sh将会帮助用户安装好Winpayloads所需要的一切（包括所有依赖组件）：
+./setup.sh
+接下来，使用下列命令运行Winpayloads：
+./Winpayloads.py
+输入'help'或'?'获取详细的帮助信息。
+运行下列命令可以重新安装该工具：
+./setup.sh -r
+工具下载
+Winpayloads：【GitHub传送门】
+* 参考来源：fireeye，FB小编Alpha_h4ck编译，转载请注明来自FreeBuf.COM

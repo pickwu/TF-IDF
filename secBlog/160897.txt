@@ -1,0 +1,187 @@
+一、背景和目的
+近年来，随着新业务、新技术的快速发展，应用软件安全缺陷层出不穷。虽然一般情况下，开发者基本都会有单元测试、每日构建、功能测试等环节来保证应用的可用性。但在安全缺陷方面，缺乏安全意识、技能和工具，最终导致了安全缺陷的出现。
+对于软件开发安全意识和软件开发安全技能方面本文中不再做详述，软件开发者可通过培训和实践提高自身意识和技能，我主要从代码检测工具方面来做介绍，工具是软件开发者可以直接使用和快速发现软件安全缺陷的高效手段，这类似我们使用汽车来满足出行的需求，只用我们掌握汽车的操作方式即可，不用了解汽车如何制造出来的。
+本文目的主要是提供一种思路和方法，让软件开发者像测试软件功能一样，测试软件安全缺陷，并且能够融入到整个的软件开发过程中。
+说明：本文暂不介绍软件安全开发的概念、代码审计工具及其使用、安全代码审计技术等内容，后续文章会就这些部分进行介绍，大家可关注。
+二、自动化安全代码检测平台概述
+2.1. 什么是安全代码审计工具？
+代码安全审计工具是以静态的方式在程序中查找可能存在的安全缺陷，如：缓冲区溢出、空指针引用、资源泄露和SQL注入等。安全代码测试工具目前比较多，例如Fortify、FindBugs等，大家感兴趣可以通过互联网搜索到这些工具的一些描述，本文中也不再赘述。
+2.2. 软件开发人员是否可以自行直接利用这些安全代码审计工具完成测试？
+答案在理论上是可以的，但是在实践中基本是很难落地。原因有如下几点：1）工具众多，很难选择；2）工具误报较高，如何提高准确率，软件开发人员很难处理；3）单一工具如何与开发过程进行结合。4）安全代码审计工作在企业里很有可能是安全专业人员的职责，这样企业里会出现安全和开发隔离的情况。
+2.3. 什么是自动化安全代码检测平台
+自动化安全代码检测平台应该具有以下的几个功能：
+1）能够融入到软件开发的过程中
+2）自动、高效、准确的进行检测
+3）自动生成检测报告，供项目管理者和开发人员查看
+三、在阿里云环境下搭建基于SonarQube的自动化安全代码检测平台搭建实践
+3.1. 检测平台概述
+首先选择在阿里云上搭建此平台主要的原因是：今后每个开发者可以直接使用我已搭建好的镜像自行来进行安全代码检测，而省去了搭建和维护的时间，并且也不用担心代码泄露的问题（如果使用的是SaaS服务，代码的保密问题将是一个很大的挑战）。
+这个平台环境主要是基于Jenkins、SVN、Maven、SonarQube集成搭建的，下面分别大概介绍一下这几个软件：
+Jenkins（本次环境使用的是：sonarqube-6.7.1）是一个开源软件项目，是基于Java开发的一种持续集成工具，用于监控持续重复的工作，旨在提供一个开放易用的软件平台，使软件的持续集成变成可能。先了解一下持续集成的概念：持续集成是一种软件开发实践，即团队开发成员经常集成它们的工作，通过每个成员每天至少集成一次，也就意味着每天可能会发生多次集成。每次集成都通过自动化的构建（包括编译，发布，自动化测试）来验证，从而尽早地发现集成错误。而 Jenkins就是基于Java开发的一种持续集成工具，用于监控持续重复的工作。
+SVN（本次环境使用的是：Subversion1.9.7）是Subversion的简称，是一个开放源代码的版本控制系统，用于多个人共同开发同一个项目，共用资源的目的。
+Maven（本次环境使用的是：Maven 3.5.2）是通过一小段描述信息来管理项目的构建，报告和文档的软件项目管理工具。Maven主要做了两件事：统一开发规范与工具、统一管理jar包。
+SonarQube（本次环境使用的是：6.7.1）是一个用于代码质量管理的开源平台，用于管理源代码的质量，可以从七个维度检测代码质量通过插件形式，可以支持包括java,C#,C/C++等二十几种编程语言的代码质量管理与检测。
+3.2. 自动化安全代码检测平台搭建的核心思路。
+在基于SonarQube的平台中，SVN是检测的入口，SonarQube是检测的主要工具和检测报告生成出口，Jenkins作为一个持续集成工具将SVN和SonarQube关联起来，监控SVN的动作并适时触发SonarQube对提交的代码进行检测。SonarQube类似一个路由器，以插件的形式集成了许多缺陷检测工具，由于大多数检测工具要求对输入的项目进行编译并提取相关的信息，因此，在本平台上也安装了Maven。在SonarQube开始检测之前，Jenkins首先调用Maven对代码进行编译，然后将源代码和编译的输出信息送给SonarQube进行检测。
+将这些工具集成在一起的好处在于：
+1. 在代码审计融入到软件项目的持续开发过程中，自动生成高质量的检测报告，无需人工干预，提高了软件开发效率； 2. SonarQube以插件的形式可以集成众多的检测工具，目前已知可以支持XX种工具。检测工具的更新升级，不会影响到正常的软件开发流程； 3. 以阿里云镜像的方式提供给大家使用，最大限度的保护了个人和公司的知识产权，方便工具的落地使用。 目前，我们的团队还在不断地集成新的工具，以及开发更加高效和精确的检测器，保证了平台的持续更新升级，大家在简单配置之后，能够体检到最好的代码审计服务。
+3.3. 搭建方法和步骤
+说明：以下环境搭建方法，我已做成镜像，可向大家共享，大家可发邮件索取（tangjf10@aliyun.com）。另外以下配置也可以根据自己的习惯进行修改。
+3.3.1. 基础环境准备
+首先，在阿里云上购买一台ECS，性能配置为1 CPU、4G内存（最少4G）、1M带宽，操作系统选择ubuntu16.04 64位；
+然后，系统启动后，使用root安装jdk1.8和MySQL，并修改环境配置文件，具体操作命令可参考如下：
+1. 安装JDK1.8.0_151，操作如下：
+a. 在官方网站上下载tar包，并上传至目录/usr/bin下，然后是用tar命令解压；
+b. 添加环境变量配置，命令如下：
+vi /etc/profile
+在该文件的末尾加上以下内容后保存：
+#JDK JAVA_HOME=/usr/bin/jdk1.8.0_151 JRE_HOME=/usr/bin/jdk1.8.0_151/jre CLASSPATH=.:$JAVA_HOME/lib/dt.jar:$JAVA_HOME/lib/tools.jar:$JAVA_HOME/lib:$JRE_HOME/lib:$CLASSPATH PATH=$JAVA_HOME/bin:$PATH
+c. 更新生效，并测试，命令如下：
+. /etc/profile (注意：此命令是 点 空格 /etc/profile) jave -version
+如果返回了java的版本信息，即设置成功。
+2. 安装MySQL 5.7.20，操作如下：
+apt-get update apt-get install -y mysql-server mysql-client
+在安装过程中，会要求设置root密码，此镜像中设置的密码为：123456@a
+安装完成后，使用root用户登录MySQL数据库，登陆成功即安装成功，命令为:
+mysql -u root -p
+3.3.2. 新建用户
+一般情况下，开发者不能直接使用root用户来管理和使用系统，最好通过一个专有用户来进行操作，因此我们新建一个用户qube，具体命令为：
+adduser qube
+本镜像中，qube用户的密码设置为bit@2017
+如果需要给qube用户sudu权限，可修改/etc/sudoers文件，具体操作如下：
+vi /etc/sudoers
+修改文件内容如下：
+# User privilege specification root ALL=(ALL:ALL) ALL qube ALL=(ALL:ALL) ALL
+保存退出，qube用户就拥有了sudo权限
+添加好此用户后，我们就使用该用户登录并完成后续的操作。
+3.3.3. 安装SVN服务端
+1. 安装SVN服务端
+sudo apt-get install subversion
+2. 配置SVN服务端
+mkdir -p /home/qube/svn/repos svnadmin create /home/qube/svn/repos
+接下来，进行身份认证、权限等相关配置。配置文件都在/home/qube/svn/repos/目录下，我们主要关心的是conf和db文件，conf文件夹下是存放主配置文件和用户、权限位置，db文件夹是存放svn转储后的数据、在conf目录下authz文件是设置用户权限，passwd文件是存储用户及密码，svnserve.conf是主配置文件，先配置主配置文件：
+vim svnserve.conf anon-access = none /**匿名用户不可读不可写**/ auth-access = write /**授权用户可写**/ password-db = passwd /**指定账号密码配置文件**/ authz-db = authz /**指定权限配置文件**/ realm = /home/qube/svn/repos **指定版本库所在目录**/
+再配置passwd文件：
+vim passwd
+#格式是用户名=密码，采用明文密码。这里设置了一个用户admin，密码为bit@2017
+[users]
+admin = bit@2017
+最后配置authz文件
+vim authz
+#增加以下信息，admin拥有根目录所有权限
+[/] admin = rw
+3. 启动服务
+输入命令：
+4. 验证
+输入命令：
+netstat -antp |grep svnserve
+出现以下信息，即正常：
+tcp 0 0 0.0.0.0:3690 0.0.0.0:* LISTEN 28967/svnserve
+3.3.4. 安装Sonarqube和Sonar-scanner
+1. 下载SonarQube和Sonar-scanner
+首先，在本机打开网站http://www.sonarqube.org/downloads/，
+找到下载地址：https://sonarsource.bintray.com/Distribution/sonarqube/sonarqube-6.7.1.zip和https://sonarsource.bintray.com/Distribution/sonar-scanner-cli/sonar-scanner-cli-3.0.3.778.zip
+然后下载：
+cd /home/qube wget https://sonarsource.bintray.com/Distribution/sonarqube/sonarqube-6.7.1.zip wget https://sonarsource.bintray.com/Distribution/sonar-scanner-cli/sonar-scanner-cli-3.0.3.778.zip
+2. 安装SonarQube和Sonar-scanner
+安装比较简单，直接解压即可：
+sudo apt-get install unzip unzip sonarqube-6.7.1.zip unzip sonar-scanner-cli-3.0.3.778.zip
+由于解压以后文件目录名称较长，可以使用mv命令来更改名称，本镜像中，更改为了：
+/home/qube/sonarqube/和/home/qube/sonar-scanner
+3. 配置环境变量
+sudo vim /etc/profile
+加入以下内容：
+#SonarQube export SONAR_HOME=/home/qube/sonarqube export SONAR_RUNNER_HOME=/home/qube/sonar-scanner export PATH=$PATH:$SONAR_RUNNER_HOME/bin
+保存退出vi后，更新：
+. /etc/profile
+4. 创建数据库sonar
+登陆MySQL
+mysql -u root -p
+创建sonar数据库和用户（用户名和密码都为sonar）
+mysql> CREATE DATABASE sonar DEFAULT CHARACTER SET utf8 COLLATE utf8_general_ci; Query OK, 1 row affected (0.00 sec)
+mysql> CREATE USER 'sonar' IDENTIFIED BY 'sonar'; Query OK, 0 rows affected (0.10 sec) mysql> GRANT ALL ON sonar.* TO 'sonar'@'%' IDENTIFIED BY 'sonar'; Query OK, 0 rows affected, 1 warning (0.00 sec) mysql> GRANT ALL ON sonar.* TO 'sonar'@'localhost' IDENTIFIED BY 'sonar'; Query OK, 0 rows affected, 1 warning (0.00 sec) mysql> FLUSH PRIVILEGES; Query OK, 0 rows affected (0.00 sec) mysql>
+5. 配置sonarqube，修改配置文件sonar.properties
+cd /home/qube/sonarqube/conf vim sonar.properties
+修改内容：
+sonar.jdbc.username=sonar #数据库名 sonar.jdbc.password=sonar #密码 sonar.jdbc.url=jdbc:mysql://localhost:3306/sonar?useUnicode=true&characterEncoding=utf8&rewriteBatchedStatements=true&useConfigs=maxPerformance
+6. 配置sonar-scanner，修改配置文件sonar-scanner.properties
+cd /home/qube/sonar-scanner/conf vim sonar-scanner.properties
+修改内容：
+sonar.jdbc.username=sonar sonar.jdbc.password=sonar sonar.jdbc.url=jdbc:mysql://localhost:3306/sonar?useUnicode=true&characterEncoding=utf8&rewriteBatchedStatements=true&useConfigs=maxPerformance
+7. 运行sonarqube
+cd /home/qube/sonarqube/bin/linux-x86-64 ./sonar.sh start
+8. 验证
+在本地浏览器输入：http://服务器ip:9000/
+能打开页面即正常。（初次启动时间大概在2分钟左右）
+9. 修改管理员密码和安装中文插件
+修改密码
+点击右上角 login，输入用户名和密码admin admin （第一次登录会有一个配置向导，直接跳过即可）。然后进入后，再点击右上角的图标，选择my account，修改密码（bit@2017）
+点击菜单administrator，然后选择marketplant，搜索Chinese，就能看到中文插件，安装并选择重启服务即可。
+3.3.5. 安装Maven
+1. 下载Maven
+首先，在本机打开网站http://maven.apache.org/download.cgi
+找到下载地址：http://mirror.bit.edu.cn/apache/maven/maven-3/3.5.2/binaries/apache-maven-3.5.2-bin.tar.gz
+然后下载：
+cd /home/qube wget http://mirror.bit.edu.cn/apache/maven/maven-3/3.5.2/binaries/apache-maven-3.5.2-bin.tar.gz
+2. 安装Maven
+安装比较简单，直接解压即可：
+tar zxvf apache-maven-3.5.2-bin.tar.gz
+然后为了管理方便mv更改目录名称为maven
+mv apache-maven-3.5.2 maven
+3. 设置环境变量，操作如下：
+sudo vim /etc/profile
+在/etc/profile文件最后加入：
+#Maven export M2_HOME=/home/qube/maven export CLASSPATH=$CLASSPATH:$M2_HOME/lib export PATH=$PATH:$M2_HOME/bin
+保存退出，并加载配置
+. /etc/profile
+4. 验证
+执行mvn –v查看maven版本信息，即正常
+3.3.6 安装Tomcat
+1. 下载Tomcat-8.5.24
+首先，在本机打开网站http://mirrors.shuosc.org/apache/tomcat/
+找到下载地址：http://mirrors.shuosc.org/apache/tomcat/tomcat-8/v8.5.24/bin/apache-tomcat-8.5.24.tar.gz
+然后下载：
+cd /home/qube wget http://mirrors.shuosc.org/apache/tomcat/tomcat-8/v8.5.24/bin/apache-tomcat-8.5.24.tar.gz
+2. 安装Tomcat
+tar -zxvf apache-tomcat-8.5.24.tar.gz mv apache-tomcat-8.5.24 tomcat cd /home/qube/tomcat/bin/ tar -zxvf commons-daemon-native.tar.gz ./configure make cp jsvc ../../
+3. 启动Tomcat
+cd /home/qube/tomcat/bin/ ./catalina.sh start
+4. 验证
+在本机浏览器里输入： http://服务器公网IP:8080 能打开页面即正常。
+3.3.7 安装Jenkins
+1. 下载Jenkins
+首先，在本机打开网站http://mirrors.jenkins-ci.org/war-stable/
+找到下载地址： http://mirrors.jenkins-ci.org/war-stable/2.89.2/jenkins.war
+然后下载：
+cd /home/qube wget http://mirrors.jenkins-ci.org/war-stable/2.89.2/jenkins.war
+2. 安装Jenkins
+Jenkins安装比较简单，直接复制到tomcat的webapps目录下即可，操作如下：
+mv /home/qube/jenkins.war /home/qube/tomcat/webapps/
+3. 配置Jenkins
+在本地浏览器中，输入http://服务器公网IP:8080/jenkins，打开页面后初次登录根据提示需要输入/roocd t/.jcd senkins/secrets/initialAdminPassword文件中的内容后，点击登录。此时还会需要你选择插件的安装，我们选择默认安装“Install suggested plugins”即可（此安装时间根据网络情况大概在10分钟以上）。
+插件安装完以后会提示建立身份认证相关的配置，我们直接跳过进入主页中修改即可。本镜像的用户名和密码为admin/bit@2017
+3.3.8 自动化安全代码检测环境的集成
+安装完这些基础软件以后，需要在Jenkins中进行集成，具体操作如下：
+1. 系统设置，将SonarQube Server 和 Jenkins URL设置好，点击系统管理—》系统设置：
+注意：使用镜像时，需要把此处进行配置成自己服务器的IP。
+2. 全局工具配置中集成jdk、Maven，点击系统管理—》全局工具配置，然后按照页面提示填入相应参数，如下图所示：
+3.4. 自动化安全代码检测平台的使用示例
+按照我们前面提到的核心思路，我们在Jenkins中创建任务来检测我们的代码（本镜像中，创建了一个helloWorld的工程，大家使用配置可参考）。大概操作如下：
+3.4.1. 新建任务，选择构建一个maven项目，点击确定。
+3.4.2. 项目配置中，需要配置源码管理、触发器和build任务。
+1. 首先，取一个项目名称
+2. 配置触发器
+3. build任务：
+其中Analysis properties的内容可参考如下：
+sonar.projectKey=my:project # this is the name displayed in theSonarQube UI sonar.projectName=helloWorld sonar.projectVersion=1.3.12
+# Path is relative to thesonar-project.properties file. Replace "\" by "/" onWindows. # Since SonarQube 4.2, this property isoptional if sonar.modules is set. # If not set, SonarQube starts looking forsource code from the directory containing # the sonar-project.properties file. sonar.sources=src sonar.binaries=bin # Encoding of the source code. Default isdefault system encoding #sonar.sourceEncoding=UTF-8 sonar.java.binaries=/home/qube/
+然后保存即可
+3.4.3. 上传项目，并检测
+1. 我们在本机上安装svn客户端，我使用的是TortoiseSVN，然后配置连接服务器，上传项目。
+2. 在Jenkins刚刚创建的任务中，点击立即“立即构建”，此时我们将在窗口右侧看到构建的进度，如果构建成功后，任务会提示执行成功。
+3.4.3 查看项目代码的检测结果
+登录Sonarqube，我们将看到执行结果，操作如下：
+在本机输入http://服务器ip:9000/，填入用户名admin和密码bit@2017后，我们将看在首页上就能看到检测结果：
+致谢：
+本平台测试和搭建过程中得到了北京理工大学计算机学院计卫星教授和研究生高志伟的大力帮助和支持，在此表示感谢。
+*本文作者：hjy103，转载请注明FreeBuf.COM

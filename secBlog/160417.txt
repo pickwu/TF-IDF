@@ -1,0 +1,34 @@
+One-Lin3r是一个简单的轻量级框架，它的设计灵感来源于Metasploit中的web-delivery模块。
+视频演示：https://asciinema.org/a/157020?autoplay=1
+One-Lin3r也可以说是一个专为懒人而设计的渗透测试框架，因为它的使用多是用一行简单的命令就能解决的：
+Reverser：输入IP和端口，它将返回一个反向shell准备复制和粘贴。
+Dropper：给它一个上传了后门的URL，它将返回下载并执行。
+其它：如一些常常会用到的（例如：Mimikatz，Powerup等），支持所有主流的操作系统 (如Windows, Linux, 和 macOS)，未来会
+特点：
+可以用全名或模糊查询数据库中的任何内容。
+你可以按照以下步骤来添加创建自己的“.liner”文件。你也可以直接将其发送给我，并由我将其添加到框架中，并记录你的名字。
+自动化执行框架命令。
+命令行参数可被框架作为源文件自动加载并执行。
+如果你添加了liner文件而没有重启框架，其具有重新加载数据库的能力。
+只需在payloads文件夹中创建一个文件夹，并在其中创建一个“.liner”文件，就可以将任何平台添加到payloads数据库中。
+更多...
+目前payloads数据库还并不完善，但我相信随着不断的更新和贡献它会变得越来越齐全。
+截图
+使用
+命令行参数
+usage: One-Lin3r.py [-h] [-r R] [-x X] [-q] optional arguments: -h, --help 显示帮助并退出 -r 执行一个源文件（历史文件） -x 执行特定的命令 -q 安静模式 (没有banner)
+框架命令
+Command Description -------- ------------- help/? 显示帮助菜单 list/show 列出可用的攻击payloads search <Keyword> 搜索指定payloads use <payload> 使用payload info <payload> 获取使用payload信息 banner 展示banner reload/refresh 重新加载payloads数据库 check 打印核心版本和数据库版本，并在线版本检查 history 从一开始就显示命令行最重要的历史 save_history 保存命令行历史到一个文件中 exit/quit 退出框架
+安装和依赖
+为了使工具能正常运作，你需要以下配置环境：
+Python 3.x或2.x（首选3）。
+Linux（我是在kali rolling测试的）或Windows系统（尚未在MacOS上测试，但应该没问题）。
+依赖安装如下。
+安装
+windows（下载ZIP并解压后）：
+cd One-Lin3r-master python -m pip install -r win_requirements.txt python One-Lin3r.py -h
+Linux：
+git clone https://github.com/D4Vinci/One-Lin3r.git chmod 777 -R One-Lin3r cd One-Lin3r pip install -r requirements.txt python One-Lin3r.py -h
+联系我
+https://twitter.com/D4Vinci1
+*参考来源：GitHub，FB小编 secist 编译，转载请注明来自FreeBuf.COM

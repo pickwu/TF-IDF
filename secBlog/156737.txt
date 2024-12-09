@@ -1,0 +1,59 @@
+*本文原创作者：西毒若相惜，本文属FreeBuf原创奖励计划，未经许可禁止转载
+一、背景
+XX眼镜，免费领取日抛5日装隐形眼镜活动，发现接收到的手机验证码为4位数字，看到4位验证码时就觉得有搞头。
+顺便祝我伦生日快乐，等你下课~
+二、技术手段
+因为是跟朋友一起，所以他直接扫码注册领取了，我就是回到家扫码抓包看一下
+发送验证码请求为
+POST /tws/we_chat/active/get_auth_code phoneNumber=13812345678
+没有什么问题，没有把验证码直接显示在response包中
+那我们来看看验证过程
+POST /tws/we_chat/active/check_auth_code HTTP/1.1 name=%E4%BD%A0%E5%A5%BD&phoneNumber=13812345678&verificationCode=1234
+verificationCode通过burpsuite的intuder，4位数字，1分钟内就爆破成功，成功登录
+这里由于第一次没注意，所以又预约到了之前的门店，不可能再去一次啊，所以想着换个别的近的门店
+于是刚才的过程再抓包，找一下门店对应的字段
+GET /tws/we_chat/active/detail?activeId=5e6d2ccd-a9b5-41b8-a376-2c00ab0c4ee4&storeId=store20160003 HTTP/1.1
+找到了storeId，遍历一下，找到最近的门店，预约成功，由于之前和朋友一起的时候有过领取经验，所以直接预约后把二维码地方截图，等待去门店领取
+三、门店领取
+持以上二维码，到预约的门店，由店员扫码核销，即可领取成功。理论上，你在家里多用几个手机号预约并截图保存二维码，脸皮够厚的话可以一直换。
+第一次做羊毛党，我就知道没这么简单~
+1.到门店后，店员会让你现场扫他们店里的活动二维码进行预约。
+（为什么要让你扫呢，因为每个门店二维码是绑定他们店的id的，这也是在第二节中我说的要修改storeId，不然会预约错门店。）这里我赶紧机智的说，上次我路过拍了你们店的活动二维码，我回家自己预约了。不管店员信不信，我反正信了。
+2.扫码领取后，店员客户端被我看到了弹出核销成功几个字，我以为这就算完成了，谁知道店员问我，你成功了么？一脸懵逼，你不是都核销成功了么。
+（后来研究了一下，原来是核销成功后，我们自己的二维码页面也会进行跳转到领取成功的页面。因为我是图片啊！！！！怎么跳转啊！！！我估计也是因为这个活动这个漏洞，导致很多人来伪冒领取，店员所以要多确认一下）一脸懵逼，我赶紧按下home键，然后一脸懵逼的说我已经关掉页面了，没看是否跳转。然后跟她一直巴拉巴拉我为什么要来骗你这东西，我不稀罕，不领就不领之类的，最后还是给我了东西，然后不欢而散。
+四、正文
+前面大家就当看个故事，涉及的burp爆破也很简单。这里总结一下类似这个场景的两个问题。
+1.店员既然等着你页面刷新，保存为图片肯定不行，页面不关闭可能会话会退出导致还是需要登录。所以最好就是能在门店里及时的得到爆破的验证码。4位验证码burpsuite算慢的也就2分钟左右，完全等的起。
+2.之前跟姐姐还有她孩子逛商场，里面你懂的，有各种地推人员会拿着小玩具比如风车啊，气球啊等，见到小朋友就说免费送给小朋友，小朋友肯定会拿着要啊。然后工作人员就拉着你说，填个问卷，或者注册一下什么的。有什么办法，我也很无奈啊，只能照做，毕竟东西都被小朋友拿着跑了。以前的这种很傻的，留个假的手机号就行了，现在这种机构也都学精了，也都需要手机号和验证码了。都是现场让你注册的，就算看到是4位的验证码也没办法马上爆破。
+所以基于以上两个场景，如果有种把手机的请求包发到云端进行爆破，然后返回验证码给手机，2分钟以内的时间，不就可以解决这个问题了么。
+五、代理
+思路很简单，把手机请求的数据包发送到云服务器，服务器上脚本解析请求获取字段然后爆破，结果返回给客户端。这里结合微信订阅号或小程序功能为未来设想。未来的目标就是微信发一条指令，服务器上就开始工作了。
+简单画的图，1,2,3步骤，2,3步骤后续再实现，而且难度不大，这次先试着解决步骤1.
+随便找到代理公司，这里刚好看到了wyproxy，基于mitmproxy造的轮子，由之前猪猪侠搞的，可以把请求存到mysql中。
+https://github.com/ring04h/wyproxy
+工具不多做介绍，大家可以自己看。
+$ python wyproxy.py -h usage: wyproxy.py [-h] [-d] [-stop] [-restart] [-pid] [-p] [-m] [-us] wyproxy v 1.0 ( Proxying And Recording HTTP/HTTPs and Socks5) optional arguments: -h, --help show this help message and exit -d, --daemon start wyproxy with daemond -stop, --stop stop wyproxy daemond -restart, --restart restart wyproxy daemond -pid , --pidfile wyproxy daemond pidfile name -p , --port wyproxy bind port -m , --mode wyproxy mode (HTTP/HTTPS, Socks5, Transparent) -us, --unsave Do not save records to MySQL server
+提供三种代理模式，HTTP/HTTPS, Socks5, Transparent
+手机端配置代理，很简单，在连接wifi后的设置地方，直接配置代理服务器ip和端口，如果是socks代理的话，可以通过代理自动配置文件pac来实现。
+搞了半天，这种代理还是要连接wifi，不管是连接到商场的wifi还是另外一部手机开热点自己去连都可以做到。
+那么，纯蜂窝网络该怎么配置呢？找了半天，也只在IOS配置VPN的地方有这样的配置，未尝试，应该是可以的。
+不过大家应该知道，IOS VPN一般都是通过客户端软件添加的，如上图的wingy，brook等。现在大家用shadowsocks代理比较多，那么可以通过手机连接ss服务器，然后再能中间人获取请求就行了。
+网上也搜索了下
+https://github.com/shadowsocks/shadowsocks/issues/747
+问：想把ss服务端的对外链接通过服务端本地的http代理中转再发出去（主要想通过mitmproxy抓包），有这样的参数设置吗？还是需要改源码？？
+需求一样啊，也看到了有解决方法
+sudo iptables -t nat -A OUTPUT -p tcp -m owner ! --uid-owner root --dport 443 -j REDIRECT --to-port 8080sudo iptables -t nat -A OUTPUT -p tcp -m owner ! --uid-owner root --dport 80 -j REDIRECT --to-port 8080sudo iptables -t nat -A PREROUTING --dst ***.***.***.*** -p tcp -m owner ! --uid-owner root --dport 8080 -j DNAT --to-destination 127.0.0.1:8080sysctl -w net.ipv4.ip_forward=1
+创建个另外的用户跑ss，之后照着这个做，未成功。sad。
+然后自己想想原理，ss客户端请求某页面，然后服务器上抓包查看。
+可以看到三次握手过程，请求响应过程和后面的TCP关闭动作，我们简单画下图。
+然后我们希望在ss服务端请求你应用服务器的时候插入代理。
+原理搞清楚了，然后就是实现端口转发了，这里用iptables实现。
+六、未完待续
+到上面为止，突然就结束了，没有后续实现的过程，因为还没成功，所以发出来也让大家一起讨论指点下。
+1.iptables实现端口转发，试了很多次均无法成功，不知道是iptables本身有问题还是规则配置问题。针对iptables nat表中的OUTPUT,PREROUTING等chain链，是SNAT还是DNAT，网上各种不一，不过都尝试了还是不通。请网络大牛指点。
+2.是否是我ss 服务器和wyproxy代理服务器是同一台导致出现这样的问题？
+3.也有搜索过ss和burpsuite连起来使用，毕竟burp还是好用和方便。
+但是基本都是浏览器设置代理------->burpsuite------->burp里加一层ss代理，请求是先到burp再到ss服务器
+想请求先到ss服务器，然后再到burp，跟上面一样，也一样是端口转发，试了下windows的，如下，也不行，这样有问题么。这意思不就是有请求到ip138的80端口，就转发到本地监听的8080端口，burp开启，监听8080端口不就行了么？
+请各位大佬指点。这次就算是上篇，等后续有时间一枪头搞定了再给大家分享下篇。
+*本文原创作者：西毒若相惜，本文属FreeBuf原创奖励计划，未经许可禁止转载

@@ -1,0 +1,39 @@
+今天给大家介绍一款名叫gron的JSON数据检索工具，gron不仅可以将目标JSON数据进行离散化拆分，并能够让用户更加轻松地使用grep来对数据进行搜索，而且它还能够允许用户查看到数据的绝对路径。
+工具下载
+下载地址：【GitHub传送门】
+使用样例
+gron的使用样例如下：
+▶gron "https://api.github.com/repos/tomnomnom/gron/commits?per_page=1"| fgrep "commit.author" json[0].commit.author= {}; json[0].commit.author.date= "2016-07-02T10:51:21Z"; json[0].commit.author.email= "mail@tomnomnom.com"; json[0].commit.author.name= "Tom Hudson";
+gron还可以逆向工作，即它能够将你所提供的数据转换成JSON格式：
+▶gron "https://api.github.com/repos/tomnomnom/gron/commits?per_page=1"| fgrep "commit.author" | gron --ungron [ { "commit": { "author": { "date":"2016-07-02T10:51:21Z", "email":"mail@tomnomnom.com", "name": "TomHudson" } } } ]
+工具安装
+gron的使用不需要任何的运行时依赖，你可以直接从gron的Github库【传送门】中下载针对不同操作系统的代码版本，目前该工具支持Linux、Mac、Windows或FreeBSD等平台。你可以直接将项目代码拷贝到自己的执行路径（例如$PATH或/usr/bin）中，以方便使用：
+▶tar xzf gron-linux-amd64-0.1.5.tgz ▶sudo mv gron /usr/bin/
+如果你使用的是macOS，你还可以通过brew来安装gron：
+▶brew install gron
+或者说，如果你使用Go，你还可以使用go get命令来完成gron的安装（Go v1.7或更高版本）：
+▶ go get -u github.com/tomnomnom/gron
+工具使用
+从文件中读取JSON数据：
+▶gron testdata/two.json json= {}; json.contact= {}; json.contact.email= "mail@tomnomnom.com"; json.contact.twitter= "@TomNomNom"; json.github= "https://github.com/tomnomnom/"; json.likes= []; json.likes[0]= "code"; json.likes[1]= "cheese"; json.likes[2]= "meat"; json.name= "Tom";
+从URL资源获取JSON数据：
+▶gron http://headers.jsontest.com/ json= {}; json.Host= "headers.jsontest.com"; json["User-Agent"]= "gron/0.1"; json["X-Cloud-Trace-Context"]= "6917a823919477919dbc1523584ba25d/11970839830843610056";
+从stdin获取JSON数据：
+▶curl -s http://headers.jsontest.com/ | gron json= {}; json.Accept= "*/*"; json.Host= "headers.jsontest.com"; json["User-Agent"]= "curl/7.43.0"; json["X-Cloud-Trace-Context"]= "c70f7bf26661c67d0b9f2cde6f295319/13941186890243645147";
+使用grep命令搜索目标数据并查看路径：
+▶gron testdata/two.json | grep twitter json.contact.twitter= "@TomNomNom";
+gron还可以结合diff命令一起使用：
+▶diff <(gron two.json) <(gron two-b.json) 3c3 <json.contact.email = "mail@tomnomnom.com"; --- >json.contact.email = "contact@tomnomnom.com";
+gron的输出为有效的JavaScript：
+▶gron testdata/two.json > tmp.js ▶echo "console.log(json);" >> tmp.js ▶nodejs tmp.js {contact: { email: 'mail@tomnomnom.com', twitter: '@TomNomNom' }, github: 'https://github.com/tomnomnom/', likes: [ 'code', 'cheese', 'meat' ], name: 'Tom' }
+Ungronning
+gron还可以将它的输出数据转换为JSON格式：
+▶gron testdata/two.json | gron -u{ "contact": { "email":"mail@tomnomnom.com", "twitter": "@TomNomNom" }, "github":"https://github.com/tomnomnom/", "likes": [ "code", "cheese", "meat" ], "name": "Tom" }
+这也就意味着，你可以使用gron配合grep以及其他的工具来修改JSON数据：
+▶gron testdata/two.json | grep likes | gron --ungron { "likes": [ "code", "cheese", "meat" ] }
+在保存数组键值时，如果值为空的话，gron将会以“null“填充数组：
+▶gron testdata/two.json | grep likes | grep -v cheese json.likes= []; json.likes[0]= "code"; json.likes[2]= "meat"; ▶gron testdata/two.json | grep likes | grep -v cheese | gron --ungron { "likes": [ "code", null, "meat" ] }
+关于gron的高级使用技巧，请参考【这篇文档】。
+获取帮助信息
+▶gron --help TransformJSON (from a file, URL, or stdin) into discrete assignments to make itgreppable Usage: gron [OPTIONS] [FILE|URL|-] Options: -u, --ungron Reverse the operation (turn assignmentsback into JSON) -c, --colorize Colorize output (default on tty) -m, --monochrome Monochrome (don't colorizeoutput) -s, --stream Treat each line of input as a separateJSON object -k, --insecure Disable certificate validation --no-sort Don't sort output (faster) --version Print version information ExitCodes: 0 OK 1 Failedto open file 2 Failedto read input 3 Failedto form statements 4 Failedto fetch URL 5 Failedto parse statements 6 Failedto encode JSON Examples: gron /tmp/apiresponse.json gron http://jsonplaceholder.typicode.com/users/1 curl -shttp://jsonplaceholder.typicode.com/users/1 | gron gronhttp://jsonplaceholder.typicode.com/users/1 | grep company | gron –ungron
+* 参考来源：gron，FB小编Alpha_h4ck编译，转载请注明来自FreeBuf.COM

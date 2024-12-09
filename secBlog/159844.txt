@@ -1,0 +1,62 @@
+作者：I春秋作家——HAI_
+0x00 前言
+看这篇可以先看看之前的文章，进行一个了解。
+Android逆向-java代码基础（1）
+Android逆向-java代码基础（2）
+文章里的内容可以选读，里面会有一些问题的解决方式。也可以读一下。
+0x01 java 加法运算
+这个运算和数学里运算一样，这里写一个简单的demo。
+1.int加法
+1.1 简单的demo
+public class add { public static void main ( String[]args ) { int a= 10 ; int b= 11 ; b=a+b; System. out .println(b); } }
+1.2 编译运行输出结果。
+1.3 class文件探索。
+1.3.1 这里是上两节讲的常量池。
+1.3.2 访问标志（access_flags）
+（1）ACC_ENUM标志位
+首先来看这个，如果定义了枚举类，那么JVM虚拟机就会把access_flags的第二位为1。
+（2）ACC_ANNOTATION标志位
+看单词的含义ANNOTAION注释，这里就是如果有注解类，KVM就会把access_flags的第三位置为1
+（3）ACC_SYNTHETIC标志位
+如果不是JVM编译器编译的，是用户自己的就会把第四位置为1。
+（4）ACC_ABSTARACT标志位
+定义某一个类的时候，JVM会把ACC_ABSTARACT标志位置为1。
+（5）ACC_INTERFACE标志位
+定义接口的时候，JVM会把ACC_INTERFACE标志位置为1。
+（6）ACC_SUPER标志位
+对于定义的类，JVM会把ACC_SUPER标志位置为1。
+（7）ACC_FINAL标志位
+如果类被声明了final类型，如果是，就会把ACC_FINAL标志位置为1。
+（8）ACC_PUBLIC标志位
+如果类被声明了public类型，JVM就会把ACC_PUBLIC标志位置为1。
+1.3.3 该文件探索
+1.4 更简单的查看方式。
+javap -v name ;
+直接查看即可。
+1.5 smali文件分析
+这里就不详细介绍，class文件是怎样转换成smali文件的方法了。详细请参考
+Android逆向-java代码基础（1）
+1.5.1这个是smali代码的整体情况。
+1.5.2必备的一个
+1.5.3 main函数
+2 float加法
+2.1 demo
+public class add { public static void main ( String[]args ) { float a= 1.1 f; System. out .println(a+a); } }
+2.2 class文件分析
+2.3 smali文件分析
+2.3.1 必备
+2.3.2main
+add- float / 2 addr vx,vy #Adds vy to vx.
+也就是说把vx和vy的值相加。
+其他的语法我们都是见过的，而且在Android逆向-java代码基础（2）中非常详细的讲解过，这里就不赘述了。
+3尝试使用smali写一段代码。
+3.1demo
+.class public Ladd; .super Ljava/lang/Object; .source "add.java" .method public constructor <init>()V .registers 1 .prologue .line 1 invoke-direct {p0}, Ljava/lang/Object;-><init>()V return - void .end method . method public static main ( [Ljava/lang/String; )V .registers 3 .prologue #start const v0,0x3f8ccccd const v1,0x4f8ccccd sget- object v2,Ljava/lang/System ;-> out :Ljava/io/PrintStream; add- float / 2 addr v0,v1 invoke- virtual {v2,v0},Ljava/io/PrintStream;->println(F)V return - void .end method
+3.2jar编译
+0x02 结束语
+1.又写了一天，很多东西等着我去学习，在学习的过程中，越理解明白的就越多。今天勉强算是完成了一个应该完成的东西。smali文件的结构也差不多可以了。我觉得同步Android Studio学习可以开始了。
+2.当然java还是要接着复习的，不过以我现在的这种进度，真的是有一点慢呢。不过慢归慢，还是可以学到之前没有学到的东西。
+3.准备每一天破解一个简单的apk，虽然是简单，但是也可以增强自己对APP的了解。至于破解的教程就不进行说明了。
+不过可能会进行一个资料的收集。
+微博：HAI_AI_ZHUZHU
+>>>>>>黑客入门必备技能 带你入坑，和逗比表哥们一起聊聊黑客的事儿，他们说高精尖的技术比农药都好玩！

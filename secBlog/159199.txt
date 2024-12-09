@@ -1,0 +1,24 @@
+*本文原创作者：yuegui_2004，本文属FreeBuf原创奖励计划，未经许可禁止转载
+使用爬虫爬取网站或者使用扫描器扫描目标时经常会遇到扫描频率较为频繁导致IP被封或者限制访问的情况，这时候我们就需要考虑利用IP代理的方式不断的变换IP进行爬虫和扫描，从而逃避目标端的检测。这里介绍一款代理工具ProxyChains。
+ProxyChains是一个开源代理工具，能够强制使任何应用的TCP连接使用SOCKS4,SOCKS或者HTTP(S)代理进行连接。首先简单介绍一下ProxyChains的使用。
+Kali中自带ProxyChains，也可以从https://github.com/rofl0r/proxychains-ng下载安装。ProxyChains运行的所有配置都在/etc/proxychains.conf中：
+在[ProxyList]下面添加代理IP和端口，可以任意添加代理，一行一个记录。
+各配置项用法如下：
+dynamic_chain：该配置项能够通过ProxyList中的每个代理运行流量，如果其中一个代理关闭或者没有响应，它能够自动选择ProxyList中的下一个代理；
+strict_chain：改配置为ProxyChains的默认配置，不同于dynamic_chain，也能够通过ProxyList中的每个代理运行流量，但是如果ProxyList中的代理出现故障，不会自动切换到下一个。
+random_chain：该配置项会从ProxyList中随机选择代理IP来运行流量，如果ProxyList中有多个代理IP，在使用proxychains的时候会使用不同的代理访问目标主机，从而使主机端探测流量更加困难。
+大致了解了proxychains的配置项之后，可以测试一下proxychains使用代理访问的情况，proxychains使用起来也非常简单，命令形式为：
+proxychains <运行的命令> <命令参数>
+接下来可以实践一下proxychains代理的效果。
+首先直接运行sqlmap扫描目标地址，然后在某云上的WAF看到拦截日志及源IP：
+接着利用proxychains代理sqlmap扫描目标地址，然后在某云上的WAF上能过看到拦截日志及源IP已经变成了代理IP：
+可以看到攻击IP已经变成了代理IP，所属地区也变成了代理IP的地区，试验成功。
+接下来就是如何实现ProxyChains自动添加代理，大致分为以下几个步骤：
+需要有一个提供免费代理的地址； 解析该地址提供的内容获取代理IP和端口； 将获取的代理IP和端口加入到proxychains.conf配置文件的ProxyList配置项中
+免费代理的网站问一下度娘或者谷哥应该就能得到很多答案，有：快代理（https://www.kuaidaili.com/free/）、ProxyList（https://proxy-list.org/english/index.php），PorxyList是国外的一个提供免费代理的网站，貌似需要翻墙访问，这里我使用快代理提供的IP和端口。
+需要注意的是，在使用proxychains代理转发过程中，如果目标对象为https，那么需要使用支持SSL/https协议的代理，快代理提供的免费代理均只支持http协议；Proxy List中有支持SSL/HTTPS协议且免费的代理。
+第一步：访问快代理并解析网页内容获取代理IP和端口：
+第二步：将获取的代理IP和端口更新写入ProxyList配置项中：
+配置文件更新成功之后，就可以运行该脚本看看效果了，出现如下图结果，代理写入成功。
+至此可以利用该脚本简单实现proxychains自动添加代理逃避检测。
+*本文原创作者：yuegui_2004，本文属FreeBuf原创奖励计划，未经许可禁止转载

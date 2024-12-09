@@ -1,0 +1,29 @@
+新的一周，各位Buffer早上好~ 两天的周末不知道大家过得是否愉悦，不过黑客活动貌似一直都没闲着：日本交易所Coincheck遭受史上最大加密货币损失案；黑客利用Youtube广告劫持用户电脑挖矿；Reddit为所有用户带来双重身份验证；受感染的Android游戏将广告软件传播给超过450万用户；CrossRAT恶意软件在Windows, MacOS以及 Linux系统下都检测不到。
+【国际动态】
+日本交易所Coincheck遭受史上最大加密货币损失案
+日本加密货币交易所Coincheck今天宣布，在事件发生时，它损失了超过5亿的NEM币，价值超过5亿美元。该公司在今天早些时候的媒体会上承认遭受黑客攻击。Coincheck表示，在检测到黑客攻击后，它通知当地执法机构并准备补偿遭受损失的用户。
+此前Coincheck 暂停 NEM存款之后，用户开始怀疑有些事情不对劲，几个小时后才停止所有NEM交易，然后停止整个网站的所有付款。据目前掌握的资料显示，黑客盗取了刚刚推出的加密货币NEM币，根据市值排名世界第十位数字货币。
+黑客事件宣布后，NEM交易价格从1美元下跌至0.8美元。据称黑客几乎盗窃了目前流通的所有NEM代币的7%。在加密货币交换平台遭遇黑客攻击的事件中，Coincheck事件规模是有史以来最大，超过了2014年黑客窃取超过4.5亿美元的比特币的Mt. Gox事件。
+[来源：bleepingcomputer]
+【Web安全】
+黑客利用Youtube广告劫持用户电脑挖矿
+趋势科技在过去几天发现Coinhie矿工人数激增，其中包括Coinhive，显然与YouTube和其他网站上提出的Google DoubleClick广告有关。
+由于比特币和以太坊等货币价值的快速上涨，加密电子货币的网络攻击数量增加。黑客瞄准几乎所有参与加密货币业务的单位，单一用户，矿工。安全公司已经发现了几个专门用来窃取加密货币的恶意软件应用程序，许多网站都被盗用以安装用于挖掘虚拟硬币的脚本，滥用访问者的计算机资源。
+研究人员观察到两个独立的网络加密货币矿工脚本，均在AWS上托管，这些脚本是从展示DoubleClick广告的网页调用的。广告使用一个JavaScript代码，产生一个1到101之间的随机数。如果产生的数字大于10，广告将调用 coinhive.min.js 脚本占用80% CPU来挖矿。剩下的10％，广告加载一个隐秘的网上矿工mqoj_1.js脚本。
+[来源：securityaffairs]
+Reddit为所有用户带来双重身份验证
+截至今天，您现在可以使用双因素身份验证来保护您的Reddit账户。此功能以前是在测试版，但现在已经推出给所有的Reddit用户。数据泄露，密码重复使用和恶劣的密码这些日子都很常见。
+通过使用诸如双因素身份验证之类的额外保护层，攻击者访问您的帐户将变得更加困难。在Reddit中启用双重身份验证，您需要转到您的帐户密码/电子邮件页面。如果您的注册电子邮件地址未经验证，您需要先验证它，否则Reddit将允许您启用双因素验证。
+[来源：bleepingcomputer]
+【终端安全】
+受感染的Android游戏将广告软件传播给超过450万用户
+一个旨在提供用户间聊天功能的Android应用程序组件一直在打开网站并点击手机背景中的广告。根据上周发布的报告，这个恶意组件是由一个中国公司呀呀呀云（Ya Ya Yun）提供的软件开发包（SDK）的一部分。
+名称 应用包名 版本 Hero Mission com.dodjoy.yxsm.global 1.8 Era of Arcania com.games37.eoa 2.2.5 Clash of Civilizations com.tapenjoy.warx 0.11.1 Sword and Magic com.UE.JYMF&hl 1.0.0 خاتم التنين - Dragon Ring (For Egypt) com.reedgame.ljeg 1.0.0 perang pahlawan com.baiduyn.indonesiamyth 1.1400.2.0 樂舞 - 超人氣3D戀愛跳舞手遊 com.baplay.love 1.0.2 Fleet Glory com.entertainment.mfgen.android 1.5.1 Kıyamet Kombat Arena com.esportshooting.fps.thekillbox.tr 1.1.4 Love Dance com.fitfun.cubizone.love 1.1.2 Never Find Me - 8v8 real-time casual game com.gemstone.neverfindme 1.0.12 惡靈退散-JK女生の穿越冒險 com.ghosttuisan.android 0.1.7 King of Warship: National Hero com.herogames.gplay.kowglo 1.5.0 King of Warship:Sail and Shoot com.herogames.gplay.kowsea 1.5.0 狂暴之翼-2017年度最具人氣及最佳對戰手遊 com.icantw.wings 0.2.8 武動九天 com.indie.wdjt.ft1 1.0.5 武動九天 com.indie.wdjt.ft2 1.0.7 Royal flush com.jiahe.jian.hjths 2.0.0.2 Sword and Magic com.linecorp.LGSAMTH Depends on a device model Gumballs & Dungeons：Roguelike RPG Dungeon crawler com.qc.mgden.android 0.41.171020.09-1.8.6 Soul Awakening com.sa.xueqing.en 1.1.0 Warship Rising - 10 vs 10 Real-Time Esport Battle com.sixwaves.warshiprising 1.0.8 Thủy Chiến - 12 Vs 12 com.vtcmobile.thuychien 1.2.0 Dance Together music.party.together 1.1.0 頂上三国 - 本格RPGバトル com.yileweb.mgcsgja.android 1.0.5 靈魂撕裂 com.moloong.wjhj.tw 1.1.0 Star Legends com.dr.xjlh1 1.0.6
+Android应用程序开发人员使用Ya Ya Yun SDK为即将开发的游戏添加即时消息（聊天）功能。使用这种SDK的程序是比较危险的，因为它使幕后的公司可以远程控制您的应用程序。在Play商店发现了27种Android游戏的恶意行为，安装在450多万台设备上。
+[来源：bleepingcomputer]
+当心！CrossRAT恶意软件在Windows, MacOS以及 Linux系统下都检测不到
+网络犯罪分子现在正在使用一种新的“无法检测”的间谍恶意软件，其目标是Windows，macOS，Solaris和Linux系统。
+就在上周，一篇关于EFF / Lookout报告的详细文章揭示了一个名为Dark Caracal的高级持续威胁（APT）小组，参与了全球移动间谍活动，同时揭示了一种名为CrossRAT的新型跨平台恶意软件（版本0.1），据称是由黑暗的Caracal小组开发的。CrossRAT是一个跨平台的远程访问木马程序，它可以针对所有四种流行的桌面操作系统，Windows，Solaris，Linux和macOS，使远程攻击者能够操纵文件系统，截图，运行任意可执行文件。
+据研究人员称，Dark Caracal黑客不依靠任何“0day攻击”来散布其恶意软件; 相反，它通过Facebook群组和WhatsApp消息上的帖子使用基本的社交工程，诱导用户访问黑客控制的虚假网站并下载恶意应用程序。CrossRAT是用Java编程语言编写的，使得反向工程师和研究人员很容易对其进行反编译。
+预祝各位新的一周工作顺利~
+*本文由Andy整理编译，转载请注明来自FreeBuf.COM

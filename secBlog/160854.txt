@@ -1,0 +1,19 @@
+英特尔：Meltdown/Spectre补丁影响严重，可能导致异常重启。
+英特尔对Meltdown和Spectre补丁进行了性能测试，证实了之前的一些猜测。
+英特尔表示，安装补丁后可能导致计算机重启更加频繁。之前英特尔就表示对家庭和企业电脑的性能影响会达到2%到14%。
+“正如预测的那样，我们迄今为止的测试结果显示，性能影响取决于具体的工作负载和配置。一般来说，权限越高，工作负载越大，受到负面影响也更大。
+英特尔称：在 FlexibleIO 的 CPU 压力测试（100% 写入）中，它观察到吞吐性能出现了 18% 的下降；模拟交易的 OLTP 测试显示性能出现 4% 的下降，除此之外的大部分测试性能影响都在 0-2% 之间。
+英特尔的微码更新被认为修复的主要是 Spectre 的漏洞，而 Meltdown 漏洞需要操作系统更新，对性能会产生显著影响。
+英特尔还报告说，Meltdown和Spectre补丁会导致更频繁的重新启动，这种情况在运行Broadwell，Haswell，Ivy Bridge，Sandy Bridge，Skylake和Kaby Lake平台的系统上都存在。
+英特尔已经在尝试解决这些问题，将在下周提供测试版微代码供厂商验证。
+英特尔表示，只有最新的Intel第八代CPU Coffee Lake似乎不受重新启动的影响。
+微软重新推送更新
+补丁不稳定的问题在微软推送补丁时就存在，导致微软临时撤销推送补丁，现在微软在修复问题后恢复了AMD设备Meltdown & Spectre更新。
+微软已经恢复了AMD设备的安全更新。这些更新修补了Meltdown和Spectre漏洞。
+微软在1月3日发布了这些补丁，但公司在1月9日停止了对AMD计算机的推送，因为用户报告说PC崩溃导致无法启动的状态。
+微软在解决AMD的问题之后，今天宣布将重新推出五项（全部九项）安全更新。五个更新是：
+2018年1月3日-KB4056892（OS Build 16299.192）（Windows 10版本1709） 2018年1月3日-KB4056898（仅安全更新）（Windows 8.1，Windows Server 2012 R2 Standard） 2018年1月9日-KB4056895（月度汇总）（Windows 8.1，Windows Server 2012 R2 Standard） 2018年1月3日-KB4056897（仅安全更新）（Windows 7 Service Pack 1，Windows Server 2008 R2 Service Pack 1） 2018年1月9日-KB4056894（月度汇总）（Windows 7 Service Pack 1，Windows Server 2008 R2 Service Pack 1）
+仍然暂停的四个安全更新是：
+2018年1月3日-KB4056888（OS Build 10586.1356）（Windows 10 1511版） 2018年1月3日-KB4056891（OS Build 15063.850）（Windows 10版本1703） 2018年1月3日-KB4056890（OS Build 14393.2007）（Windows 10版本1607，Windows Server 2016，Windows 10 Mobile，2016年8月发布） 2018年1月3日-KB4056893（OS Build 10240.17735）（Windows 10 Enterprise于2015年7月发布）
+崩溃漏洞不会影响AMD设备，这些更新包括针对Spectre漏洞的OS级补丁。 AMD表示正在开发固件更新，希望在本月底完成。
+* 参考来源：BleepingComputer & SecurityAffairs，作者Sphinx，转载注明来自Freebuf.COM

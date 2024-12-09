@@ -1,0 +1,32 @@
+今天的早餐包括：Siemens 修复工厂管理产品TeleControl Basic系统中的三个漏洞；WannaMine：通过永恒之蓝传播的挖矿病毒；Smominru僵尸网络出现，影响 50000台Win设备；恶意软件样本正在试验性地利用Meltdown和Specter漏洞；韩国发布新在野Flash 0day漏洞警告：朝鲜黑客正在利用；98.5%安卓APP获取用户隐私权限……
+【国际时事】
+Smominru僵尸网络出现，影响 500000台Win设备
+迄今为止最大的僵尸网络Smominru出现，目前已经影响超过 526,000台Windows计算机（主要是Windows服务器）。安全研究人员从去年开始就知道这个小组的运作情况，不同的公司（奇虎360 NetLab和Proofpoint）已经发表了关于这个僵尸网络的活动报告。
+GuardiCore，趋势科技，卡巴斯基，Crowdstrike等也发布了相关的调查结果。
+目前，该僵尸网络已经感染了超过52万台机器，并为其运营商挖掘了价值2,300万美元的门罗币。
+bleepingcomputer
+恶意软件样本正在试验性地利用Meltdown和Specter漏洞
+安全研究人员看到越来越多的恶意软件样本正在试验Meltdown和Specter漏洞。据AV-TEST，Fortinet和Minerva Labs的研究人员介绍，他们已经发现试验中的PoC代码可以利用CVE-2017-5754和幽灵CVE-2017-5715，CVE -2017-5753漏洞。
+来自AV-TEST的研究人员已经检测到119个与上述CPU漏洞相关的恶意软件样本。根据Fortinet的报告，这些样本中的大部分包括PoC代码或其变体。
+bleepingcomputer
+【Web安全】
+WannaMine：通过永恒之蓝传播的挖矿病毒
+CrowdStrike的研究人员发现了一款 名为WannaMine的新型Monero加密挖掘蠕虫，它会利用与NSA相关的EternalBlue漏洞进行传播。CrowdStrike的安全研究人员说，这个恶意代码编写得非常复杂，它类似于国家支持的APT组织所使用的模型。
+[来源：securityaffairs]
+【终端安全】
+韩国发布新在野Flash 0day漏洞警告：朝鲜黑客正在利用
+韩国计算机应急响应小组（KR-CERT）目前发出了关于新在野 Flash 0day漏洞的警告。根据发布的安全警报来看，这个漏洞影响 Flash Player 版本28.0.0.137（当前）及之前的版本。
+KR-CERT表示：攻击者可以诱导用户打开包含恶意 Flash 代码文件的 Microsoft Office 文档、网页、垃圾电子邮件等等。 目前看来，恶意代码被认为嵌入在 MS Word 文档中的 Flash SWF 文件中。
+韩国计算机应用中心建议，用户应当禁用或卸载 Adobe Flash Player，直到 Adobe 发布补丁。
+【工控安全】
+Siemens 修复工厂管理产品TeleControl Basic系统中的三个漏洞
+西门子在其“工厂管理产品”（西门子TeleControl系统）中修补了三个安全漏洞。该系统平时是用于水处理设施，交通监控系统和能源分配工厂之中的。
+TeleControl Basic控制中心运行TeleControl Server Basic软件。 目前TeleControl Server Basic系统中一共受到三个漏洞的攻击，攻击者可利用这三个漏洞进行不同类型的攻击，包括权限升级，绕过验证和拒绝服务（DoS）攻击。
+这些缺陷会影响V3.1之前的TeleControl Server Basic版本，其中最严重的问题是CVE-2018-4836。
+[来源：securityaffairs]
+【国内新闻】
+98.5%安卓APP获取用户隐私权限
+腾讯社会研究中心和DCCI互联网数据中心日前发布《2017年度网络隐私安全及欺诈行为研究分析报告》（以下简称《报告》），《报告》显示，98.5%安卓手机APP存在获取用户隐私权限问题，iOS应用获取用户隐私权限也达到81.9%。2017年下半年，852个安卓手机APP中有98.5%都要获取用户隐私权限，这比去年一季度增长了2%。其中，网络游戏与常用工具是获取用户手机隐私权限占比最高的两类应用，分别达到获取隐私权限总数的24.4%和18.8%。
+值得注意的是，与2017年一季度测评结果相比，Android手机APP对核心隐私权限的获取情况有所降低。特别是读取手机号码、读取彩信两个权限大幅度下降，下半年测评中所占比例分别为10.9%和0.8%。此外，Android应用在下半年越界获取用户隐私权限的比例也有明显下降，从25.3%降至9%。
+[来源：中国经济网]
+*本文整理编译Elaine，转载请注明FreeBuf.COM

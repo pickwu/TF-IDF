@@ -1,0 +1,23 @@
+2017年勒索软件成为安全界的一个热门关注点，很多安全公司预测2018年它仍会是危害用户安全的一个重点。近期安全人员发现，一款名为Rapid的勒索软件正在快速传播，与以往多数勒索软件不同的是，它不仅会对计算机上已有的文件进行加密，还会对新创建的任何文件进行加密。许多关于勒索软件的贴吧中出现用户针对Rapid加密文件如何解密的求助信息。
+暂时还不清楚Rapid恶意软件是如何传播的，但从一月份开始，他已经感染了很多人。根据ID-Ransomeware的统计（如上图），第一个提交的案例是在1月3日，之后提交的有超过300个，这只是受害者中的一小部分。
+Rapid恶意软件是如何对计算机实施加密的？
+当恶意软件运行时，它就会清除Windows卷影拷贝、终止数据库进程和禁用自动修复。被终止的进程为：sql.exe、sqlite.exe及oracle.com，并执行下列命令：
+vssadmin.exe Delete Shadow /All /Quiet cmd.exe /Cbcdedit /set {default} recoveryenabled No cmd.exe/C bcdedit /set {default} bootstatuspolicy ignoreallfailures
+一旦这些命令被执行，恶意软件就会扫描计算机进行加密，当文件被加密后，其文件名就会被添加.rapid扩展名，如下图：
+当恶意软件完成对计算机的加密时，将在各个文件夹中创建名为“HowRecovery Files.txt”的勒索提示文件，文件中包含一个电子邮件，让受害者联系如何完成付款。恶意软件也会创建启动，在重启后加载勒索提示文件，Rapid恶意软件不会免费对文件解密，除非完成支付。显示的提示信息内容如下：
+Rapid的IOC信息
+哈希值：
+125c2bcb0cd05512391a695f907669b2f55a8b69c9d4df2ce1b6c9c5a1395b61
+关联文件：
+%AppData%\info.exe %AppData%\HowRecovery Files.txt %AppData%\recovery.txt
+关联的注册表信息：
+HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Run"Encrypter"="%AppData%\info.exe" HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Run"userinfo"="%AppData%\recovery.txt"
+相关邮件地址：
+frenkmoddy@tuta.io jpcrypt@rape.lol support@fbamasters.com unlockforyou@india.com rapid@rape.lol fileskey@qq.com fileskey@cock.li
+Rapid勒索软件提示信息：
+Hello! All your fileshave been encrypted by us Ifyou want restore files write on e-mail - frenkmoddy@tuta.io
+感染Rapid勒索软件后要怎么办？
+受害者如果发现Rapid恶意软件对计算机进行加密后，应尽快打开Windows进程管理器，终止关联的恶意进程。如果计算机没有被重启，运行的进程名称可能为任意名称，如样本的名称为rapid.exe（如下图）。如果受害者计算机已经被重启，这个进程名称可能被命名为info.exe。
+一旦终止了进程，然后启动msconfig.exe禁止启动项，如果不能进到任务管理器，就重启进入网络联接安全模式（Safe Mode with Networking），然后再进行尝试。
+为避免计算机被勒索软件感染，应该养成良好的使用习惯，安装安全防护软件、做好数据备份等。可参考“Howto Protect and Harden a Computer against Ransomware”这篇文章。
+*参考网站：BleepingComputer,编译JingleCats，转载请注明FreeBuf.COM

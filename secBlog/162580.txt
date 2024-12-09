@@ -1,0 +1,193 @@
+0x00 前言
+不知所以然，请看
+Android逆向-Android基础逆向（1）
+Android逆向-Android基础逆向（2）
+Android逆向-Android基础逆向（2-2）
+Android逆向-Android基础逆向（2-3补充篇）
+Android逆向-Android基础逆向（3）
+Android逆向-Android基础逆向（4）
+Android逆向-Android基础逆向（4-2）
+Android逆向-Android基础逆向（5）
+以及java系列：
+Android逆向-java代码基础（1）
+Android逆向-java代码基础（2）
+Android逆向-java代码基础（3）
+Android逆向-java代码基础（4）
+Android逆向-java代码基础（5）
+Android逆向-java代码基础（6）
+Android逆向-java代码基础（7）
+Android逆向-java代码基础（8）
+内容or问题
+1.如何写一个登录界面？ √
+2.逆向分析登录逻辑 √
+3.如何暴力绕过一个登录界面？ √
+4.如何巧妙登录 √
+5..如何加广告√
+6.如何去广告
+7.实例分析
+时间
+2018年2月4日13:10:42
+目的
+1.复习登录界面的书写
+2.暴力练习
+3.获取练习
+4.smali代码熟练
+5.给自己的app加广告
+6.二次打包加广告实战
+7.如何去广告
+0x01 Android 编程---登录界面
+说明
+这个是学编程的时候必须要学的，这次我们就不接数据库来操作。也没有注册界面，直接就是一个简单的登录界面。
+demo还是按照之前的改。恩，反正我会，我就要偷懒。
+1.更改布局
+首先一个用户名的框框。
+然后一个登录密码的框框。
+然后还是一个登录按钮
+预览一下我们的界面
+好丑，做一个简单的调整，整体代码如下：
+<?xml version="1.0" encoding="utf-8"?> < LinearLayout xmlns:android = "http://schemas.android.com/apk/res/android" xmlns:tools = "http://schemas.android.com/tools" android:id = "@+id/activity_main" android:layout_width = "match_parent" android:layout_height = "match_parent" android:orientation = "vertical" tools:context = "com.example.hanlei.first_demo.MainActivity" > < EditText android:layout_width = "match_parent" android:layout_height = "wrap_content" android:id = "@+id/name" android:hint = "请输入用户名" /> < EditText android:layout_width = "match_parent" android:layout_height = "wrap_content" android:id = "@+id/password" android:hint = "请输入密码" /> < Button android:layout_width = "match_parent" android:layout_height = "wrap_content" android:id = "@+id/bt" android:text = "Login" /> </ LinearLayout >
+2.绑定控件
+恩，为了像一个登录界面，我把name也改了。
+所以重新绑定。
+3.逻辑书写
+login.setOnClickListener( new View.OnClickListener() { @ Override public void onClick (View v) { if (name.getText().toString().equals( "zhuzhu" )&&Integer.parseInt(ps.getText().toString())== 520 ) { startActivity( new Intent(MainActivity. this ,Main2Activity. class )); } } });
+这里涉及到一个知识点。
+java String 类型如何转换为int类型。
+简单的来说：
+Integer .parseInt（）;
+就可以转换了
+这里突然想到万一不输入数字怎么办。恩，去改下规范。
+< EditText android:layout_width = "match_parent" android:layout_height = "wrap_content" android:id = "@+id/password" android:inputType = "number" android:hint = "请输入密码" />
+这里加了一行只允许输入数字。
+测试
+0x02 反编译分析
+分析嘛，很多次了。老规矩
+1. Android Killer
+2.找到主要函数
+我们找到逻辑判断的地方$1
+. class Lcom /example/hanlei/first_demo/ MainActivity $1 ; . super Ljava /lang/ Object ; .source "MainActivity.java" .implements Landroid /view/ View $OnClickListener ; .annotation system Ldalvik /annotation/ EnclosingMethod ; value = Lcom /example/hanlei/first_demo/ MainActivity ;->onCreate( Landroid /os/ Bundle ;) V . end annotation .annotation system Ldalvik /annotation/ InnerClass ; accessFlags = 0x0 name = null . end annotation .field final synthetic this $0 :Lcom/example/hanlei/first_demo/MainActivity ; .method constructor <init>( Lcom /example/hanlei/first_demo/ MainActivity ;) V .locals 0 .param p1, "this$0" .prologue .line 24 iput-object p1, p 0 , Lcom /example/hanlei/first_demo/ MainActivity $1 ;->this $0 :Lcom/example/hanlei/first_demo/MainActivity ; invoke-direct {p 0 }, Ljava /lang/ Object ;-><init>() V return -void . end method .method public onClick( Landroid /view/ View ;) V .locals 4 .param p1, "v" .prologue .line 27 iget-object v 0 , p 0 , Lcom /example/hanlei/first_demo/ MainActivity $1 ;->this $0 :Lcom/example/hanlei/first_demo/MainActivity ; invoke-static {v 0 }, Lcom /example/hanlei/first_demo/ MainActivity ;->access $000 ( Lcom /example/hanlei/first_demo/ MainActivity ;) Landroid /widget/ EditText ; move-result-object v 0 invoke-virtual {v 0 }, Landroid /widget/ EditText ;->getText() Landroid /text/ Editable ; move-result-object v 0 invoke-virtual {v 0 }, Ljava /lang/ Object ;->toString() Ljava /lang/ String ; move-result-object v 0 const-string v1, "zhuzhu" invoke-virtual {v 0 , v1}, Ljava /lang/ String ;->equals( Ljava /lang/ Object ;) Z move-result v 0 if -eqz v 0 , :cond_0 iget-object v 0 , p 0 , Lcom /example/hanlei/first_demo/ MainActivity $1 ;->this $0 :Lcom/example/hanlei/first_demo/MainActivity ; invoke-static {v 0 }, Lcom /example/hanlei/first_demo/ MainActivity ;->access $100 ( Lcom /example/hanlei/first_demo/ MainActivity ;) Landroid /widget/ EditText ; move-result-object v 0 invoke-virtual {v 0 }, Landroid /widget/ EditText ;->getText() Landroid /text/ Editable ; move-result-object v 0 invoke-virtual {v 0 }, Ljava /lang/ Object ;->toString() Ljava /lang/ String ; move-result-object v 0 invoke-static {v 0 }, Ljava /lang/ Integer ;->parseInt( Ljava /lang/ String ;) I move-result v 0 const/ 16 v1, 0x208 if -ne v 0 , v1, :cond_0 .line 29 iget-object v 0 , p 0 , Lcom /example/hanlei/first_demo/ MainActivity $1 ;->this $0 :Lcom/example/hanlei/first_demo/MainActivity ; new-instance v1, Landroid /content/ Intent ; iget-object v2, p 0 , Lcom /example/hanlei/first_demo/ MainActivity $1 ;->this $0 :Lcom/example/hanlei/first_demo/MainActivity ; const- class v3 , Lcom / example / hanlei / first_demo / Main2Activity ; invoke-direct {v1, v2, v3}, Landroid /content/ Intent ;-><init>( Landroid /content/ Context ; Ljava /lang/ Class ;) V invoke-virtual {v 0 , v1}, Lcom /example/hanlei/first_demo/ MainActivity ;->startActivity( Landroid /content/ Intent ;) V .line 31 :cond_0 return -void . end method
+3.重点逻辑部分
+重点逻辑就是如何判断登录的部分
+if -eqz v 0 , :cond_0 iget-object v 0 , p 0 , Lcom /example/hanlei/first_demo/ MainActivity $1 ;->this $0 :Lcom/example/hanlei/first_demo/MainActivity ; invoke-static {v 0 }, Lcom /example/hanlei/first_demo/ MainActivity ;->access $100 ( Lcom /example/hanlei/first_demo/ MainActivity ;) Landroid /widget/ EditText ; move-result-object v 0 invoke-virtual {v 0 }, Landroid /widget/ EditText ;->getText() Landroid /text/ Editable ; move-result-object v 0 invoke-virtual {v 0 }, Ljava /lang/ Object ;->toString() Ljava /lang/ String ; move-result-object v 0 invoke-static {v 0 }, Ljava /lang/ Integer ;->parseInt( Ljava /lang/ String ;) I move-result v 0 const/ 16 v1, 0x208 if -ne v 0 , v1, :cond_0 .line 29 iget-object v 0 , p 0 , Lcom /example/hanlei/first_demo/ MainActivity $1 ;->this $0 :Lcom/example/hanlei/first_demo/MainActivity ; new-instance v1, Landroid /content/ Intent ; iget-object v2, p 0 , Lcom /example/hanlei/first_demo/ MainActivity $1 ;->this $0 :Lcom/example/hanlei/first_demo/MainActivity ; const- class v3 , Lcom / example / hanlei / first_demo / Main2Activity ; invoke-direct {v1, v2, v3}, Landroid /content/ Intent ;-><init>( Landroid /content/ Context ; Ljava /lang/ Class ;) V invoke-virtual {v 0 , v1}, Lcom /example/hanlei/first_demo/ MainActivity ;->startActivity( Landroid /content/ Intent ;) V
+我们看到了两个if语言
+整个逻辑就是先进行一个判断，然后进行另外一个判断。就是满足第一个if语句，然后满足第二个if语句才到结束。
+这些smali代码就是我们之前分析过很多次的语句，没有什么难的地方，都很简单的。
+0x03 暴力美学
+我们来尝试破解。
+方法 1
+思路
+既然有if语句进行判断，那我把if语句删了。编程现在这个样子：
+invoke-static {v 0 }, Lcom /example/hanlei/first_demo/ MainActivity ;->access $000 ( Lcom /example/hanlei/first_demo/ MainActivity ;) Landroid /widget/ EditText ; move-result-object v 0 invoke-virtual {v 0 }, Landroid /widget/ EditText ;->getText() Landroid /text/ Editable ; move-result-object v 0 invoke-virtual {v 0 }, Ljava /lang/ Object ;->toString() Ljava /lang/ String ; move-result-object v 0 const-string v1, "zhuzhu" invoke-virtual {v 0 , v1}, Ljava /lang/ String ;->equals( Ljava /lang/ Object ;) Z move-result v 0 这里删除 if 语句 iget-object v 0 , p 0 , Lcom /example/hanlei/first_demo/ MainActivity $1 ;->this $0 :Lcom/example/hanlei/first_demo/MainActivity ; invoke-static {v 0 }, Lcom /example/hanlei/first_demo/ MainActivity ;->access $100 ( Lcom /example/hanlei/first_demo/ MainActivity ;) Landroid /widget/ EditText ; move-result-object v 0 invoke-virtual {v 0 }, Landroid /widget/ EditText ;->getText() Landroid /text/ Editable ; move-result-object v 0 invoke-virtual {v 0 }, Ljava /lang/ Object ;->toString() Ljava /lang/ String ; move-result-object v 0 invoke-static {v 0 }, Ljava /lang/ Integer ;->parseInt( Ljava /lang/ String ;) I move-result v 0 const/ 16 v1, 0x208 这里删除 if 语句 .line 29 iget-object v 0 , p 0 , Lcom /example/hanlei/first_demo/ MainActivity $1 ;->this $0 :Lcom/example/hanlei/first_demo/MainActivity ; new-instance v1, Landroid /content/ Intent ; iget-object v2, p 0 , Lcom /example/hanlei/first_demo/ MainActivity $1 ;->this $0 :Lcom/example/hanlei/first_demo/MainActivity ; const- class v3 , Lcom / example / hanlei / first_demo / Main2Activity ; invoke-direct {v1, v2, v3}, Landroid /content/ Intent ;-><init>( Landroid /content/ Context ; Ljava /lang/ Class ;) V invoke-virtual {v 0 , v1}, Lcom /example/hanlei/first_demo/ MainActivity ;->startActivity( Landroid /content/ Intent ;) V .line 31 :cond_0 return -void
+然后保存进行反编译。
+安装测试
+方法 2
+思路
+不删除if语句，但是我更改if语句的逻辑。比如本来是相等才可以，我改成不相等就继续运行。
+具体操作
+第一个判断语句是：
+if -eqz v 0 , :cond_0
+if-eqz的含义就是 如果是0，就跳转到 cond_0
+现在我们修改成：
+if -nez v 0 , :cond_0
+if-nez的含义是，如果不是0，就跳转到cond_0
+第二个判断语句是：
+if -ne v 0 , v1, :cond_0
+if-ne的含义就是如果v0！=v1就跳转。
+现在我们改成：
+if -eq v 0 , v1, :cond_0
+if-eq的含义就是如果相等再进行跳转。
+测试
+测试成功，不想录图片了。
+方法3
+思路
+既然最后一定要走的是第二个判断里的内容，那么我们使用goto语句直接进去不就好了。
+首先设置一个 cond_1
+然后goto :cond_1
+.method public onClick( Landroid /view/ View ;) V .locals 4 .param p1, "v" .prologue .line 27 goto :cond_1 iget-object v 0 , p 0 , Lcom /example/hanlei/first_demo/ MainActivity $1 ;->this $0 :Lcom/example/hanlei/first_demo/MainActivity ; invoke-static {v 0 }, Lcom /example/hanlei/first_demo/ MainActivity ;->access $000 ( Lcom /example/hanlei/first_demo/ MainActivity ;) Landroid /widget/ EditText ; move-result-object v 0 invoke-virtual {v 0 }, Landroid /widget/ EditText ;->getText() Landroid /text/ Editable ; move-result-object v 0 invoke-virtual {v 0 }, Ljava /lang/ Object ;->toString() Ljava /lang/ String ; move-result-object v 0 const-string v1, "zhuzhu" invoke-virtual {v 0 , v1}, Ljava /lang/ String ;->equals( Ljava /lang/ Object ;) Z move-result v 0 if -eqz v 0 , :cond_0 iget-object v 0 , p 0 , Lcom /example/hanlei/first_demo/ MainActivity $1 ;->this $0 :Lcom/example/hanlei/first_demo/MainActivity ; invoke-static {v 0 }, Lcom /example/hanlei/first_demo/ MainActivity ;->access $100 ( Lcom /example/hanlei/first_demo/ MainActivity ;) Landroid /widget/ EditText ; move-result-object v 0 invoke-virtual {v 0 }, Landroid /widget/ EditText ;->getText() Landroid /text/ Editable ; move-result-object v 0 invoke-virtual {v 0 }, Ljava /lang/ Object ;->toString() Ljava /lang/ String ; move-result-object v 0 invoke-static {v 0 }, Ljava /lang/ Integer ;->parseInt( Ljava /lang/ String ;) I move-result v 0 const/ 16 v1, 0x208 if -ne v 0 , v1, :cond_0 :cond_1 .line 29 iget-object v 0 , p 0 , Lcom /example/hanlei/first_demo/ MainActivity $1 ;->this $0 :Lcom/example/hanlei/first_demo/MainActivity ; new-instance v1, Landroid /content/ Intent ; iget-object v2, p 0 , Lcom /example/hanlei/first_demo/ MainActivity $1 ;->this $0 :Lcom/example/hanlei/first_demo/MainActivity ; const- class v3 , Lcom / example / hanlei / first_demo / Main2Activity ; invoke-direct {v1, v2, v3}, Landroid /content/ Intent ;-><init>( Landroid /content/ Context ; Ljava /lang/ Class ;) V invoke-virtual {v 0 , v1}, Lcom /example/hanlei/first_demo/ MainActivity ;->startActivity( Landroid /content/ Intent ;) V .line 31 :cond_0 return -void . end method
+测试结果
+测试成功。
+结束语
+可能还有很多种绕过的方法，这里就不一一展示了。
+0x04 优雅的登录
+思路
+既然是登录，那么必然就要有一个对比的存在，我只要知道是用什么去对比的，我把需要对比的东西进行输出，方便我们查看是不是更好呢。
+代码分析
+const- string v1 , "zhuzhu" invoke-virtual {v0, v1 }, Ljava/lang/ String;->equals(Ljava/lang/Object;)Z move-result v0 if -eqz v0, :cond_0
+这里很明显，用v0和v1进行比较，如果是就返回1，如果不是就返回0
+const/ 16 v1 , 0x208 if -ne v0, v1 , :cond_0
+定义一个v1寄存器，然后用v0和v1比较看是否一致如果一致就继续向下运行。
+0x208就是16进制形式，进行转换，就知道了我们密码是多少了，之后在登录输出即可。当然这个是可有看到的密码，如果接入了数据库就会变成不可见的密码，到时候就可以进行动态调试来对密码进行一个输出了。
+0x05 如何植入广告
+什么是广告？
+大神说过一句话叫做，和游戏无关的都是广告，我们普遍说的广告就是，一些恩，很烦人的东西。
+植入广告的目的是什么？
+植入广告的目的主要是
+（1） 做推广
+（2）能赚到钱
+植入广告原理分析
+用一个载体去承载广告，然后显示出来。使用的技术用静态布局，或者使用动态加载等方式。还是来看一下如果植入广告的具体操作吧。
+市面上的广告
+有米广告
+有米广告，反正我被坑了整整两天，什么都没搞成功，还被折腾的够呛，不过虽然没有搞出什么成果来，但是对有米广告倒是有了一个很深的认识，这个坑人的东西，好气。
+最后我只是搞成功了一个这个东西。
+爬坑
+先来说说，我遇到的坑。希望有人研究的时候可以节约时间。
+Error:Execution failed for task ':processDebugManifest'. > [ :YoumiSdk_v7.5.1_2018-01-16: ] C: \Users \hanlei \Desktop \ls \YoumiAndroidSdk \demo
+ormaldemo \build \intermediates \exploded -aar \YoumiSdk _v7.5.1_2018-01-16 \AndroidManifest .xml:23:3-29:15: Error: Invalid instruction 'targetApi', valid instructions are : REMOVE,REPLACE,STRICT
+看到这个鬼东西了木有，网上搜索都说需要换一个sdk，但是官网只提供最新的sdk，或许是我没找到。
+果断换sdk。
+而且官方给的demo导入到Android Studio 里用不了，也是这个问题。
+解决方案：
+Androidmanifest.xml里加这一句，可能有用。
+< uses-sdk tools:overrideLibrary = "YoumiSdk_v7.4.0_2017-05-18" />
+重新搞
+1.新建一个demo
+2.加入arr包
+3.添加依赖关系
+4. 申请ID
+5.初始化信息
+毫不留情就出问题了。
+Error:Execution failed for task ':app:processDebugManifest'. > [ :YoumiSdk_v7.5.1_2018-01-16: ] C: \Users \hanlei \Desktop \ls \YoumiAndroidSdk \demo \demo 3 \app \build \intermediates \exploded -aar \YoumiSdk _v7.5.1_2018-01-16 \AndroidManifest .xml:23:3-29:15: Error: Invalid instruction 'targetApi', valid instructions are : REMOVE,REPLACE,STRICT
+换个arr版本接着搞。
+记得改配置文件
+果然换了一个arr包马上就对了，太不友好了。
+我们接着初始化。
+6.设置渠道号
+7.权限配置。
+广告嘛，配置权限权限扫描的才可以运行。
+< uses-permission android:name = "android.permission.INTERNET" /> < uses-permission android:name = "android.permission.READ_PHONE_STATE" /> < uses-permission android:name = "android.permission.ACCESS_NETWORK_STATE" /> < uses-permission android:name = "android.permission.ACCESS_WIFI_STATE" /> < uses-permission android:name = "android.permission.WRITE_EXTERNAL_STORAGE" /> < uses-permission android:name = "android.permission.SYSTEM_ALERT_WINDOW" />
+ps
+应该同步做一件事情。
+应该在我的小本本上同步做一个记录。
+添加v4包
+compile 'com.android.support:support-v4:xx.x.x'
+这里的v4：xx.x.x一定要和上面的一致，直接看图：
+写完一个调用
+试一下其他广告类型
+一样的返回code 1。好烦哦。提交审核了。
+2018年2月6日12:38:11
+多盟广告
+自己搞吧，我心累
+腾讯
+谷歌
+....
+结束语
+至少写了4个demo，现在接入sdk，对于我来说真的是太熟悉了。塞翁失马焉知祸福。怎样用也很熟练了。
+如果要做到去广告的话，先对Activity进行观察，然后直接看官方文档，然后反着来就行，
+0x06 如何二次植入广告
+基本一搜索都是一种方法：（可能是有什么黑科技没有公布于世吧）、
+http://blog.csdn.net/u011106915/article/details/52184362
+还有一个是二次打包有米的。
+https://www.cnblogs.com/cooka/p/3593607.html
+0x07 结束语
+鉴于篇幅，转战Android逆向-Android基础逆向（6-2）
+收获：
+1.复习登录界面的书写
+2.简单的绕过总结
+3.简单的分析smali代码
+4.爬了两天的广告接入坑，对Android 接入sdk有了很深层次的认识
+遗留问题
+1.如何去除广告
+2.还有之前增加demo按钮逻辑
+以上
+>>>>>> 带你入坑 和逗比表哥们一起聊聊黑客的事儿，他们说高精尖的技术比农药都好玩~

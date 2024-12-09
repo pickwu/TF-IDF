@@ -1,0 +1,28 @@
+今天给大家介绍的是一款名叫BLEAH的BLE扫描器，这款扫描器专门针对的是智能设备，该工具基于Iah Harvey的bluepy代码库（Python）开发，并且易于使用，因为这些智能设备对安全事件的响应速度较慢，所以利用BLEAH来实现攻击可以说是轻而易举的。
+工具组件下载
+bluepy代码库：【GitHub传送门】
+BLEAH：【GitHub传送门】
+首先，我们需要判断自己的硬件是否支持进行BLE扫描（我假设你使用的是GNU/Linux，并且安装了bluez以及所有默认的BT实用工具栈）：
+sudo hcitool lescan
+如果可以正常工作的话，你将会看到如下所示的输出结果：
+LE Scan ... AA:BB:CC:DD:EE:FF(unknown) AA:BB:CC:DD:EE:FFSTORZ&BICKEL AA:BB:CC:DD:EE:FF(unknown) AA:BB:CC:DD:EE:FF(unknown) AA:BB:CC:DD:EE:FF(unknown) AA:BB:CC:DD:EE:FF(unknown) AA:BB:CC:DD:EE:FF(unknown) AA:BB:CC:DD:EE:FF(unknown) AA:BB:CC:DD:EE:FF(unknown) AA:BB:CC:DD:EE:FF[LG] webOS TV OLED55E6V
+此时，说明你的设备已经准备好了…
+注：我个人比较喜欢使用hcitool来读取数据，并使用gatttool来与目标设备进行连接。
+如何使用
+从GitHub安装bluepy源码：
+git clone https://github.com/IanHarvey/bluepy.git cd bluepy python setup.py build sudo python setup.py install
+接下来，安装BLEAH：
+cd bleah python setup.py build sudo python setup.py install
+工具使用
+你可以使用-h参数来获取工具的帮助菜单：
+usage:bleah [-h] [-i HCI] [-t TIMEOUT] [-s SENSITIVITY] [-b MAC] [-f] [-e] [-u UUID][-d DATA] [-r DATAFILE] optional arguments: -h, --help show this help message and exit -i HCI, --hci HCI HCI device index. -t TIMEOUT, --timeout TIMEOUT Scan delay, 0 forcontinuous scanning. -s SENSITIVITY, --sensitivity SENSITIVITY dBm threshold. -b MAC, --mac MAC Filter by device address. -f, --force Try to connect even if the devicedoesn't allow to. -e, --enumerate Connect to available devices and performservices enumeration. -u UUID, --uuid UUID Write data to this characteristic UUID(requires --mac and --data). -d DATA, --data DATA Data to be written. -r DATAFILE, --datafile DATAFILE Read data to be writtenfrom this file.
+使用样例
+持续扫描BTLE设备：
+sudo bleah -t0
+连接指定设备并枚举出所有信息：
+sudo bleah -b "aa:bb:cc:dd:ee:ff" -e
+向设备中的特定属性写入hello world字节数据：
+sudo bleah -b "aa:bb:cc:dd:ee:ff" -u "c7d25540-31dd-11e2-81c1-0800200c9a66"-d "hello world"
+许可证协议
+BLEAH遵循GPL 3.0许可证协议。
+* 参考来源：kitploit，FB小编Alpha_h4ck编译，转载请注明来自FreeBuf.COM

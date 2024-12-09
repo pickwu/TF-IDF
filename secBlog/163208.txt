@@ -1,0 +1,47 @@
+StaCoAn是一款跨平台工具，它可以帮助开发人员、漏洞猎人以及白帽黑客对移动端应用程序进行静态代码分析。
+该工具能够从程序代码中搜索出很多有价值的数据，其中包括：
+1. 硬编码凭证； 2. API密钥； 3. API的URL地址； 4. 解密密钥； 5. 重要的编码错误；
+值得一提的是，该工具最重要的就是其易用性以及丰富的图形化用户接口。如果你想立即体验该工具的话，可以直接进入该项目的releases页面下载和使用StaCoAn【传送门】。
+注意：当前版本的StaCoAn仅支持apk文件，但是随后我们将添加针对ipa文件的功能支持。如需获取样本输出报告，请点击【这里】。
+功能介绍
+在使用StaCoAn应用程序时，你只需要将需要分析的移动端应用文件（.apk或.ipa）拖到StaCoAn程序窗口中，它便会给用户生成一份可视化的报告（可复制下载）。除此之外，用户也可以根据自己的需求来修改程序配置以及字典来获取自定义体验。
+生成报告是以树形结构图的形式提供的，用户可以轻松地浏览反编译的程序信息：
+Loot概念
+StaCoAn所提供的Loot功能可以帮助你寻找所有有价值的数据，并在loot页面中全部呈现给用户。最终的报告会以zip压缩文件的形式导出，并允许用户将其分享给他人。
+字典
+StaCoAn使用了字典来帮助用户寻找代码中的“蛛丝马迹”，字典内容的形式如下所示（支持更多正则表达式）：
+API_KEY|||80|||这里包含一个API密钥引用
+(https|http):\/\/.*api.*|||60|||这个正则表达式可以匹配任何含有'api'的URL
+文件类型
+任何类型的源文件都可以被处理，其中包括'.java', '.js', '.html', '.xml'等等…
+StaCoAn不仅可以从数据库文件中搜索关键字，而且还可以生成一份数据库表单概览：
+响应式设计
+报告形式可以自适应任何尺寸的设备屏幕。
+功能限制
+该工具目前还无法正常处理混淆后的代码，如果你是一名开发人员，请在运行该工具之前确保需要编译的代码没有经过混淆处理。如果你是以攻击者角度使用它的话，那就祝你好运吧！
+工具使用
+如果你想要立刻使用该工具，你可以访问该项目的releases页面并根据自己的操作系统来下载可执行文件或源码文档。
+如果你下载的是zip文件，你需要解压缩，并将.apk或.ipa文件复制到提取出的文件夹中。然后将文件拖到可执行文件图标上，报告将会自动生成在report文件夹中。
+源代码
+git clone https://github.com/vincentcox/StaCoAn/ cd StaCoAn/src
+确保你已经安装了pip3：
+sudo apt-get install python3-pip
+安装相关的Python依赖包：
+pip3 install -r requirements.txt
+运行StaCoAn：
+python3 stacoan.py yourApp.apk
+构建可执行文件
+pip3 install pyinstaller
+Windows
+pyinstaller main.py --onefile --icon icon.ico --name stacoan–clean
+MacOS
+pyinstaller main.py --onefile --icon icon.ico --name stacoan–clean
+Linux
+python3 -m PyInstaller main.py --onefile --icon icon.ico--name stacoan –clean
+运行Docker容器
+cd docker docker build . -t stacoan docker run -e JAVA_OPTS="-Xms2048m -Xmx2048m" -p8000:8000 -v /yourappsfolder:/tmp -i -t stacoan /tmp/com.myapk.apk
+等待分析完成后，你可以打开浏览器访问http://localhost:8000。
+相关项目
+本项目中还使用到了下列项目：
+1. MaterializeCSS：基于MaterialDesign的CSS框架，用于设计报告主题外观； 2. PRISMJS：轻量级代码高亮工具； 3. JADX：用于反编译.apk文件； 4. Fancytree：jQuery树形结构查看插件； 5. Fontawesome：用于显示某些图标； 6. JSZip：用于创建、读取和编辑.zip文件的JavaScript库； 7. FileSaver：JSZip库需要使用的HTML5存储实现；
+* 参考来源：StaCoAn，FB小编Alpha_h4ck编译，转载请注明来自FreeBuf.COM

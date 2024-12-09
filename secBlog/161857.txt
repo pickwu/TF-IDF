@@ -1,0 +1,26 @@
+Proofpoint的研究人员对之前未曾报道过的一种威胁进行跟踪，发现代理运营者通过Tor代理onion[.]top盗取比特币。代理的运营者正秘密地将被勒索受害者支付的比特币赎金转移到自己比特币钱包中，对被勒索的受害者和实施勒索的攻击者双方都造成影响。这种方式用《庄子·山木》中的“螳螂捕蝉，黄雀在后”形容，再恰当不过了。
+背景：Tor代理
+许多恶意勒索案例中，攻击者都向受害者提出支付要求，受害者必须访问一个Tor .onion网站来向特定的比特币地址支付赎金。由于大多数用户通常不安装Tor浏览器，所以他们可能会使用Tor代理，一些赎金提示中也建议他们这样操作。Tor代理是可以将Tor流量转换成正常网页流量的网站，这就给了网站运营者成为中间人并毫无限制的替换内容的权利。
+Tor代理使用起来简单，用户一般只需在onionURL后添加扩展名即可，如.to\.cab，它就变成可在正常浏览器使用的链接。比如要访问hxxps://robusttldkxiuqc6[.]onion/，用户需要使用Tor浏览器，或者在任意浏览器上访问hxxps://robusttldkxiuqc6[.]onion[.]to/即可。
+LockerR
+有很多的代理提供商使用onion[.]top代理，第一次发现这种威胁行为是在恶意勒索软件LockerR的勒索信息中，如图。
+研究人员也发布了类似的攻击报告，如Evrial盗取信息木马监视Windows剪贴板上的比特币支付地址（包括使用Steam支付的字符串），并将剪贴板上的地址改成攻击者自己的。
+LockerR在2017年10月首次被发现，最近它通过RIG-v利用工具包进行传播，通过比较其支付网站在Tor浏览器和.top的Tor代理中显示的信息，发现利用onion.top访问的比特币支付地址被替换了（如图）。可以看到通过Tor访问的地址是正确的，因为它向所有受害者展示的地址都一样。相反，通过.topTor代理访问的就不一致。
+GlobeImposter
+对于GlobeImposter的支付地址，通过两种方式查看的地址也是不一样的。
+Sigma勒索软件
+测试Sigma恶意勒索软件也被替换了，并且注意到该地址和GlobeImposter中替换的地址相同(1Q64uWnKMUoZ6G7BSrH77xdrewMou2zGpU)。
+已被转移的比特币数量
+研究者通过对替换的比特币地址的检查，确定运营商可能窃取了多少比特币。下图中展示了两个比特币地址窃取的数量分别约为0.15BTC和1.82BTC，对于其它未展示出来的比特币地址，研究者也不清楚具体窃取了多少比特币。
+最后说明
+.onion.top也不是对所有的勒索软件变体都尝试重定向，测试中BitPaymer勒索软件的比特币地址就没有改变。专业的勒索软件研发人员也意识到了这个问题，他们试图通过“用户教育”和技术手段预防这种行为。如LockerR，攻击者之后在勒索提示中删除了.top链接，并且专门用红色文字警示受害者。
+Magniber恶意软件将比特币地址分为四个部分放到HTML源码中，使代理更难检测到比特币地址。
+GlobeImposter勒索软件要求用户使用Tor浏览器并且对受害者隐藏了.onion的支付地址，它不再在勒索提示文件中提供一个链接，而是在提示文件中对地址进行混淆，用户单击一个按钮后还原混淆。
+总结
+onion.top的运营商并没有盗取很多比特币，这种类型的活动破坏了攻击者和受害者之间的信任关系，对那些试图支付赎金解密文件的受害者来说影响很大。这也对实施勒索攻击从中获取利益的攻击者带来了一个头疼的问题，降低了受害者支付赎金的意愿度，从而降低攻击者的收益。这反映了所有针对加密货币实施盗窃行为的趋势，加密货币市场的持续不稳定以及增加对Tor网络的兴趣。也潜在加剧了Tor带来的滥用，对新用户造成额外风险。
+攻击指示（IOCs）
+IOC
+IOC类型
+描述
+7cf39ebb4409b13a7c153abff6661cc4d28d8d7109543d6419438ac9f2f1be57 SHA256 LockeR ransomware lockerrwhuaf2jjx[.]onion Domain LockeR ransomware C&C ae0d28e8d57329866624ec6cf63b9609fe9e685200029d3aa207eda67747fcd7 SHA256 GlobeImposter ransomware bcwfga5ssxh3jrlp.onion Domain GlobeImposter ransomware C&C 8f66bb494b3fc3063b18a18a51c7b85da90dc1bb429ded21e7dbb02b404d3831 SHA256 Sigma ransomware yowl2ugopitfzzwb[.]onion Domain Sigma ransomware C&C onion[.]top|46.246.120.179 Domain|IP onion[.]top Tor Gateway
+*参考来源： ProofPoint ，本文作者：JingleCats，转载请注明来自 FreeBuf.COM

@@ -1,0 +1,126 @@
+0x00 前言
+不知所以然，请看
+以及java系列：
+Android逆向-java代码基础（1）
+Android逆向-java代码基础（2）
+Android逆向-java代码基础（3）
+Android逆向-java代码基础（4）
+Android逆向-java代码基础（5）
+Android逆向-java代码基础（6）
+Android逆向-java代码基础（7）
+Android逆向-java代码基础（8）
+内容
+1.Activity之间的跳转
+2.Androidmanifest.xml 属性说明
+3.跳转smali分析
+4.实战
+说明
+首先感谢七少月大神教学。
+https://www.ichunqiu.com/course/56529
+Android开发的只是主要是郭霖大神的《第一行代码》
+时间
+2018年2月3日19:37:08
+0x01 Activity 跳转
+demo还是上一次的demo，这次我们更改一下Button逻辑，改成跳转。
+建一个新的Activity
+跳转Activity
+这里跳转到我们新建的Activity。
+使用Intent进行跳转，Intent相当于一个载体。
+具体代码如下：
+Intent i=new Intent ( MainActivity .this,Main2Activity.class) startActivity ( i )
+设置标识
+生成apk测试
+0x02 Androidmanifest.xml说明
+首先来看下Androidmanifest.xml的内容
+<?xml version="1.0" encoding="utf-8"?> < manifest xmlns:android = "http://schemas.android.com/apk/res/android" package = "com.example.hanlei.first_demo" > < application android:allowBackup = "true" android:icon = "@mipmap/ic_launcher" android:label = "@string/app_name" android:supportsRtl = "true" android:theme = "@style/AppTheme" > < activity android:name = ".MainActivity" > < intent-filter > < action android:name = "android.intent.action.MAIN" /> < category android:name = "android.intent.category.LAUNCHER" /> </ intent-filter > </ activity > < activity android:name = ".Main2Activity" > </ activity > </ application > </ manifest >
+在这里我们可以看到有两个Activity。
+如何设置最先启动？
+这里有两个Activity，那么app是怎么识别那个是最先启动的Activity呢。
+这里我们对比一下两个Activity的区别。
+这是第一个Activity
+< activity android:name = ".MainActivity" > < intent-filter > < action android:name = "android.intent.action.MAIN" /> < category android:name = "android.intent.category.LAUNCHER" /> </ intent-filter > </ activity >
+这个是我们的第二个Activity
+< activity android:name = ".Main2Activity" > </ activity >
+是不是区别很明显，一个有一大堆的内容，一个只有一句话。
+所以我们的重点就是：
+< intent-filter > < action android:name = "android.intent.action.MAIN" /> < category android:name = "android.intent.category.LAUNCHER" /> </ intent-filter >
+很容易就发现是因为这个所以才是最先启动的。
+我们来做一个简单的测试。
+我们把这个移动一下位置。
+现在Androidmanifest,xml是这个样子。
+<?xml version="1.0" encoding="utf-8"?> < manifest xmlns:android = "http://schemas.android.com/apk/res/android" package = "com.example.hanlei.first_demo" > < application android:allowBackup = "true" android:icon = "@mipmap/ic_launcher" android:label = "@string/app_name" android:supportsRtl = "true" android:theme = "@style/AppTheme" > < activity android:name = ".MainActivity" > </ activity > < activity android:name = ".Main2Activity" > < intent-filter > < action android:name = "android.intent.action.MAIN" /> < category android:name = "android.intent.category.LAUNCHER" /> </ intent-filter > </ activity > </ application > </ manifest >
+测试
+现在我们生成apk。
+我们发现，点开之后发现已经不是之前的Activity，而是我们之后自己添加的Activity。
+基于这个思路，我们可以想嘛，如果有第三方的Activity注入，我们是不是可以通过改变启动的Activity从而避开一些验证问题。
+恩，之后通过实战来进行一个测试。
+0x03 反编译
+有到了学习smali的时候到了。可能很无聊吧，但是写的人却是很有兴趣呢。
+废话不说，开始吧。
+1. 丢Android Killer里。
+2.找到关键代码
+恩。在$2里。
+.method public onClick( Landroid /view/ View ;) V .locals 3 .param p1, "v" .prologue .line 33 new-instance v 0 , Landroid /content/ Intent ; iget-object v1, p 0 , Lcom /example/hanlei/first_demo/ MainActivity $2 ;->this $0 :Lcom/example/hanlei/first_demo/MainActivity ; const- class v2 , Lcom / example / hanlei / first_demo / Main2Activity ; invoke-direct {v 0 , v1, v2}, Landroid /content/ Intent ;-><init>( Landroid /content/ Context ; Ljava /lang/ Class ;) V .line 34 .local v 0 , "i" :Landroid/content/Intent ; iget-object v1, p 0 , Lcom /example/hanlei/first_demo/ MainActivity $2 ;->this $0 :Lcom/example/hanlei/first_demo/MainActivity ; invoke-virtual {v1, v 0 }, Lcom /example/hanlei/first_demo/ MainActivity ;->startActivity( Landroid /content/ Intent ;) V .line 35 return -void . end method
+这里我们不一句一句翻译，想看的回去翻之前的内容，很多。
+我们来看这里的主要代码：
+新建一个 Intent对象
+new- instance v 0 , Landroid / content / Intent ;
+获取MainActivity对想存储在v1中
+iget-object v1, p 0 , Lcom /example/hanlei/first_demo/ MainActivity $2 ;->this $0 :Lcom/example/hanlei/first_demo/MainActivity ;
+把Main2Activity存入v2中
+const - class v2 , Lcom / example / hanlei / first_demo / Main2Activity ;
+然后把v1和v2放入v0中。
+invoke- direct {v0, v1, v2}, Landroid/content/ Intent ;-><init>(Landroid/content/Context;Ljava/lang/ Class ;)V
+startActivity调用即可。还是很简单的，很容易理解的。
+.line 34 .local v 0 , "i" :Landroid/content/Intent ; iget-object v1, p 0 , Lcom /example/hanlei/first_demo/ MainActivity $2 ;->this $0 :Lcom/example/hanlei/first_demo/MainActivity ; invoke-virtual {v1, v 0 }, Lcom /example/hanlei/first_demo/ MainActivity ;->startActivity( Landroid /content/ Intent ;) V
+怎么说呢，smali见过了，虽然不知道什么意思，但是很熟悉，一下子就理解了。恩，语言还是多看看，多分析分析，有好处的。当初学c语言的时候就是，敲了很多行，做了几个项目恩就很熟练了。
+0x04 实战分析
+样本
+样本为了方便我就传在百度云里了
+原APK：链接：https://pan.baidu.com/s/1pMwcuef 密码：a673
+试玩
+不知道为什么我的夜深模拟器打不开了。试试别的模拟器。
+一打开游戏，就弹出个这个界面，很不喜欢，我想直接弹出我的游戏界面。
+好，我们用我们刚开始的技能。
+1.apk反编译
+2.查看Androidmanifest.xml文件
+<?xml version="1.0" encoding="utf-8" standalone="no"?> < manifest xmlns:android = "http://schemas.android.com/apk/res/android" android:installLocation = "preferExternal" package = "com.sxiaoao.farm.farmherohx" > < uses-feature android:glEsVersion = "0x00020000" android:required = "true" /> < uses-permission android:name = "android.permission.WAKE_LOCK" /> < uses-permission android:name = "android.permission.INTERNET" /> < uses-permission android:name = "android.permission.VIBRATE" /> < uses-permission android:name = "android.permission.ACCESS_NETWORK_STATE" /> < uses-permission android:name = "android.permission.READ_PHONE_STATE" /> < uses-permission android:name = "android.permission.WRITE_SETTINGS" /> < uses-permission android:name = "android.permission.WRITE_EXTERNAL_STORAGE" /> < uses-permission android:name = "" /> < uses-permission android:name = "android.permission.MOUNT_UNMOUNT_FILESYSTEMS" /> < uses-permission android:name = "android.permission.ACCESS_WIFI_STATE" /> < uses-permission android:name = "android.permission.GET_TASKS" /> < uses-permission android:name = "android.permission.DISABLE_KEYGUARD" /> < uses-permission android:name = "android.permission.READ_CONTACTS" /> < uses-permission android:name = "android.permission.SYSTEM_ALERT_WINDOW" /> < uses-permission android:name = "android.permission.ACCESS_FINE_LOCATION" /> < uses-permission android:name = "com.android.launcher.permission.INSTALL_SHORTCUT" /> < uses-permission android:name = "com.android.launcher.permission.UNINSTALL_SHORTCUT" /> < uses-permission android:name = "com.android.launcher.permission.READ_SETTINGS" /> < uses-permission android:name = "com.android.launcher.permission.WRITE_SETTINGS" /> < uses-permission android:name = "android.permission.INTERNET" /> < uses-permission android:name = "android.permission.ACCESS_WIFI_STATE" /> < uses-permission android:name = "com.google.android.providers.gsf.permission.READ_GSERVICES" /> < uses-permission android:name = "android.permission.ACCESS_NETWORK_STATE" /> < uses-permission android:name = "android.permission.ACCESS_WIFI_STATE" /> < application android:icon = "@drawable/icon" android:label = "美人鱼消消" android:name = "com.sxiaoao.farm.farmherohx.CmgameApplication" > < activity android:configChanges = "keyboard|keyboardHidden|orientation|screenSize" android:label = "美人鱼消消" android:launchMode = "singleTask" android:name = "MainActivity" android:screenOrientation = "sensorPortrait" /> < activity android:configChanges = "keyboard|keyboardHidden|orientation|screenSize" android:label = "美人鱼消消" android:launchMode = "singleTask" android:name = "LogActivity" android:screenOrientation = "sensorPortrait" /> < activity android:configChanges = "keyboard|orientation|screenSize" android:name = "cn.cmgame.billing.api.GameOpenActivity" android:screenOrientation = "sensorPortrait" android:theme = "@android:style/Theme.NoTitleBar.Fullscreen" > < intent-filter > < action android:name = "android.intent.action.MAIN" /> < category android:name = "android.intent.category.LAUNCHER" /> < category android:name = "tv.ouya.intent.category.GAME" /> </ intent-filter > < intent-filter > < action android:name = "android.intent.action.CHINAMOBILE_OMS_GAME" /> < category android:name = "android.intent.category.CHINAMOBILE_GAMES" /> </ intent-filter > </ activity > < activity android:name = "cn.cmgame2_0.launch_model.shortcut.main.MiguHomeActivity" android:screenOrientation = "portrait" android:theme = "@android:style/Theme.Dialog" > < intent-filter > < action android:name = "android.intent.action.MAIN" /> < category android:name = "cn.cmgame2_0.category.migu_home" /> </ intent-filter > </ activity > < service android:name = "cn.cmgame.billing.service.GameService" /> < activity android:configChanges = "keyboard|keyboardHidden|orientation|screenSize" android:exported = "true" android:label = "美人鱼消消" android:launchMode = "singleTop" android:name = "com.sxiaoao.farm.farmherohx.wxapi.WXEntryActivity" android:screenOrientation = "sensorPortrait" /> < receiver android:name = "com.xiaoao.pay.util.update.UpdataBroadcastReceiver" > < intent-filter > < action android:name = "android.intent.action.DOWNLOAD_COMPLETE" /> </ intent-filter > </ receiver > < meta-data android:name = "UMENG_APPKEY" android:value = "552f4eeafd98c57677001cb8" /> < meta-data android:name = "UMENG_CHANNEL" android:value = "8556" /> </ application > </ manifest >
+3.尝试跳转
+首先来看下我们的跳转。
+< activity android:configChanges = "keyboard|orientation|screenSize" android:name = "cn.cmgame.billing.api.GameOpenActivity" android:screenOrientation = "sensorPortrait" android:theme = "@android:style/Theme.NoTitleBar.Fullscreen" > < intent-filter > < action android:name = "android.intent.action.MAIN" /> < category android:name = "android.intent.category.LAUNCHER" /> < category android:name = "tv.ouya.intent.category.GAME" /> </ intent-filter > < intent-filter > < action android:name = "android.intent.action.CHINAMOBILE_OMS_GAME" /> < category android:name = "android.intent.category.CHINAMOBILE_GAMES" /> </ intent-filter > </ activity >
+跳转的Activity名称为：cn.cmgame.billing.api.GameOpenActivity，Gameopen。。。恩，这是什么唉，好奇怪。但是呢，肯定就是我们打开的界面。恩。我觉得这个有点重要，以后可能会涉及到。所以还是找个小本子记下来。我应该建立一个小本子。
+我们来看一下我们的Activity。
+< activity android:configChanges = "keyboard|keyboardHidden|orientation|screenSize" android:label = "美人鱼消消" android:launchMode = "singleTask" android:name = "MainActivity" android:screenOrientation = "sensorPortrait" /> < activity android:configChanges = "keyboard|keyboardHidden|orientation|screenSize" android:label = "美人鱼消消" android:launchMode = "singleTask" android:name = "LogActivity" android:screenOrientation = "sensorPortrait" />
+这里有两个Activity：
+第一个Activity的name：android:name="MainActivity"
+第二个Activity的name：android:name="LogActivity"
+作为开发人员，MainActivity，就是一个开始恩。我们直接开始更改。
+< activity android:configChanges = "keyboard|keyboardHidden|orientation|screenSize" android:label = "美人鱼消消" android:launchMode = "singleTask" android:name = "MainActivity" android:screenOrientation = "sensorPortrait" > < intent-filter > < action android:name = "android.intent.action.MAIN" /> < category android:name = "android.intent.category.LAUNCHER" /> < category android:name = "tv.ouya.intent.category.GAME" /> </ intent-filter > < intent-filter > < action android:name = "android.intent.action.CHINAMOBILE_OMS_GAME" /> < category android:name = "android.intent.category.CHINAMOBILE_GAMES" /> </ intent-filter > </ activity >
+这个是修改后的Activity。
+其实我也只是对
+< action android:name = "android.intent.action.MAIN" /> < category android:name = "android.intent.category.LAUNCHER" />
+这两句有了解。但是还有三句是什么，一起来看一下吧。关于测试的问题，我们学习完之后再进行测试吧。
+首选是
+< category android:name = "tv.ouya.intent.category.GAME" />
+< action android:name = "android.intent.action.MAIN" /> < category android:name = "android.intent.category.LAUNCHER" />
+这两个直接挪过去，直接失败。所以，还是分析一下吧。
+刚才说的
+< category android:name = "tv.ouya.intent.category.GAME" />
+这句就是必须的。
+还有两句
+< action android:name = "android.intent.action.CHINAMOBILE_OMS_GAME" /> < category android:name = "android.intent.category.CHINAMOBILE_GAMES" />
+好了，我们搜一搜，最后发现是：移动基地运营商sdk需要添加所必须的。
+好嘛，做测试的时候直接挪过来的。现在我们删了做一下测试吧。
+4.测试
+测试结果，成功了。不过值得一说的是蓝叠模拟器也掉链子了。还是自己的手机好用啊。成功的跳过了。手机发图好麻烦的，恩，自己做测试吧。
+以上。
+0x05 结束语
+收获
+1.学习了一个gif制作软件，非常好用。
+2.了解到Androidmanifest.xml的应用
+3.Androidmanifest.xml妙用
+4.复习了Android跳转。
+结束语
+内容很简单，恩，可能是因为自己的理解能力有了一定的提升。看来以后的进度要提升了一下。
+以上。
+>>>>>> 黑客入门必备技能 带你入坑和逗比表哥们一起聊聊黑客的事儿，他们说高精尖的技术比农药都好玩~

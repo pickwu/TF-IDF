@@ -1,0 +1,40 @@
+*本文原创作者：烟波渺渺正愁予，本文属FreeBuf原创奖励计划，未经许可禁止转载
+0x00实验环境
+开发工具：Android studio 3
+模拟器：
+操作机器：Windows 10
+0x01实验目的
+通过认识安卓系统中webview域控制不严格漏洞导致文件泄露
+0x02 实验工具
+通过 android studio 开发两个简单的APP
+0x03 实验内容
+1、 漏洞概述
+A 应用可以通过B应用导出的 Activity让B应用加载一个恶意的file协议的url来获取B应用的内部私有文件，从而带来数据泄露威胁。
+2、 漏洞原理
+当B应用的activity是可被导出的，同时设置允许WebView使用File协议，则A应用可以在外部调起B的activity，同时向B传递一个请求内部数据的文件，则可以获取B的数据。
+0x04 实验步骤
+1、 APP编写
+1.1受害者APP编写
+1、 新建设工程webviewVictim，然后修改strings.xml中的app_name，如下图：
+2、 在AndroidManifest.xml中添加activity可导出，将原来的<action android:name="android.intent.action.MAIN" />改成<action android:name="android.intent.action.MAIN" android:exported = "true" />，如下图：
+3、 修改MainActivity中的代码，代码中“webView.getSettings().setAllowFileAccess(true);”是关键，而且值一定要是true，主要目的是为了让webview可以使用file协议，如下图：
+(代码中使用intent接收来自其他activity传递来的数据)
+1.2攻击者APP编写
+1、 新建设工程webviewAttacker，然后修改strings.xml中的app_name，如下图：
+2、 修改MainActivity中的代码，红色矩形框中“com.example.cy.victim”是要去启动的App的包名(也是配置文件Manifest里设置好的包名)，红色椭圆框中"com.example.cy.victim.MainActivity"是要去启动的App中的Activity的类名(写类名时要带上包名)，如下图:
+3、 在intent传递数值是要保证attacker的名称与victim的名称一致，如下图中putString是url，那么getString也要是url，putExtra是bundle，getBundleExtra也是bundle，如果不一致就无法传递数据，如下图：
+2 、漏洞利用
+1、 先将Victim安装到模拟器中，然后再安装attacker到模拟器中，这里选择之前由studio创建的模拟器，如下图
+2、安装好后会在模拟器中看到两个APP，如下图：
+3、 我们点击运行Attacker，Attacker会自动调起Victim应用，随后便可以看到读取/etc/hosts文件的内容，如下图：
+3、 修改受害者APP代码
+1、当在Victim中删掉android:exported = "true"时，则Attacker无法调起Victim，如下图：
+2、假设Victim要求是导出的，我们要如何修改代码，才能使Attacker无法获取Victim的内部私有文件呢？前面编写victim应用时我们设置了让webview可以使用file协议，此处我们将“true”改为“false”则当attacker再 次调用victim时发显示webpage not available，如下图：
+3、然后我们将禁止webview访问file协议的代码注释掉，再次运行attacker，会发现仍然可以读取文件内容，由此可以猜想webview默认就是可以使用file协议，也就是说必须在代码中明确禁止webview使用file协 议，否则隐患就埋在那里，如下图：
+0x05 实验结果分析与总结
+在真实情况下想要利用此漏洞，我们首先需要使用apk tool之类的工具反编译，分析AndroidManifest.xml文件中的Activity组件，看哪些activity是被设置成android:exported="true"，这是我们编写APP调用victim应用中activity的前提。除了反编译，还可以使用drozer之类的工具查看安装好的APP有哪些activity是导出的。如下图，可以看到victim.MainActivity是导出的，也就表明此activity可被其他APP调用。
+从实验中我们可以看到webview主要是使用了函数setAllowFileAccess()，通过这个函数使其可以使用file协议，如果想要防止漏洞发生，就需要在代码中明确的将webview使用file协议的权限设置为false。
+0x06 修复建议
+1、 设置activity不可被导出
+2、 禁止WebView 使用 File 协议，而且是明确禁止
+*本文原创作者：烟波渺渺正愁予，本文属FreeBuf原创奖励计划，未经许可禁止转载

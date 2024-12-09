@@ -1,0 +1,121 @@
+0x00前言
+一直以来都在搞逆向，没事破解点小程序，打打CTF。但是CTF上的逆向题也是越来越难了，各种套路让人防不胜防。都说漏洞利用是门艺术，于是就决定来学学pwn。
+作为一名初学pwn的新人，在经过一段时间的“闭关”学习后，觉得是时候“出关”了，于是就从pwnable.tw上找来了一道200分的题applestore，由于比较“膨胀”，直接来200的，所以最后......但是pwnable.tw上的题还是不错的，有兴趣可以去尝试一下。
+pwnable.tw不上外放高分题目的write up，但是我觉得200分也不算高分，还是可以分享下解题思路的，有什么不足之处欢迎批评指教。
+0x01题目解析
+这道pwn题给出了程序applestore与libc库文件。
+运行程序可知这是个Apple商店，程序类似于一些note类型的题目，有添加、删除、查看、结算等功能。
+使用checksec检查程序的执行保护，可见该程序开启了NX（堆栈不可执行）和Stack（也可叫CANNARY，栈溢出保护）。
+0x02逆向分析
+main函数
+使用IDA打开程序进行逆向分析，首先来到main函数中。
+.text:08048CA6 push ebp .text:08048CA7 mov ebp, esp .text:08048CA9 and esp, 0FFFFFFF0h .text:08048CAC sub esp, 10h .text:08048CAF mov dword ptr [esp+4], offset timeout ; handler .text:08048CB7 mov dword ptr [esp], 0Eh ; sig .text:08048CBE call _signal .text:08048CC3 mov dword ptr [esp], 3Ch ; seconds .text:08048CCA call _alarm .text:08048CCF mov dword ptr [esp+8], 10h ; n .text:08048CD7 mov dword ptr [esp+4], 0 ; c .text:08048CDF mov dword ptr [esp], offset myCart ; s .text:08048CE6 call _memset .text:08048CEB call menu .text:08048CF0 call handler .text:08048CF5 leave .text:08048CF6 retn
+在main函数中，memset函数为全局变量初始化了一块大小为16个字节的空间，地址为 0x804B068 。
+menu函数为显示的菜单，handler函数是程序的主要内容。
+0x02逆向分析
+main函数
+使用IDA打开程序进行逆向分析，首先来到main函数中。
+.text:08048CA6 push ebp .text:08048CA7 mov ebp, esp .text:08048CA9 and esp, 0FFFFFFF0h .text:08048CAC sub esp, 10h .text:08048CAF mov dword ptr [esp+4], offset timeout ; handler .text:08048CB7 mov dword ptr [esp], 0Eh ; sig .text:08048CBE call _signal .text:08048CC3 mov dword ptr [esp], 3Ch ; seconds .text:08048CCA call _alarm .text:08048CCF mov dword ptr [esp+8], 10h ; n .text:08048CD7 mov dword ptr [esp+4], 0 ; c .text:08048CDF mov dword ptr [esp], offset myCart ; s .text:08048CE6 call _memset .text:08048CEB call menu .text:08048CF0 call handler .text:08048CF5 leave .text:08048CF6 retn
+在main函数中，memset函数为全局变量初始化了一块大小为16个字节的空间，地址为 0x804B068 。
+menu函数为显示的菜单，handler函数是程序的主要内容。
+handler函数
+接下来看下handler函数
+函数中通过my_read()接收输入，my_read函数中主要调用了read函数来接受输入。然后使用atoi()将接收到的字符串转换为整型。atoi这个函数有个特点，就是遇上数字或正负符号才开始做转换，而在遇到非数字或字符串结束时('\0')才结束转换（ 这是关键 ），并将结果返回，后面需要利用到这个关键的函数。然后进入一个switch条件判断中，通过对输入进行判断来决定使用那个功能。
+switch中分了五个函数和一个return，这五个函数分别为list()、add()、delete()、cart()和checkout()。通过函数名以及在menu函数中显示的主菜单可以了解到这几个函数的功能。
+list函数的功能是显示商品列表
+add函数的功能是添加商品、delete函数函数的功能是删除商品、cart函数函数的功能是购物车清单、checkout函数函数的功能是结账。下面会详细分析下这几个函数。
+add函数
+看下add函数的内容
+add函数和handler函数的结构类似，同样使用my_read函数接收输入，并且用atoi函数做转换，之后进入switch中。
+这里面有create()和insert()两个函数，先来看下create函数
+char **__cdecl create(int name, char *price) { char **v2; // eax char **v3; // ST1C_4 v2 = malloc(0x10u); v3 = v2; v2[1] = price; asprintf(v2, "%s", name); v3[2] = 0; v3[3] = 0; return v3; }
+调用create函数会传入两个参数，一个为商品名称，一个为商品价格。在create函数中，首先用malloc函数申请一块堆空间，大小为0x10，然后会将商品名称的地址和商品价格放入堆空间中的低8位，并将高8位置为0。
+此时堆中的结构可以看做数组，这里Device1表示添加的第一个设备
+Device1[0] = &name Device1[1] = price Device1[2] = 0 Device1[3] = 0
+最后返回这块堆空间的首地址并作为参数传入insert函数中。
+下面看下insert函数的内容
+int __cdecl insert(int a1) { int result; // eax _DWORD *i; // [esp+Ch] [ebp-4h] for ( i = &myCart; i[2]; i = i[2] ) ; i[2] = a1; result = a1; *(a1 + 12) = i; return result; }
+insert函数中有个for循环，for循环中首先将全局变量myCart地址赋值给i，然后判断i[2]是否为0，如果 i[2]==0 ，那么跳出循环。如果 i[2] != 0 ，那么会将 i[2] 赋值给 i ，继续循环判断，直到 i[2] == 0 为止。
+那么这个i[2]是什么呢？首先先来看下myCart的内容
+从图中可以看到，将myCart的16个字节分成的4个块，每块4个字节，若是将myCart看作是个数组，那么可将图中的内容解释为：
+myCart[0] == 0 myCart[1] == 0 myCart[2] == 0 myCart[3] == 0
+那么上面的i[2]就很好理解了，在初始化 i = &myCart 时， i[2] == myCart[2] == 0 ，此时i[2]为0，那么直接跳出循环。
+上面说过，insert函数的参数 a1 是从create函数中得到的堆地址，那么下面就是将这个地址放入i[2]也就是myCart[2]中，然后将i的值放入 *（a1+12） 中，也就等同于将i的值放入上面所说的 Device1[3] 中。
+到这里，可以看到这里其实相当于一个链表，myCart则为链表的头部。
+每个商品的高8位存放着上个商品的起始地址和下个商品的起始地址。第一个商品的last指向链表头（myCart），最后一个商品的next为0。
+那么我们来总结下insert函数所做的功能：
+insert函数就是判断从myCart开始的每个块的next处是否为0，如果为0，表示当前块处于链表末尾，那么会将新块的首地址放入，并且将当前块的首地址放入新块的last处，目的就是构建成一个“双向链表”。
+delete函数
+下面看下delete函数的内容
+在delete函数中，会通过设备id来删除商品。但是在删除这里，并没用与 malloc 函数所对应的 free 函数释放空间，而是通过改变每个商品的next和last，将需要删除的商品从商品链表中“拿掉”。
+next = v2[2]; last = v2[3]; if ( last ) *(last + 8) = next; if ( next ) *(next + 12) = last;
+这里就有了可利用之处。(具体如何利用，后面会详细说明)
+cart函数
+在cart函数中，通过循环遍历链表，取得商品的价格，输出并且累加。
+for ( i = dword_804B070; i; i = i[2] ) { v0 = v2++; printf("%d: %s - $%d
+", v0, *i, i[1]); v3 += i[1]; }
+循环结束后，将总价返回。
+checkout函数
+这个函数很有意思
+首先会调用cart函数获取商品总价，然后会判断总价是不是7174，如果是，则会以$1的价格购得iPhone 8。
+这里会通过insert函数将这个商品添加到商品链表中，按照前面来看，insert的参数是一个堆结构的地址，但是这里并没有申请堆空间，而是以栈空间中的v2作为参数加到前面的商品链表中。
+这里就造成了栈空间的泄露。
+0x03漏洞分析
+通过上面对每个函数的详细分析，可知主要漏洞的就在iphone 8上。
+iphone 8商品的结构位于栈上，并且距离ebp并不远。如果能通过栈溢出覆盖iphone 8结构的next和last，那么就可以构造payload来修改ebp，进而通过修改GOT表来获取shell。
+GOT表
+说到GOT表，就不得不说说PTL表
+在IDA中可以看到这两块区域
+其中可以看到第一张图是PTL表，第二张图是GOT表。
+我们可以随便找个函数，点进去查看下它的内容
+首先找个 call atoi 的地方，点进去会来到2（这里是PTL表），一个jmp跳转，跟进跳转地址会来到3（这里就是GOT表）。
+那么简单的来说，PTL表中存放着与之对应的GOT表，而GOT表中存放着函数的真实地址。而函数的真是地址需要在程序运行中获得。
+如果想要详细了解GOT表和PTL表，推荐文章《Linux中的GOT和PLT到底是个啥？》
+0x04漏洞利用
+上面说了漏洞iphone 8上，那么第一步就是得到iphone 8。所以首先需要添加商品，将总价凑到7174。这里我用的是20个iphone 6和6个iphone 6 plus（总价刚好7174，不要问我怎么得到的，都是泪）
+for i in range(6): add("1") for i in range(20): add("2")
+想要获取shell，就需要执行 system("/bin/sh"); 命令，那么首先就需要获得system函数的真实地址。
+这里我们就可以利用上面说到的atoi的特点来泄露函数地址。这里我们来泄露puts函数的真实地址。
+首先需要获得puts函数got表的地址，然后构造payload，通过cart函数来泄露puts函数的真实地址。
+puts_addr = cart("y\x00" + p32(puts_got) + p32(0)*4)
+在这段payload中，开头的“y\x00”占前四字节，为了让程序在判断（y/n）时继续运行下去，后四字节则是puts_got的地址，而这里刚好覆盖了iphone8->name的地址。最后的四个字节补0是为了覆盖iphone8->next的地址，使iphone8->next地址中的内容为0，这样可以保证这次循环之后可以正常退出循环。如果iphone8->next地址中的内容不为0的话，会再次进行循环，则会导致程序崩溃。（大家在调试的时候可以随便输入点别的，观察内存变化！！！）
+在后续打印iphone->name时，则会打印puts_got地址中的内容，也就是puts函数的真实地址。这样puts函数的真实地址也就被获取到。
+可能有人会想利用别的函数来泄露地址，比如read、printf、exit等，这当然是可以的，不一定必须用puts。不过在这里需要注意一点，我们这里泄露地址是通过printf的，printf有个特点，就是在输出字符串的时候，遇到 \x00 会截断，比如某个函数的真实地址是 0xf75ea00 ，那么printf在读到 \x00 的时候会截断，导致输出的内容不完整，也就获取不到完整的真实地址。如果遇到类似情况，一定要亲自调试。（我是被坑过的，在这里纠结了好久。。。。）
+接下来可以通过libc库来获得puts和system函数的偏移地址
+注意：本地调试的话，不要用题目所给的libc库，要用本地的libc库，因为在本地调试中，系统调用会默认使用本地的libc库，而本地的libc库和题目所给的libc库中的函数偏移会有所不同。本地libc库文件一般在根目录下的lib32文件夹中
+libc = ELF('/lib32/libc-2.24.so') puts_offset = libc.symbols["puts"] system_offset = libc.symbols["system"]
+有了puts函数的真实地址，有了puts函数的偏移，那么通过计算便可得出基地址，然后通过基地址与system函数的偏移来获得system函数的真实地址。
+base_addr = puts_addr - puts_offset system_addr = base_addr + system_offset
+有了system函数的地址，接下来就需要控制ebp了。那么如何获得ebp的地址呢？
+经过一番资料搜查，发现了一个环境变量指针environ。这个指针指向的就是栈空间。通过调试来看下这个环境变量指针指向的栈地址与当前ebp有什么关系。
+从图中可以明显看到，environ确实处于栈空间上，而且与ebp相差0x104。（这个差值不同程序可能会不同，需要调试）
+接下来通过environ的偏移地址计算environ的真实地址，然后通过environ的真实地址使用cart函数来泄露当前栈地址。
+environ_offset = libc.symbols["environ"] environ_addr = base_addr + environ_offset stack_addr = cart("y\x00" + p32(environ_addr) + p32(0)*3)
+有了environ指向的栈地址，减去刚才计算的差值，得到当前ebp的地址。
+OK，现在ebp的地址也有了，那么就可以构造payload，通过delete函数来修改ebp。
+如何构造这个payload呢？
+先来分析下这个payload的内容，这个payload的主要功能是来修改ebp，修改ebp的目的是为的控制栈空间，在这里我们控制栈空间的目的是为了后面修改函数的got地址。我们需要将这个函数的got地址覆盖到ebp上，便于我们后面进行篡改。
+修改ebp为函数got表地址的方式就是通过delete中的这段代码实现。
+if ( last ) *(last + 8) = next; //可表示为 iphone->last + 8 = next
+如果将iphone8->next覆盖为某个函数的got表地址，iphone8->last覆盖为ebp-8，那么这段代码就可表示为
+ebp - 8 + 8 = xxx_got = ebp
+这样就成功的将ebp修改为我们想要的got表地址。那么应该修改那个函数的got表呢？
+经过一番分析，发现了一个可以利用并且比较方便的函数------atoi（后面会发现它为什么方便）。
+在执行完delete函数后，程序会返回到handler函数中，通过IDA来到handler函数中，返回后接着执行的就是my_read函数和atoi函数。如果修改了atoi函数的got表中的内容，那么在执行到atoi函数的时候，就可以通过输入的system地址，劫持程序到system函数中。当然，这里还有个接收输入的关键参数----- nptr ，位置在 ebp-0x22 处。我们需要利用这个参数接收我们输入的system地址以及所用到的参数。
+那么这个payload的内容就比较明确了。下面是构造好的一个payload：
+payload1 = '27' + p32(atoi_got) + p32(0xAAAAAAAA) + p32(atoi_got + 0x22) + p32(stack_ebp - 8)
+这个payload中，开头的'27'即为iphone8的id，后面的内容则是修改了iphone8的结构体。
+这里iphone8->name和iphone8->price中的数据看似对我们的利用没什么影响，但是在调试过程中发现，这两个值是不能空着不管的，在后面printf的时候会用到iphone8->name，如果将iphone8->name改为任意值，那么printf到一个不可读的地方就会崩溃，因此这里将iphone8->name的值改为了一个可读的地址。而后面iphone8->price的值虽然没什么影响，但还是不要空着好。
+为了让 atoi_got 配合前面所说的参数 nptr ，因此这里iphone8->next的值就改成了 atoi_got + 0x22
+nptr = ebp - 0x22 = atoi_got + 0x22 - 0x22 = atoi_got
+这样nptr的地址就会被改为atoi_got的地址，那么在执行my_read函数接收输入的时候，就会将我们输入的数据写入atoi_got中，达到修改got表的目的。
+下面是执行handler函数中的my_read函数前，栈空间的内容。可见，栈空间已经被覆盖成了 atoi_got 表的地址。
+在执行完my_read函数后，可见 atoi_got 的内容也有原来atoi的真实地址改成了system函数的真实地址。
+劫持到了system函数地址，那么再配合参数 /bin/sh ，那么最后执行的命令就是 system("/bin/sh");
+p.send(p32(system_addr) + ';/bin/sh\x00')
+最终运行exp，获取shell
+0x05总结
+通过这道题，学到了很多，比如对堆和栈的理解、对read和atoi函数的利用、如何泄露函数的真实地址、如何篡改GOT表以及解决遇到的各种坑。。。。。。学习的过程虽然艰辛，但是pwn题真的很有意思，当你找到漏洞、绕过各种防护、最后拿到shell的时候，还是很激动的。
+这里就不放exp了，感兴趣的朋友可以参考我的解题思路进行分析调试，一定能写出更完美的exp。
+最后分享一个链接，学习二进制安全的好去处
+*本文作者：野火研习社1，转载请注明FreeBuf.COM

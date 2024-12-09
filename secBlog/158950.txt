@@ -1,0 +1,40 @@
+0x01 背景
+上周发的phpcms的漏洞分析，有些伙伴觉得比较复杂，于是便诞生本篇，通过审计一些普通的cms来一步步学习代码审计的技巧。
+本篇涉及的源码可以在 此处下载：https://sourceforge.net/projects/fiyo-cms/
+0x02 漏洞集合
+SQL 注入漏洞
+问题文件：\fiyocms\dapur\apps\app_contact\controller\status.php
+问题分析：
+在问题文件中的第16-25行中使用GET请求接收stat和id参数的值，然后将id参数的值拼接到update操作的SQL语句中。
+跟入update方法，在\fiyocms\system\database.php文件中的第210-255行中发现update方法的代码块，然后在文件的第233-239行中，先进行了SQL拼接在传入到prepare方法中，然后再执行SQL语句，因此此处是存在SQL注入漏洞的，且全站使用update方法的可能都存在相同问题。
+漏洞验证：
+由于该页面并不回显SQL错误信息，所以不能使用SQL报错注入，页面无论正确与否都是一致的所以不能使用布尔盲注，因此可以使用时间盲注来获取数据
+使用GET请求如下语句进行like的迭代注入，然后用if进行数据对错的判断，获得正确数据变回延迟5s回显页面，错误数据便会直接回显页面。
+[http://127.0.0.1/code/fiyocms/dapur/apps/app_contact/controller/status.php?stat=1&id=1](http://127.0.0.1/code/fiyocms/dapur/apps/app_contact/controller/status.php?stat=1&id=1) and if((select user() like "root@localhost%"),(sleep(5)),1)
+任意文件读取:
+问题文件： \fiyocms/dapur/apps/app_theme/libs/check_file.php
+问题分析：
+在问题文件中的第13-26行，使用GET方式接受src，name参数的值，然后再使用$file和 $furl进行数据拼接后，传入file_get_contents函数中。
+file_get_contents函数读取到的目标文件在当前页面中进行显示，因此存在任意文件读取的漏洞。
+漏洞验证：
+为了方便构造和查看路径信息，我在问题文件中加入了如下两行，其中src参数可以用来进行目录跳转，name参数可以用来设置要读取的目标文件名称，然后进行如下请求可以读取任意文件的内容。
+[http://127.0.0.1/code/fiyocms/dapur/apps/app_theme/libs/check_file.php?src=..&name=config.php]
+任意文件删除
+问题文件：fiyocms\dapur\apps\app_config\controller\backuper.php
+问题分析：
+在问题文件中的第16-30行中使用了unlink函数对POST传入的文件进行删除操作，虽然开始限制了需要在.backup文件夹内的内容，但是可以使用../进行目录跳转，从而删除任意文件。
+漏洞验证：
+任意文件删除漏洞通常可以结合重装来进行利用，比如fiyocms在index.php首页中会检测是否存在config.php文件，如果不存在便会启动安装过程。
+因此可以构造如下请求删除config.php，然后访问首页便会进行重装操作。
+Url： [http://127.0.0.1/code/fiyocms/dapur/apps/app_config/controller/backuper.php](http://127.0.0.1/code/fiyocms/dapur/apps/app_config/controller/backuper.php) POST: type=database&file=../config.php
+任意文件上传:
+问题文件：\fiyocms/dapur/apps/app_theme/libs/save_file.php
+问题分析：
+在问题文件中的第23-27行中使用了file_put_contents方法将传入的$c文本内容保存到$f相对应的位置上，且这两个变量都是通过POST请求接收到对应参数的值，并没有进行任何的安全处理，所以存在任意文件上传漏洞。
+漏洞验证：
+首先使用POST请求提交如下内容
+Url: [http://127.0.0.1/code/fiyocms/dapur/apps/app_theme/libs/save_file.php](http://127.0.0.1/code/fiyocms/dapur/apps/app_theme/libs/save_file.php) POST: src=./evil.php&content=<?php phpinfo();
+然后在进行如下请求验证恶意文件有没有上传成功
+url: [http://127.0.0.1/code/fiyocms/dapur/apps/app_theme/libs/evil.php](http://127.0.0.1/code/fiyocms/dapur/apps/app_theme/libs/evil.php)
+0x03 总结
+本篇仅举了几个例子进行代码审计的分析，其实这个cms还有很多漏洞可以研究学习，大家(萌新)可以参考本篇尝试学习代码审计的过程，然后开始入坑代码审计吧:-)

@@ -1,0 +1,42 @@
+在此之前，移动端应用程序会直接忽略掉所有的SSL错误，并允许攻击者拦截和修改自己的通信流量。但是现在，很多热门应用程序至少会检查证书链是否是一个有效可信任的证书机构（CA）颁发的。
+作为一名渗透测试人员来说，我们常常需要让目标应用程序信任我们的证书是有效的，这样我们就可以进行中间人攻击（MITM）并修改其流量了。在这篇文章中，我们将给大家介绍四种绕过Android SSL验证的方式。
+SSL MitM
+为什么我们要特别关注移动端应用程序的SSL MitM安全情况呢？为了观察或对移动端应用程序的Web服务调用情况，我们需要使用类似BurpSuite或ZAP这样的拦截代理。当我们利用代理拦截下SSL流量之后，客户端的SSL链接将会中断。默认情况下，类似Burp这种工具所生成的自签名证书将失效，如果证书不被信任，那么移动端App将会中断连接。接下来，我们所要介绍的技术将能够让移动端应用程序信任我们的拦截代理所提供的证书。
+技术#1-向用户证书中添加自定义CA
+避免SSL错误的最好方法就是设置一个有效可信任的证书。这种方法相对比较简单，如果你可以向设备安装一个新的可信任CA证书，并且操作系统信任你的CA，那么它就会信任由你CA签名的证书。
+Android有两个内置的证书存储（即System Store和User Store），它们会对操作系统信任的CA进行跟踪。其中System Store用于存储预装的CA，User Store存储用户安装的CA。默认配置下，使用了类似TLS或HTTPS的安全连接会信任预安装的系统CA，而Android 6.0（API Level23）及以下版本默认会新人用户添加的CA。
+这意味着什么呢？如果我们向User Store中添加自己的CA，那我们就可以尝试对Android 6.0及以下版本的设备进行中间人攻击了。如果针对的是高于Android 6.0版本的设备，那么我们所添加的证书将不会被信任。为了解决这个问题，我们可以编辑应用程序的Manifest文件，并强制它适配Android 6.0。目标API Level定义在AndroidManifest.xml文件中的‘platformBuildVersionCode’属性（’manifest’元素）：
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"package="com.test.app" platformBuildVersionCode="25"platformBuildVersionName="7.1.1">
+我们要把‘platformBuildVersionCode=25’改成23：
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"package="com.test.app" platformBuildVersionCode="23"platformBuildVersionName="6.0">
+重新打包之后，应用程序将会信任用户添加的CA证书了。
+当然了，如果你想要在特定平台版本中运行的话，你也可以在APK的‘/res/xml/network_security_config.xml’文件中定义一个<trust-anchors>。比如说，下面的代码就定义了一个新的受信任CA，文件存储在/res/raw/my_ca：
+<?xm lversion="1.0" encoding="utf-8"?> <network-security-config> <base-config> <trust-anchors> <certificates src="@raw/my_ca"/> </trust-anchors> </base-config> </network-security-config>
+这样一来，我们就能够顺利完成MitM了。
+技术#2-用自定义CA证书重写已打包的CA证书
+如果第一种方法不起效的话，可能是因为开发人员限制了应用程序所能信任的CA证书了。还记得刚才我们使用自定义的<trust-anchors> 来提供CA证书路径吗？而开发人员同样可以使用这种方法来保护自己的应用程序免受SSL拦截攻击。
+在这种场景下，为了让我们的拦截证书可以被信任，我们就需要提取APK并用我们自定义的CA证书来重写应用程序所提供的CA证书。需要注意的是，这种方法可能会要求进行一系列验证。
+使用APK Studio之类的工具打开APK文件，然后在窗口中找到应用程序所捆绑的证书。在上图中，证书位于应用程序的assets目录下。接下来，用我们自定义的CA覆盖应用程序原本的CA（‘UniversalRootCA’证书），这样就可以让应用程序直接信任我们的证书了并实现流量拦截了。
+技术#3-Frida Hook
+如果安装自定义CA也无法成功的话，说明应用程序可能使用了某种SSL绑定技术或采用了额外的SSL验证。一般来说，为了绕过这种验证方法，我们需要对应用程序的代码以及验证接口设置钩子。这种接口一般用于限制手机被root或越狱，但是在Frida框架【工具下载】的帮助下，我们就可以在不root设备的情况下，对应用程序进行动态分析了。
+Frida可以在操作系统中以独立应用程序的形式运行，但是这需要对设备进行root。为了避免root操作，我们可以直接将Frida注入到目标APK之中。Frida工具中包含了一个能够让应用程序在运行时加载Frida的动态库，并允许我们对目标应用程序的代码和指令进行动态修改。
+接下来，我们需要提取APK文件，注入动态库，然后编辑一些smali代码来让我们的代码库在应用程序启动时最先被调用。完成之后，重新打包APK并进行安装。整个过程的完整操作方法可以参考【这篇文章】。
+除此之外，我们也可以使用Objection工具【项目地址】来实现我们的目标。Objection可以让整个过程自动化完成，我们只需要在命令行中提供目标APK的路径，Objection就可以帮我们完成所有的代码注入以及修改操作。
+C:\>objection patchapk -s test_app.apk No architecture specified. Determining it using `adb`... Detected target device architecture as: armeabi-v7a Github FridaGadget is v10.6.28, local is v10.6.13. Updating... Downloading armeabi-v7a library toC:\.objection\android\armeabi-v7a\libfrida-gadget.so.xz... Unpacking C:\.objection\android\armeabi-v7a\libfrida-gadget.so.xz... Cleaning up downloaded archives... Using Gadget version: 10.6.28 Unpacking test_app.apk App already has android.permission.INTERNET Reading smali from:C:\Temp\tmp8dxqks1u.apktemp\smali\com/test/app/TestMainActivity.smali Injecting loadLibrary call at line: 10 Writing patched smali back to:C:\Temp\tmp8dxqks1u.apktemp\smali\com/test/app/TestMainActivity.smali Creating library path: C:\Temp\tmp8dxqks1u.apktemp\lib\armeabi-v7a Copying Frida gadget to libs path... Rebuilding the APK with the frida-gadget loaded... Built new APK with injected loadLibrary and frida-gadget Signing new APK. jar signed. Signed the new APK Performing zipalign Zipaling completed Copying final apk from C:\Users\cwass\AppData\Local\Temp\tmp8dxqks1u.apktemp.aligned.objection.apkto current directory... Cleaning up temp files...
+接下来，我们的工作目录中应该会出现一个名叫‘test_app.objection.apk’的文件（默认情况下，工具会在原始APK文件名的后面添加一个.objection后缀）。我们可以像安装普通APK一样安装这个文件，使用命令“adb install test_app.objection.apk”可以直接将其推送到连接设备上。安装完成之后运行目标App，此时App将会卡在启动界面。现在，我们就可以连接到Frida服务器，并开始监听设备流量了。Frida命令行工具的使用方法如下：
+C:\>frida-ps-U PID Name ---- ------ 6383 Gadget C:\>frida-U gadget ____ / _ |Frida 10.3.14 - A world-class dynamic instrumentation framework | (_|| >_ | Commands: /_/|_| help -> Displays the help system . . .. object? -> Display information about 'object' . . .. exit/quit -> Exit . . .. . . .. More info at http://www.frida.re/docs/home/ [MotorolaMoto G (5) Plus::gadget]-> Java.available true Alternatively,Objection supports interaction with the listening Frida server by using the‘explore’ command: C:\>objectionexplore ___||_ |_|___ ___| |_|_|___ ___ | . |. | | | -_| _| _| | . | | |___|___|_||___|___|_| |_|___|_|_| |___|(object)inject(ion)v1.2.2 RuntimeMobile Exploration by:@leonjza from @sensepost [tab]for command suggestions com.test.appon (motorola: 7.0) [usb] # android hooking search classes TrustManager android.security.net.config.RootTrustManager android.app.trust.ITrustManager$Stub$Proxy android.app.trust.ITrustManager android.security.net.config.NetworkSecurityTrustManager android.security.net.config.RootTrustManagerFactorySpi android.app.trust.TrustManager android.app.trust.ITrustManager$Stub com.android.org.conscrypt.TrustManagerImpl com.android.org.conscrypt.TrustManagerImpl$ExtendedKeyUsagePKIXCertPathChecker com.android.org.conscrypt.TrustManagerImpl$TrustAnchorComparator com.android.org.conscrypt.TrustManagerFactoryImpl javax.net.ssl.TrustManagerFactory$1 javax.net.ssl.TrustManager javax.net.ssl.TrustManagerFactory javax.net.ssl.X509TrustManager javax.net.ssl.TrustManagerFactorySpi javax.net.ssl.X509ExtendedTrustManager [Ljavax.net.ssl.TrustManager;
+此时，你就可以使用内置的SSL绑定绕过函数来实施攻击了：
+com.test.appon (motorola: 7.0) [usb] # android sslpinning disable Job:2f633f86-f252-4a57-958e-6b46ac8d69d1 - Starting [6b46ac8d69d1][android-ssl-pinning-bypass] Custom, Empty TrustManager ready Job:2f633f86-f252-4a57-958e-6b46ac8d69d1 – Started
+技术#4-逆向自定义证书的验证代码
+当然了，开发人员也有可能会使用自己开发的SSL库，而不是直接使用系统库来处理SSL证书验证过程。如果这样的话，我们就需要提取出APK文件，然后将smali代码转换成Java代码，这样我们才可以对负责处理证书验证的代码进行分析，并想办法实现流量拦截，这里我们需要使用到dex2jar工具。
+dex2jar工具的使用命令语句如下所示：
+C:\>d2j-dex2jar.bat"C:\test_app.apk" dex2jarC:\test_app.apk -> .\test_app-dex2jar.jar
+输出的.jar文件可以直接在绝大多数Java逆向工具（例如JD-GUI）中打开。
+当你找到了负责处理证书验证的代码之后，你就可以选择对代码进行直接修改或者使用Frida来给特定函数设置钩子了。为了避免对整个应用程序进行重构，我们可以直接对证书验证函数设置钩子。具体的操作方法可以参考技术#3所介绍的内容（使用Frida命令行工具或Objection接口）。
+总结
+本文所介绍的技术可以允许我们绕过Android开发人员所设置的常见防护措施，并拦截目标Android应用的SSL通信流量。除此之外，本文还简单介绍了Objection接口以及Frida工具，这些工具可以帮助我们绕过应用程序的SSL绑定以及其他防护机制。本文揭露了多种绕过给定安全控制的方法，希望这篇文章可以给Android应用程序的安全研究人员提供一些有用帮助。
+资源获取
+Frida使用教程（无需root）：【传送门】
+Frida框架：【下载地址】
+Objection工具：【下载地址】
+* 参考来源：netspi，FB小编Alpha_h4ck编译，转载请注明来自FreeBuf.COM

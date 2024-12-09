@@ -1,0 +1,59 @@
+MADLIRA是一个针对安卓系统的恶意软件检测工具，包含TFIDF组件和SVM学习组件两部分。一般来说，MADLIRA首先会输入一组恶意软件或benware，然后提取恶意行为（TFIDF组件）或计算训练模型（SVM分类器），然后再利用这些知识检测Android应用程序中的恶意行为。
+安装步骤
+下载 MADLIRA.7z文件并解压。
+已安装文件
+MADLIRA.jar：主程序
+noAPI.txt：说明API前缀
+family.txt：按不同家族罗列的恶意软件清单
+Folder TrainData：包含训练配置和训练模型
+Folder Samples：含样本数据
+Folder TempData：包含内核计算的数据
+功能
+该工具包含TFIDF与SVM两大组件。
+TFIDF组件
+Command: MADLIRA TFIDF
+这一组件具备两大功能：训练（恶意行为提取）与测试（恶意行为检测）。
+恶意行为提取
+1. 收集良性程序和恶意程序，并将它们分别放入benginAPKfolder和maliciousAPKfolder的文件夹中；
+2. 准备训练数据并使用以下命令将它们打包在名为benignPack和maliciousPack的两个文件中：
+MADLIRA TFIDF packAPK -PB benignApkFolder -B benignPack -PM maliciousApkFolder -M maliciousPack
+3. 使用以下命令从两个打包文件（benignPack和maliciousPack）中提取恶意行为：
+MADLIRA TFIDF train -B benignPack -M maliciousPack
+恶意行为检测
+1. 收集新的应用程序并将它们放在checkApk文件夹中；
+2. 使用以下命令检测文件夹checkApk中应用程序的恶意行为：
+MADLIRA TFIDF check -S checkApk
+命令：
+MADLIRA TFIDF train <Options> Compute the malicious specifications for given training data. -B <filename>: the archive file contains all graphs of training benwares. -M <filename>: the archive file contains all categories of training malwares. MADLIRA TFIDF check <Options> Check malicious behaviors in the given applications in a folder. -S <folder>: the folder contains all applications (apk files). MADLIRA TFIDF test <Options> Test the classifier for a given test data. -S <folder>: the folder contains all graphs for testing. MADLIRA TFIDF clear Clean all training data. MADLIRA TFIDF install Clean old training data and install a new data for training. -B <filename>: the archive file contains all graphs of training benwares. -M <filename>: the archive file contains all categories of training malwares.
+例如：
+新数据训练
+1. 首先收集训练应用程序（APK文件）并将它们存储在MalApkFolder和BenApkFolder文件夹中；
+2. 使用以下命令将训练应用程序打包到名为MalPack和BenPack的归档文件中：
+MADLIRA TFIDF packAPK -PB BenApkFolder -B BenPack -PM MalApkFolder -M MalPack
+3. 清理旧的训练数据：
+MADLIRA TFIDF clear
+4. 从训练包（BenPack和MalPack）中计算恶意模型
+MADLIRA TFIDF train -B BenPack -M MalPack
+检查新的应用程序：
+将这些应用程序放在checkApk文件夹中并运行以下命令：
+MADLIRA TFIDF check -S checkApk
+输出：
+SVM组件
+Command: MADLIRA SVM
+该组件具备训练和测试两大功能。
+训练阶段：
+1. 在benignApkFolder文件夹中收集良性程序，并在maliciousApkFolder中收集恶意程序；
+2. 运行以下命令准备训练数据：
+MADLIRA SVM packAPK -PB benignApkFolder -B benignPack -PM maliciousApkFolder -M maliciousPack
+3. 利用下面的命令计算训练模型：
+MADLIRA SVM train -B benignPack -M maliciousPack
+恶意行为检测
+1. 收集新的应用程序并将它们放在checkApk文件夹中；
+2. 使用以下命令检测文件夹checkApk中应用程序的恶意行为：
+MADLIRA SVM check -S checkApk
+命令：
+MADLIRA SVM train <Options> Compute the classifier for given training data. -T <T>: max length of the common walks (default value = 3). -l <lambda>: lambda value to control the importance of length of walks (default value = 0.4). -B <filename>: the archive file contains all graphs of training benwares. -M <filename>: the archive file contains all graphs of training malwares. MADLIRA SVM check <Options> Check malicious behaviors in the applications in a folder. -S <foldername>: the folder contains all apk files. MADLIRA SVM test <Options> Test the classifier for given graph data. -S <foldername>: the folder contains all graphs of test data. -n <n>: the number of test samples. MADLIRA SVM clear Clean all training data.
+软件包
+该工具会用到以下3个软件包（附链接）：
+下载地址戳：https://github.com/dkhuuthe/MADLIRA
+*参考来源：github，FB小编柚子编译，转载请注明来自FreeBuf.COM

@@ -1,0 +1,98 @@
+站长们最头疼事情是，站点程序有bug，容易会被人篡改页面，添加其他乱七八糟的东西。
+针对这类问题，常见的做法：1、修改升级程序漏洞。2、用WAF主动防御（用第三方免费cdn，也提供这类防御）。
+这儿我们介绍第三种方法（如果网站固定文件不变的情况下）。
+网站部署好后，通过对站点所有文件的计算MD5值，并保存在一个文件中。然后以后可以手动或者crontab，监控程序等定期对保存文件中的文件生成md5值和已有的md5值对比，如果发现值对不上，则说明文件被篡改了。
+好了废话，少说，直接撸代码：
+、#!/usr/bin/perl
+use strict;
+use warnings;
+use Digest::MD5 qw(md5_hex);
+my $dir=shift;
+# 此处默认为检查md5值。
+md5check($dir);
+# 如果需要开始生成web目录的md5值，注释掉上面一句，把下面一句启用
+#md5init($dir);
+sub md5_sum {
+my ($file_name,$mode)=@_;
+my ($FD,$ctx, $md5);
+open ($FD,$file_name) or die "Can't open /'$file_name/': $!";
+$ctx = Digest::MD5->new;
+binmode($FD) if $mode;
+$ctx->addfile($FD) || die "$!
+";
+$md5 = $ctx->hexdigest;
+close $FD;
+return $md5;
+}
+sub md5check {
+my $file=shift;
+open(my $fd, '<',$file) or die "$file: $!
+";
+print $file;
+while (<$fd>){
+my ($name, $sum) = split /\s+/;
+if ($sum eq md5_sum($name,1)){
+print "$name OK
+";
+}
+else{
+print "$name FAILED
+";
+}
+}
+close $fd;
+}
+# 遍历目录计算md5值
+sub md5init {
+my $fd=shift;
+my $md5value;
+if ( -f $fd ){
+if ( -T $fd ) {
+#print "按照文本模式进行计算MD5!
+";
+$md5value =md5_sum($fd,0);
+print "$fd\t$md5value
+";
+}elsif( -B $fd ){
+#print "二进制文件用binmod计算MD5!
+";
+$md5value =md5_sum($fd,1);
+print "$fd\t$md5value
+";
+}else{
+#print "其他文件，按照bimmod计算!
+";
+$md5value = md5_sum($fd,1);
+print "$fd\t$md5value
+";
+}
+}
+elsif( -d $fd ){
+my $file_md5;
+# print "开始验证目录下所有文件:
+";
+opendir (my $DH,$fd) or die "Can't open dir $fd: $!";
+for(readdir $DH ){
+my $file=$fd.'/'.$_;
+# 上级目录..，本目录. 以及连接文件跳过
+next if ($file =~ m{/.$} || $file =~ m{/..$} || -l $file );
+md5chek($file);
+}
+closedir $DH;
+}
+}
+以上程序保存成文件，比如filemd5check.pl
+脚本具体使用：
+1、生成Web文件 哈希列表：
+注释掉：md5check
+#md5check($dir);
+启用md5init，去掉其行最前面的#注释
+md5init($dir);
+然后执行perl filemd5check.pl web目录 > webmd5-20180201
+就可以在当前目录下生成 webmd5-20180201 的web文件名和对应md5 哈希值得文件。
+2、验证文件哈希，以判断文件是否被篡改：
+perl filemd5check.pl webmd5-20160920
+会输出文件哈希改变的文件名。
+总体上本篇文章，说明了解决此类问题的一个思路，有了这个思路，脚本可以参考我这个自己用其他方式
+实现，或者其他工具来做，作为进一步扩展，可以添加监控或者告警等方法。笔者目前在这个脚本基础上
+搞成了一个模块。https://github.com/bollwarm/MD5Check 欢迎fork ，欢迎star 一起完善，共同提高。

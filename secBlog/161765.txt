@@ -1,0 +1,18 @@
+一、介绍
+用过二进制扫描工具yara的安全人,都喜欢其简洁的语法，其规则由字符串和布尔型表达式组成,可用于标示某一类家族。外面也由很多web日志扫描工具，我比较喜欢这种语法，且新添加语法简单，方便小白使用，所以空闲的时间把这种语法扩展到web access 日志中，xlog代码简单,规则仿照yara的规则，大牛们不喜勿喷，awk勿喷~~~~~~
+web 访问日志格式正常情况为:
+11.11.11.11 - - [18/Sep/2013:14:19:18 +0000] "GET /admin.php HTTP/1.0" 404 25 "-" "Mozilla/5.0 (Windows NT 6.1; rv:19.0) Gecko/20100101 Firefox/19.0"
+rule yara_attackAdmin { meta: description = "attack admin" strings: $str="admin.php" url $str1="feed" url condition: $str and (GET or POST) and status=404 and not $str1 }
+以上规则说明请求url种含有$str,不含有$str1 且 请求为post 或者get方法,且返回请求为404 都会识别为 yara_attackAdmin 家族
+二、语法
+具体使用方式和yara相同,目前支持语法：agent、正则匹配url、refer、请求类型,返回状态的匹配。
+三、xlog使用
+1、下载源码后，可直接make可生产scanner程序
+2、执行：./scanner 规则文件路径 web访问日志
+即：
+3、输出命中的结果：
+可根据命令行定制化输出
+-a 输出全部结果(默认) -ip 输出ip -refer 输出ip -request 输出url .... -st 参数time 输出访问时间大于time的结果 -et 参数time 输出访问时间小雨time的结果
+四、github开源
+xlog github 可直接在上面fork和反馈问题
+* 本文作者zyvsfx，转载注明来自FreeBuf.COM 轻量web日志扫描工具 - xlog

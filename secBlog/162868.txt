@@ -1,0 +1,52 @@
+1. 斗哥采访环节
+什么是POC？ 答：POC是用来验证漏洞是否存在的一段代码，经常对漏洞做检测的同学对写POC这件事应该不陌生吧哈哈。
+框架有什么用？ 答：通常我们写POC除了考虑它的通用性以外，还会考虑批量化，线程等。POC写多了需要规范管理和使用，于是框架应运而生了。我们可以写一个POC框架，帮助我们实现批量化和线程输出报告等等其他功能，这样我们就可以专心写POC的代码而不需要考虑其他问题。写一个框架当然不是简单的事情，所以可以先拿别人的框架来使用，必要的时候做二次开发，实在不好再自己写也不迟哈。
+关于Pocsuite？ 答：PocSuite是一款基于漏洞与 PoC的远程漏洞验证框架，是知道创宇的安全团队开发的。本文主介绍Pocsuite的基本使用方式，关于编写POC的一点点小技巧和使用Pocsuite遇到的问题排错。
+2. Pocsuite下载和安装
+pip
+pip install pocsuite
+git clone code
+git clone git@github.com:knownsec/pocsuite.git
+直接下载解压
+wget https://github.com/knownsec/pocsuite/archive/master.zip unzip master.zip
+3. Pocsuite命令行模式
+Pocsuite有两种交互模式，一个是命令行模式类似我们所知的sqlmap的界面，另一个是控制台交互模式类似w3af或者matasploit的界面。
+查看帮助命令
+python pocsuite.py -h
+verify和attack两种POC模式
+在使用Pocsuite的时候，我们可以用 --verify 参数来调用 _verify 方法，用 --attack 参数来调用 _attack 方法。
+def _attack(self): result = {} #Write your code here return self.parse_output(result) def _verify(self): result = {} #Write your code here return self.parse_output(result)
+verify 模式：验证目标是否存在漏洞
+pocsuite -r tests/poc_example.py -u http://www.example.com/ --verify
+attack 模式：向目标发起有效的攻击
+pocsuite -r tests/poc_example.py -u http://www.example.com/ --attack
+批量验证，将url写到一个txt
+pocsuite -r test/poc_example.py -f url.txt --verify
+加载 tests 目录下的所有 PoC 对目标进行测试（可以充当扫描器角色）
+pocsuite -r tests/ -u http://www.example.com --verify
+使用多线程，默认线程数为1
+pocsuite -r test/ -f url.txt --verify --threads 10
+4.调用ZoomEye API
+Pocsuite的强大之处还在于能够方便的调用ZooneEye和Seebug两大自家平台API。
+--dork DORK ：Zoomeye Dork ，用于在ZoomEye 搜索目标 --max-page MAX_PAGE ：ZoomEye API 的请求翻页数（10 目标/页） --search-type ：ZoomEye API 搜索类型，web 或者 host --vul-keyword VULKEYWORD ：Seebug 搜索关键词，用于在Seebug 搜索漏洞POC
+eg:从ZoomEye中调用host批量验证某个POC
+pocsuite -r weblogic_CVE-2017-10271.py --dork 'weblogic' --max-page 5 --thread 20 --verify
+5.POC注意事项
+有时一些漏洞的检测并没有数据回显，如SQL盲注，如命令执行无回显等等。这时可以借助DNS查询nslook或者curl来监控数据。CEYE为我们提供了这样一种服务，地址：http://ceye.io。
+6.Windows下Pocsuite写日志url带冒号报错问题
+报错描述
+Windows平台使用Pocsuite，当输入的url带有 : 的时会报错，如下：
+[WARNING] unable to create output directory 'C:\Users\Administrator\.pocsuite\output\127.0.0.1:8080'
+错误分析
+原来保存日志记录会选取 C:\Users\Administrator\.pocsuite\output\ 拼接上url地址，而windows下文件名不允许含有 : ，所以才会报错。
+所以，不论URL是 http:// 还是带有冒号都会报错，看来pocsuite这边在创建这个文件名的时候名没有检查文件名字是否还有特殊符号呀。
+错误解决
+手动改代码解决问题：反向追踪哪个文件做了创建文件夹的操作。
+经查找，发现该操作代码存在于 pocsuite\lib\controller\controller.py 文件。
+从131行代码开始，定义了一个 _setRecordFiles() 函数，该函数会创建这么一个文件夹。
+def _setRecordFiles(): for (target, pocname, pocid, component, version, status, r_time, result) in kb.results: if type(status) != str: status = status[1] target=target.replace(":","_") #这里添加了一行替换代码 outputPath = os.path.join(getUnicode(paths.POCSUITE_OUTPUT_PATH), normalizeUnicode(getUnicode(target)))
+可以发现 _setRecordFiles() 函数从 kb.results 这个数据实例里面取值。我们用 target=target.replace(":","_") 来将 : 替换成 "_" ，问题解决。
+另外，如果是用pip安装的pocsuite，那么这个文件在：
+C:\Python27\Lib\site-packages\pocsuite\lib\controller\controller.py
+小结
+还有很多用法小伙伴可以上官网查阅就不细说了，POC这种东西还是需要平时的积累。以上就是这一期的分享了~

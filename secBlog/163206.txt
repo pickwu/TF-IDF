@@ -1,0 +1,27 @@
+工具简介
+Sickle是一款功能强大的Shellcode开发工具，它可以帮助开发人员以最快的速度开发出功能丰富的Shellcode。Sickle可以帮助开发人员：
+1. 识别导致错误字符的指令；
+2. 按各种语言格式进行输出格式化（例如Python、Perl和JavaScript等等）；
+3. 通过STDIN接收Shellcode并进行格式化；
+4. 在Windows和Linux环境下执行Shellcode；
+5. 将逆向Shellcode跟原始代码进行对比；
+6. 将Shellcode转换成汇编语言代码（ARM和x86等等）；
+工具下载
+Sickle：【GitHub传送门】
+故障快速检测
+我发现自己需要不断重复做的工作就是编译汇编源码，然后提取出shellcode并将其放到封装器之中，最后再对代码进行测试。如果运行失败，整个过程将会不断重复进行直到成功为止。而Sickle可以帮助我们将Shellcode放到封装器中，并进行快速测试。注：此功能支持Windows和Unix系统。
+重新创建Shellcode
+有的时候你可能会发现一段Shellcode执行起来非常流畅，而你此时想要重新开发一次并了解其底层运行机制。那么Sickle就可以帮助我们比较原始Shellcode和你所创建的Shellcode版本之间的区别。
+错误字符识别
+需要注意的是，目前来说错误字符识别在基于Linux的操作系统平台中实现得最好，如果将Shellcode导出到Windows主机中，那么错误字符将不会高亮显示。下面给出的是Unix环境下的使用样例：
+视频地址：https://asciinema.org/a/7vvVRjZGbY7OlqMsh6dBi7FDU
+反汇编
+Sickle还可以接收二进制代码文件并将提取出的操作码（shellcode）转换成机器指令（-obj）。请记住，这个功能只适用于原始操作码（-r）和STDIN（-s）。在下面给出的样例中，我转换了一个反向shell：
+Windows安装
+如果你不打算使用反汇编功能，并且只准备把Sickle当作封装器或导出工具来使用的话，Sickle可以搭配任何Python版本来使用。在测试过程中，我只在Windows 10主机上编写/测试64位Shellcode时遇到了问题。为了避免类似问题出现，我建议大家安装Python 3.4.4（amd64），不过在其他版本的Windows平台上还没有出现问题。如果你想编写x86 Shellcode的话，Windows 10也是可以的。在下面给出的样例中，我在Windows 10主机中测试了msfvenom生成的Shellcode ("windows/x64/shell_reverse_tcp")：
+Linux安装
+Sickle采用Python3编写，为了发挥其最大功能，我建议大家直接安装capstone【传送门】。Capstone的安装代码如下：
+apt-get install python3-pip pip3 install capstone
+为了方便使用，我把Sickle添加到了/usr/bin/目录中用，操作样例如下所示：
+root@kali:~#git clone https://github.com/wetw0rk/Sickle.git root@kali:~#cd Sickle/ root@kali:~#chmod +x sickle.py root@kali:~#cp sickle.py /usr/bin/sickle root@kali:~#sickle usage:sickle [-h] [-r READ] [-s] [-obj OBJDUMP] [-f FORMAT] [-b BADCHAR] [-c] [-v VARNAME] [-l] [-e EXAMINE][-d] [-rs] [-a ARCH] [-m MODE] Sickle- Shellcode development tool optionalarguments: -h, --help show this help message and exit -r READ, --read READ read byte array from the binary file -s, --stdin read ops from stdin (EX: echo -ne"\xde\xad\xbe\xef" | sickle -s -f<format> -b '\x00') -obj OBJDUMP, --objdump OBJDUMP binary to use forshellcode extraction (via objdump method) -f FORMAT, --format FORMAT output format (use--list for a list) -b BADCHAR, --badchar BADCHAR bad characters to avoidin shellcode -c, --comment comments the shellcode output -v VARNAME, --varname VARNAME alternative variablename -l, --list list all available formats andarguments -e EXAMINE, --examine EXAMINE examine a separate filecontaining original shellcode. mainly used to see ifshellcode was recreated successfully -d, --disassemble disassemble the binary file -rs, --run-shellcode run the shellcode (use at your own risk) -a ARCH, --arch ARCH select architecture for disassembly -m MODE, --mode MODE select mode for disassembly
+* 参考来源：Sickle，FB小编Alpha_h4ck编译，转载请注明来自FreeBuf.COM

@@ -1,0 +1,46 @@
+本文作者：i春秋签约作家——Aedoo
+0x00 前言
+笔者前一段时间发布了原创文章，“[Python黑客] Python手把手教你打造自己的多线程批量工具”,受到了不少热评，传送门：
+https://bbs.ichunqiu.com/thread-31814-1-1.html
+0x01 涉及知识点
+多线程模板：threading多线程模块、Queue队列模块、超时处理、异常处理。
+IP地址块转换：扫描的是一个比较大的网段的IP的Web端口，我们并不能手动一个一个的输入IP地址，所以需要IP地址块和IP的转换。
+HTTP网络请求库：requests模块。
+正则表达式：需要在Request请求之后的Response中获取我们想要的banner信息。
+所以我们的大致思路：
+首先，将输入的IP段转换为IP依次放入队列Queue中，之后开启多线程，将Queue传入多线程类，多线程类中的核心函数执行步骤：
+1.取出一个IP并拼接URL为http://x.x.x.x的格式
+2.使用requests模块获取页面status信息、title信息、banner信息（服务器的banner信息，在这里为Web容器以及其版本信息）
+3.title信息需要在页面源代码中获取，并且使用re模块正则匹配title标签内的内容。
+4.banner信息需要获取Response中header信息中的server。
+之后，加入我们的工具文档以及自定义的LOGO信息后，一个完整的工具就完成了。
+放一下完成之后的效果图：
+炫酷！
+0x02 核心代码讲解
+由于IP地址块转换、多线程模板在笔者的上一篇文章已经详细讲述过了，此篇文章不再讲解，直接到核心代码区域，也就是取出每个IP之后的工作。
+while not self._queue.empty(): ip = self._queue.get(timeout=0.5) url = 'http://' + ip try: r = requests.Session().get(url=url, headers=header, timeout=5) content = r.text status = r.status_code title = re.search(r'<title>(.*)</title>', content) if title: title = title.group(1).strip().strip("\r").strip("
+")[:30] else: title = "None" banner = 'Not Found' try: banner = r.headers['Server'][:20] except: pass sys.stdout.write("|%-16s %-6s %-26s %-30s
+" % (ip, status, banner, title)) except: pass
+status是http页面的状态码，简单了解http协议的童鞋应该都知道吧。
+title是请求页面的标题信息，需要用正则表达式匹配一下。
+banner是Response头信息中的Server字段。
+下面给出一个Request请求的Response包，可以直观看出，红框就是我们想要获取的东西。
+输出使用了sys.write来解决多线程输出不对称问题，并且使用格式化输出使获取的数据对齐。
+0x03 添加工具模块
+Logo的制作使用Linux下的工具figlet，帮助文档使用Python内置模块argparse。
+两款工具详解传送门：https://bbs.ichunqiu.com/thread-31231-1-1.html
+Logo代码以及帮助文档代码：
+logo_code = 'IF8gICBfIF8gICBfICAgICAgICAgX19fXyAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIF9fX18gICAgICAgICAgICAgICAgICAKfCB8IHwgfCB8X3wgfF8gXyBfXyB8IF9fICkgIF9fIF8gXyBfXyAgXyBfXyAgIF9fXyBfIF9fLyBfX198ICBfX18gX18gXyBfIF9fICAKfCB8X3wgfCBfX3wgX198ICdfIFx8ICBfIFwgLyBfYCB8ICdfIFx8ICdfIFwgLyBfIFwgJ19fXF9fXyBcIC8gX18vIF9gIHwgJ18gXCAKfCAgXyAgfCB8X3wgfF98IHxfKSB8IHxfKSB8IChffCB8IHwgfCB8IHwgfCB8ICBfXy8gfCAgIF9fXykgfCAoX3wgKF98IHwgfCB8IHwKfF98IHxffFxfX3xcX198IC5fXy98X19fXy8gXF9fLF98X3wgfF98X3wgfF98XF9fX3xffCAgfF9fX18vIFxfX19cX18sX3xffCB8X3wgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgCg==' logo = base64.b64decode(logo_code) print logo parser = ArgumentParser() parser.add_argument("-i", dest="cidr_ip", default="192.168.1.1/16", help="The CIDR IP Like 192.168.1.1/24") parser.add_argument("-t", dest="thread_count", type=int, default=100, help="The Thread Number") args = parser.parse_args() parser.print_help() print '' print 'The Mission Started Successfully::' print ''
+输出演示：
+_ _ _ _ ____ ____ | | | | |_| |_ _ __ | __ ) __ _ _ __ _ __ ___ _ __/ ___| ___ __ _ _ __ | |_| | __| __| '_ \| _ \ / _` | '_ \| '_ \ / _ \ '__\___ \ / __/ _` | '_ \ | _ | |_| |_| |_) | |_) | (_| | | | | | | | __/ | ___) | (_| (_| | | | | |_| |_|\__|\__| .__/|____/ \__,_|_| |_|_| |_|\___|_| |____/ \___\__,_|_| |_| usage: httpbannerscan.py [-h] [-i CIDR_IP] [-t THREAD_COUNT] optional arguments: -h, --help show this help message and exit -i CIDR_IP The CIDR IP Like 192.168.1.1/24 -t THREAD_COUNT The Thread Number
+完成。
+脚本运行示例：
+python httpbannerscan.py -t 100 -i 192.168.1.1/24
+0x04 后续改进
+众所周知的是Web端口可并不仅限于80端口，一些其他的Web端口的安全性可能远不如80端口做的好。
+所以，我们在使用requests模块进行request请求时，完全可以将一些常见的Web端口放进一个列表里，首先对端口的开放性进行检测（端口开放性检测详情请见本文第一部分的传送门文章），之后再抓取Response信息，这是最快速的检测方法。
+常见的Web端口：
+80-90,8080-8090
+0x05 源码分享
+附件下载>>>>>戳我下载
+>>>>>>黑客入门必备技能 带你入坑和逗比表哥们一起聊聊黑客的事儿他们说高精尖的技术比农药都好玩

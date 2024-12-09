@@ -1,0 +1,18 @@
+Satori和Brickerbot攻击中被使用的华为路由器exp被圣诞老人公布在了Pastebin上。
+介绍
+根据NewSky Security的博客，黑客在Pastebin上公开发布了华为漏洞CVE-2017-17215的exp代码。这个漏洞已经被两个不同的物联网僵尸网络用来攻击，即Satori和Brickerbot。
+CVE-2017-17215漏洞存在于华为HG532路由器中，由Checkpoint研究员在Satori零日攻击中发现，他们并没有公开PoC代码，以防被黑客使用。但由于最近攻击代码被公开，黑客更容易进行大规模攻击。
+Brickerbot和Satori的exp比较
+有趣的是，Satori并不是唯一一个利用这个漏洞的僵尸网络。12月初，Brickerbot拥有者Janitor表示要退休，然后发布了Brickerbot源代码片段。分析代码时，研究人员同样发现了CVE-2017-17215的使用痕迹，也就是说黑客一直有在用这个漏洞。下图中，我们可以看到来自泄漏的Brickerbot代码的片段，其中在<NewStatusURL>中存在命令注入，在SOAP请求的<NewDownloadURL>属性中看到“echo HUAWEIUPNP”。这个命令注入就是CVE-2017-17215漏洞的基础。
+Brickerbot僵尸网​​络的代码片段
+我们与Satori僵尸网络的二进制数据进行比较。不仅我们在<NewStatusURL>中看到相同的攻击向量，即代码注入，而且还看到另一个“echo HUAWEIUPNP”字符串，这意味着Satori和Brickerbot都从同一个源复制了漏洞源代码。
+Satori僵尸网络代码片段
+所有这些信息也存在于pastebin泄露的工作漏洞代码中，如下所示。
+漏洞利用代码片段
+SOAP问题频出
+这不是IoT僵尸网络第一次出现与SOAP协议相关的问题。今年早些时候，研究人员使用两个分别位于<NewInternalClient>和<NewNTPServer>中的SOAP漏洞（CVE-2014-8361和TR-64）观察了几个Mirai分支。下图中，我们看到了一个Mirai变体，这两个漏洞被一起使用，以增加成功攻击的机会。
+Mirai变体代码片段
+当涉及到与SOAP协议有关的漏洞时，即使Windows也未能幸免。我们看到过与CVE-2017-8759相关的攻击，其中根本原因是MS Word调用了使用WSDL的SOAP处理程序，而解析错误引发代码注入，把rtf变成病毒。
+修复方案
+目前华为已提供相关补丁。读者可移步华为官网查看细节。
+* 参考来源：NewSky，作者Sphinx，转载注明来自Freebuf.COM

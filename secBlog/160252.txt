@@ -1,0 +1,113 @@
+*本文中涉及到的相关漏洞已报送厂商并得到修复，本文仅限技术研究与讨论，严禁用于非法用途，否则产生的一切后果自行承担。
+1 概述
+2018年1月9日，微软发布了2018年1月份的安全补丁更新，其中较引人关注的Office远程代码执行漏洞CVE-2018-0802。该漏洞为Office内存破坏漏洞，影响目前流行的所有Office版本。攻击者可以利用漏洞以当前登录的用户的身份执行任意命令。
+该漏洞影响的版本包括：
+Microsoft Office 2007 Microsoft Office 2010 Microsoft Office 2013 Microsoft Office 2016
+该漏洞早在微软公布补丁之前，由腾讯电脑管家团队首先发现，并上报给微软后一直与微软保持积极沟通，推动漏洞修复，使得漏洞得到妥善解决后再披露漏洞信息。
+该漏洞出现在模块EQNEDT32.EXE中，与CVE-2017-11882如出一辙，都属于栈溢出漏洞，都是对Equation Native 数据结构处理不当导致。腾讯反病毒实验室在上周微软补丁尚未发布之前就已经捕获在野利用样本，本文将通过利用样本详细阐述漏洞利用攻击过程。
+2 技术分析
+样本hash: 643927925BC2E4AD42B0B11221E8053A
+样本为rtf文档类型，在rtf里面嵌入了两个OLE对象，其中一个OLE对象会触发CVE-2017-11882漏洞利用，另外一个OLE对象会触发是CVE-2018-0802漏洞利用。此外，rtf文档中嵌入了一个package对象，通过package对象释放setup.zip到临时目录下。只要Ole对象中的两个漏洞利用有一个成功触发后，shellcode代码都会将setup.zip拷贝到C:\Users\[username]\AppData\Roaming\Microsoft\Word\STARTUP\z.wll，这样word在下次启动时就会自动加载z.wll，实现自启动。
+2.1 基础知识
+2.1.1 Package对象分析
+Package对象的功能是释放PE文件到临时目录下的setup.zip文件中。
+对于RTF格式文档，如果用户单击文档内的对象，则WORD进程会将对象提取到用户的临时目录中，并使用默认处理程序启动它们。在文档关闭后，WORD进程会将用户的临时目录中提取的ole对象进行删除。因此，在文档打开的时间段内，这些文件可用于系统上的其他进程。
+当一个对象从文件嵌入到文档中时，它将使用Packager对象服务，它符合OLE1标准。 但微软并没有公开Packager结构格式。
+结合我们对大量带有package对象的rtf样本的分析，给出我们对Packager格式的理解以及它如何与文档中的嵌入对象相关联。
+字段名称 长度 描述 Header 4 数据流的头标志，总为0x0200 Label 可变长度 嵌入对象的标签，默认为文件名 (Null Terminated) OrgPath 可变长度 嵌入对象的原始路径 UType 8 含义不明，可能与格式相差 – 对于嵌入对象，值为 00000300 – 对于链接对象，值为00000100 DataPathLen 8 DataPath 字段的长度 DataPath 可变长度 释放的路径和文件名，默认为 %localappdata%/Temp DataLen 8 嵌入数据的长度 Data 可变长度 嵌入数据的内容 OrgPathWLen 8 OrgFileW 字段的长度 OrgPathW 可变长度 嵌入对象的原始路径(WChar) LabelLen 8 LabelW 字段的长度 LabelW 可变长度 嵌入对象的标签，默认为文件名 (WChar) DefPathWLen 8 OrgPathW 字段的长度 DefPathW 可变长度 嵌入对象的默认路径 (WChar)
+对于样本中的package对象，根据上面的数据结构在010editor中看到的字段内容如下：
+2.1.2 Equation Native 数据结构
+“Equation Native”描述了公式编辑器中公式对象的二进制格式。它的数据构成为：
+Equation Native Stream Data = EQNOLEFILEHDR+MTEFData
+其中MTEFData = MTEF header+ MTEF Byte Stream。
+其中EQNOLEFILEHDR的数据结构如下：
+MTEF header的结构(对于2.0及以后版本)大小为5字节，其对应的数据结构如下表所示
+偏移量 说明 值 0 MTEF版本号 3 1 该数据的生成平台 0 for Macintosh, 1 for Windows 2 该数据的生成产品 0 for MathType, 1 for Equation Editor 3 产品主版本号 3 4 产品副版本号 0
+在MTEF header数据头之后的字节流即为公式数据,即上面所提到的MTEF Byte Stream结构。
+MTEF数据由一系列记录组成。每条记录都以包含记录类型和一些标志位的标签字节开始。 整体结构是：
+FONT记录及FONT内容结构如下：
+字段 值 说明 Tag 0x08 1字节，固定为0x08 tface typeface number 1字节，Typeface编号 style 1或者2 1字节，1表示斜体，2表示粗体 name Font name (null-terminated) 字体名字，以Null结尾
+更多关于结构的描述，可参考http://rtf2latex2e.sourceforge.net/MTEF3.html
+2.2 漏洞利用
+2.2.1 CVE-2017-11882漏洞利用
+在未安装CVE-2017-11882漏洞补丁的机器中，文档会利用CVE-2017-11882漏洞执行shellcode。Shellcode功能为将package对象释放的setup.zip拷贝到word启动目录中。
+文档中的第一个ole对象中包含Equation Native 数据内容如下
+动态调试CVE-2017-11882漏洞示意图如下, 这里strcpy的源地址的内容就对应着上一章中Equation Native数据中的Font name的内容：
+漏洞利用成功后，执行shellcode，shellcode的主要功能是将上面释放到临时目录下的setup.zip拷贝到word的插件目录中。
+Shellcode使用通过hash得到的函数地址，使用的hash是shellcode中常用的ROR 0X0D的方式。通过调用ExpandEnvironmentStringAStub分别获得setup.zip和word的插件目录。
+随后，通过CopyFile函数，将zip文件拷贝到启动目录中。
+至此shellcode的功能完成，在IDA中看到的shellcode过程如下。
+2.2.2 CVE-2018-0802漏洞利用
+在安装CVE-2017-11882漏洞补丁的机器中，文档会利用CVE-2018-0802漏洞执行shellcode。Shellcode功能同样为将package对象释放的setup.zip拷贝到word的插件目录。
+通过静态IDA分析CVE-2018-0802漏洞所在的位置如下：
+内部函数421E39处的代码实现，在这里在没有检测字符长度的情况下，直接通过strcpy覆盖了局部变量,这里strcpy的源地址的内容就对应着上一章中Equation Native数据中的Font name的内容。
+在安装CVE-2017-11882补丁的机器上，动态调试样本时会触发CVE-2018-0802漏洞利用过程，如下所示：
+在执行拷贝时，发生了栈溢出，导致栈空间内容破坏。在执行拷贝之前的栈内容如下：
+拷贝内容的最后两个字节(25 00)将覆盖函数的返回地址,如下所示。
+随后，函数继续运行，后面的sub_4115A7函数为CVE-2017-11882修补的函数，在补丁条件下会返回非0，从而导致最终该函数会再次递归调用sub_421774。在第二次调用sub_421774的过程中，函数就会正常返回。
+函数正常返回，就会跳转到上面修改过的返回地址运行。
+而011d0025的代码指令也为RET
+最后跳转到栈中的shellcode执行，shellcode与文件中的内容比较如下：
+最终shellcode实现的功能为通过CopyFile函数，将zip文件拷贝到word的插件目录。
+2.3 木马功能分析
+木马的执行流程如下：
+注意区分这里的两个文件名相似的文件：servernet.exe和servicenet.exe。servernet.exe由tmp.exe文件释放的，起到中转加载执行的作用；而servicenet.exe是保存NetWork目录中的tmp.exe文件，它与tmp.exe的数据内容是完全一致的。
+在木马加载执行过程中，会根据用户的环境采用不同的方式绕过安全软件，在某些安全软件存在的情况下会使用中转加载的方式绕过安全检测，在另外一些安全软件存在的情况下会使用白利用方式加载执行。
+木马涉及的多个不同的文件功能列表如下。
+文件名 角色 功能 z.wll 加载器 释放木马文件并加载执行，word运行时自动加载 Tmp.exe/servicenet.exe 木马 实现木马功能 Srvlic.dll/msTracer.dll 调用中转执行 加载servernet.exe执行 MemRunExe32.exe/MemRunExe64.exe Bypass UAC功能 servernet.exe 中转加载木马 加载servicenet.exe(实现了木马主功能)执行 SandboxieBITS.exe 白利用程序 添加计划任务，启动时加载servernet.exe执行 HookMessageBox.dll 防止用户感知 Hook MessageBox函数，防止弹窗
+下面，我们将对每个文件依次展开进行分析说明。
+2.3.1 z.wll
+漏洞利用成功后Shellcode会将setup.zip拷贝到%APPDATA%\Microsoft\Word\STARTUP目录中保存成z.wll。%APPDATA%\Microsoft\Word\STARTUP目录为WORD程序的插件目录，在WORD程序启动时，WORD会自动加载该目录下扩展名wll的文件。这样在下一次word启动时，z.wll就会被加载执行。
+z.wll功能为：释放%ALLUSERSPROFILE%\\NetWork\\tmp.exe，加载tmp.exe执行
+tmp.exe是以硬编码的方式保存在0x10003030处，大小为0xB601字节。
+2.3.2 Tmp.exe/servicenet.exe
+在407C90处将标志“5A 5A 5A 5A”后的大小为0x1962字节的内容异或0x6B解码，解码出来的代码为线程函数的代码
+未解码前的线程函数，未解码前线程函数并不是可以执行的代码，从下图可以看到ida无法将这些数据处理成代码格式：
+解码后的线程函数，IDA 在解码后就可以正常的识别出代码。
+线程函数的功能
+释放C:\Documents andSettings\All Users\NetWork\ servernet文件
+判断当前进程是不是servicenet.exe，如果当前进程不是servicenet.exe，则将自身拷贝到servicenet.exe，并使用cmd加载servicenet.exe执行，同时删除当前的自身文件。
+如果当前进程是servicenet.exe，则首先会开启三个线程，用来模拟鼠标点击，用来绕过BKAV、Symantec等防火墙产品。
+模拟鼠标点击绕过防火墙部分代码：
+随后会遍历系统进程，判断是否存在安全软件进程，判断的安全软件如下：
+先后与83.166.242.122:443和109.237.110.10:81通信，执行不同的功能
+其中木马功能与对应的操作指令如下：
+指令ID 功能 0x01 文件操作 0x28 管道命令 0x2E 清除日志 0x2A 本地提权 0x31 设置注册表内容 0x2D 更新木马服务端 0x2B 清除木马服务端 0x39 关闭连接 0x3A 修改木马上线分组名 0x47 向t1.dat文件追加内容
+2.3.3 Srvlic.dll/msTracer.dll文件
+功能：加载network目录下的servernet.exe执行
+2.3.4 servernet.exe文件分析
+功能：以EXPLORER.EXE的权限加载执行servicenet.exe。样本的pdb名为：e:\倚天剑\小马(英文版)\马端代码\GetExplorerToken\Release\GetExplorerToken.pdb。从pdb名称也可以看到，文件功能为使用Explorer的Token加载木马主体文件(servicenet.exe)执行。
+2.3.5 白利用样本分析
+涉及到的白利用程序包含三个文件：SandboxieBITS.exe、SbieDll.dll
+其中使用的白签名为“SANDBOXIE L.T.D”，具体签名内容如下：
+使用PE工具，查看SandboxieBITS.exe的导入表，在导入函数中引用了SbieDll.dll文件中的SbieDll_Hook函数。
+由于SandboxieBITS.exe在调用SbieDll.dll时，没有对SbieDll.dll进行验证，导致将恶意的SbieDll.dll放置在SandboxieBITS.exe相同目录下并运行SandboxieBITS.exe时，恶意SbieDll.dll会被自动加载，从而执行恶意代码。
+SbieDll.dll主要实现两个功能：
+1. 将servernet.exe加入计划任务，实现开机自启动的功能 2. 如果加入计划任务失败，则加载HookMessageBox.dll
+Sbiedll.dll中的字符串经过了异或编码，使用的异或key为0x05，解码字符内容的代码片段如下：
+判断是不是有360安全产品，如果没有安装360则直接加载HookMessageBox.dll
+加载HookMessageBox.dll的代码片段
+HookMessageBox.dll功能就是将MessageBoxA与MessageBoxW函数直接Hook成空函数。
+如果安装有360安全产品，则将servernet.exe加入计划任务
+加入的计划任务如下所示
+2.3.6 MemRunExe32.exe/MemRunExe64.exe
+这两个文件分别对应着32位版本与64位版本，主要功能为：绕过系统的UAC账户控制。该文件主要来源于开源代码实现。从代码上看，完全从开源代码编译而来，连程序的窗口类名与窗口名称都没有改变，甚至程序的图标都完全一样。
+从代码中可以看到程序窗口的ClassName与TitleName分别为“reirraC”和“igakA”。
+3 样本扩展
+分析完上面的样本后，我们从腾讯的安全大数据中按照样本特征，关联出一批同源样本，在这些样本中，有下面几类的同源但不同功能的样本。
+1. CopyFileToSystem32文件，主要实现将%ALLUSERSPROFILE%\NetWork目录下的msTracer.dll或者srvlic.dll(根据系统的位数决定)拷贝到%system%目录。
+2. 测试样本。包含三类测试样本，一是功能测试样本，主要用来测试加载servernet.exe功能是否正常，样本字符串中有“IsRunning”等互斥体名。第二类是测试签名，在一些样本中，看到黑客给样本打上了“亚洲诚信代码签名测试证书SHA2”的测试签名。第三类为测试CC地址的样本，在一些样本中，我们发现连接的CC地址为：192.168.2.74:8008，192.168.2.155:8099，192.168.2.155:81等测试地址。
+测试的签名如下
+4 总结建议
+从样本层面看，该木马有下面的显著特点：
+l 利用NDAY漏洞CVE-2017-11882与0Day漏洞CVE-2018-0802组合利用，在CVE-2017-11882漏洞利用失败的情况下，依然可以使用CVE-2018-0802漏洞再次触发恶意代码执行。“组合拳”的打法更大的增加利用成功率。
+l 利用word启动目录实现首次的加载执行。漏洞利用成功后，并不会直接加载恶意程序执行，而是在用户再次使用word时加载执行。这利用WORD进程自身机制，达到启动的目的对于绕过安全软件的加载检测有着极好的效果。
+对于这类木马的防范，腾讯反病毒实验室建议用户：
+1. 及时更新系统补丁，针对此次攻击的两个补丁下载地址为：
+https://portal.msrc.microsoft.com/en-US/security-guidance/advisory/CVE-2017-11882
+https://portal.msrc.microsoft.com/en-US/security-guidance/advisory/CVE-2018-0802
+2. 安装腾讯电脑管家等安全软件，并保持安全软件更新，目前腾讯电脑管家已经可以查杀此类木马。
+3. 企业客户可以使用采用腾讯企业安全的解决方案。腾讯企业安全针对APT防御方面提供了多种解决方案，腾讯御界、腾讯御点等产品均可以检测和防御本次APT攻击。
+4. 如果用户总是使用word打开rtf文件，可以通过禁用Package ActiveX控件来阻止，rtf文件在临时目录释放文件的问题，从而切断木马释放环节的攻击链路。这种方式仅可以阻断文中分析的以rtf为载体，package对象释放文件的攻击类型。具体操作为设置下面的注册表项。
+5. 通过禁用公式编辑器COM控件的方式进行缓解。
+*本文作者：腾讯电脑管家，转载请注明来自FreeBuf.COM

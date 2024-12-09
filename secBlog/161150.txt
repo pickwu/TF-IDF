@@ -1,0 +1,22 @@
+*本文中涉及到的相关漏洞已报送厂商并得到修复，本文仅限技术研究与讨论，严禁用于非法用途，否则产生的一切后果自行承担。
+近日，Android上的一个本地提权漏洞已被确认，该漏洞可通过设备上运行的Android Debug Bridge Daemon（adbd）被利用。
+如果一个安卓设备被发现正在运行于TCP端口监听的adbd，那么设备上运行的恶意程序就可以进行连接和身份验证，从而实现提权。该漏洞影响版本为Android 4.2.2到Android 8.0，编号为CVE-2017-13212。利用这种错误配置可以允许安卓应用从“u:r:untrusted_app:s0”提升为“u:r:shell:s0”。
+影响
+该adbd配置可以被设备上的恶意应用程序利用，不过恶意应用程序必须能够连接到adbd正在监听的TCP端口，这就需要应用程序在它的AndroidMainifest.xml中定义INTERNET权限。一旦应用程序通过了adbd daemon的验证，就可以使用adb shell用户的权限执行命令了。其可以安装/卸载程序，读写SD卡，截取屏幕，注入触摸事件来模拟用户输入等等。但由于默认情况下AOSP映像中adbd被配置为只能通过认证的USB连接访问，因此该漏洞的影响已显著降低。此外，安装在设备上的程序无法强制ADB通过Wifi连接，因此仅当开启“ADB over Wifi”功能时该露洞才可以被利用。
+技术细节
+只有在Android设备启用了“USB调试”并且在TCP端口上监听adbd的情况下，此漏洞才存在。 先前通过TCP攻击adb的研究已经说明攻击者和受害者需要在同一局域网内，然后通过局域网向adbd发起身份验证，不过这个漏洞已经在Android 4.2.2通过引入USB安全调试被修补，USB安全调试需要用户验证adb server的RSA公钥来授权每一个adb server连接。因此，攻击者必须在认证到adbd之前避开RSA认证。 下面显示了此RSA身份验证提示的一个示例：
+在Android 5.0之前，Android的AOSP映像会将adb二进制文件发送到/system/bin/adb下。一些研究人员已经发现可以使用这个二进制文件连接adbd并获得shell用户的权限。但是自Android 6.0，这个arm二进制文件就从AOSP中删除了。不过即便是这样，攻击者也可以远程地在目标设备上通过恶意应用打破或绕过现有的防御措施，并通过TCP利用adbd。
+为了让恶意应用程序能够利用此配置漏洞，首先其必须识别adbd正在监听的TCP端口，然后向守护进程验证其自身。一旦通过身份验证，恶意应用程序就可以作为adb shell用户在设备上执行命令。此攻击已经在Android 7.1.2上进行了测试，还会影响所有支持通过TCP连接到adbd的版本。
+使用adb命令“adb tcpip <portnumber>”来启用adbd以监听TCP端口。为了演示此漏洞，adbd被配置为监听端口5555：
+要确认adbd正在侦听TCP端口5555，目标设备的netstat输出如下所示：
+在启用了USB调试，且adbd正于TCP端口监听的情况下，恶意应用程序可以利用自带的adb二进制文件连接adbd，或者可以实现adb server协议与adbd通信。如果adb server尚未被设备授权，则会触发认证请求并提示用户验证并接受RSA公钥。
+为了避免RSA 身份认证，攻击者可以使用覆盖图部分掩盖RSA公钥提示以授权adb server。这种绕过adbd身份验证的方法也可以被用于其他用途，在Android Manifest中声明了SYSTEM_ALERT_WINDOW权限的应用程序能够在SystemUI提示上绘制覆盖图。
+为了证明这种攻击，研究人员开发了一个PoC应用程序。应用程序绑定了预编译的adb二进制文件，并使用该文件在设备上安装一个adb server实例。此PoC应用程序定义了INTERNET权限，以允许其连接到adbd正在监听的TCP端口。其还定义了SYSTEM_ALERT_WINDOW权限，以绕过身份认证。为了验证是否提权，应用程序中还添加了一个"REFRESH ID"按钮，可以显示应用程序当前的uid和用户组。以下截图显示了提权之前PoC应用程序的uid和用户组：
+上图中的“ESCALATE”按钮可进行提权，代码片段如下（如欲复制，点此查看原文）：
+点击“ESCALATE”后，与PoC应用程序捆绑的adb server会尝试连接到adbd，此时会触发SystemUI的弹出，提示用户接受adb server的RSA公钥，具体如下图所示：
+该SystemUI窗口很容易遭到劫持，为了欺骗用户，可以使用任意消息进行覆盖，如下图所示：
+如果用户点击OK，RSA密钥将被接受，应用程序启动的adb server将成功验证adbd。一旦认证，应用程序就可以通过adb server执行命令。 以下屏幕截图显示了使用提权后执行id命令的应用程序：
+一旦升级到shell用户，应用程序将被授予权限，uid变成了2000，并在/data/system/packages.xml中定义。 一些更有趣的列举如下：
+解决方法
+在显示RSA身份验证提示的SystemUI弹出窗口中添加覆盖检测功能即可解决此漏洞。 该补丁包含在2018年1月5日的Android安全公告中。 建议Android用户将设备更新。
+*参考来源：mwrinfosecurity，Covfefe编译，转载请注明来自FreeBuf,COM

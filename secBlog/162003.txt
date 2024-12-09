@@ -1,0 +1,27 @@
+作为一个个人站长，一个头特的问题是，不知不觉中会发现网站被人黑了，挂马了，在以前的文章中笔者介绍过用脚本分析访问日志，对恶意攻击进行封闭的处理方法。
+根据Webshell中的一些特征字段进行搜索，就可以搜出可能含有木马的的文件，特征字段可自行根据需要添加。
+perl -lne 'print "$ARGV $_" if/(phpspy|c99sh|milw0rm|eval\(gunerpress|eval\(base64_decoolcode|spider_bc)/ '`find -type f -name "*.php"`
+本行脚本解释：这行代码结合了find和Perl单行来实现Webshell的查杀，首先通过` find -type f -name "*.php"` 列出本目录及子目录下所有php文件，注意`反斜杠（tab上面的建），find命令参数 -type f表示类型为文件，-name "*.php"`表示文件名以php结尾（当然可以是其他类型，可以是其他特征）。find具体用法可以用find -h看说明，或者搜索引擎搜索其用法。
+接着搜索到的所有php文件都被传递个Perl单行，perl对每一个文件按行进行正则搜索，搜索phpspy，c99sh，milw0rm，eval (gunerpress，eval (base64_decoolcode，spider_bc等关键词，注意正则匹配中（为关键字需要在其前面加反斜杠\来转义。最后把匹配到的文件名和行的内容输出。
+注意输出的$ARGV表示文件列表中的每一个文件文件名，$_表示当前列表的当前项，此处表示匹配到的行内容。
+以上的脚本输出了每一个匹配的行，可以作为一个用来详细核对每一个项目。实际中会需要只输出有问题文件名，其实也简单，对上述脚本稍做修改即可。
+perl -lne '{$files{$ARGV}++ if/(phpspy|c99sh|milw0rm|eval\(gunerpress|eval\(base64_decoolcode|spider_bc)/}END{printfor keys %files} ' `find -type f -name "*.php"`
+以上脚本在脚本1的基础上用了个哈希变量 %files把匹配的每一行的文件名作为键，如果有匹配其值就+1，最后再END模块输出%files的键，即有匹配的文件名。当然也可以先把所有文件名都输出然后重定向做个uniq也可以的。
+perl -lne 'print "$ARGV" if/(phpspy|c99sh|milw0rm|eval\(gunerpress|eval\(base64_decoolcode|spider_bc)/ '`find -type f -name "*.php"`|uniq
+需要注意的是，以上查出来的文件，有可能是正常的php文件，需要你根据实际甄别处理（批量替换），不要误杀了（处理以前注意备份俄）。
+其他需要关注的是文件的修改时间和文件权限
+查找最近一天被修改的PHP文件，根据这些特征也可以查找可以的文件，这个可以做为关键字查询的前提。
+find -type f -mtime -1 -name \*.php
+修改网站的权限
+find -type f -name \*.php -exec chmod 444 {} \;
+find ./ -type d -exec chmod 555{} \;
+More知识扩展：
+1、linux下的批量查找和替换。
+find . -type f -name "*.html"|xargs grep yourstring
+2、查找并用perl One-liners替换
+perl -i -lpe 's#被替换的字符串#替换后的字符串#g' `find yourdir -type f -name "*.shtml"`
+下面这个例子就是将当前目录及所有子目录下的所有*.shtml文件中的”<iframe src=http://com-indexl.com/ask/admin.html width=0height=0></iframe>“替换为”(空)“.
+perl -i -lpe 's|<iframe src=http://com-indexl.com/ask/admin.html width=0height=0></iframe>| |g' `find . -type f -name "*.shtml"`
+perl -i -pe
+在Perl 命令中加上-e选项，后跟一行代码，那它就会像运行一个普通的Perl 脚本那样运行该代码.
+更多Perlone的详细，请fork 请star 笔者的Gihtub仓库 Perlone 中文版 https://github.com/bollwarm/perlonelinecn

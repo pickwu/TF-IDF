@@ -1,0 +1,59 @@
+*本文原创作者：ADog，属于FreeBuf原创奖励计划，未经许可禁止转载
+前言
+由于开源的JAVA WEB项目不是很多，这里找到一个没有用struct2或是spring框架的cms，希望借此cms来帮助新手敲开JAVA代码审计的大门，文章会详细写一些笔者进行审计过程走过的路，漏洞利用过程并不是多高深，大牛可以绕过，此篇权当抛砖引玉~
+0x00 cms简介
+系统基于租车业务场景而搭建的O2O服务平台，可为用户提供商务租车、接送机、旅游租车、企业租车、自驾租车、婚庆用车等自助租车服务。
+系统包含车辆库管理、门店管理、员工管理、司机管理、订单管理、活动管理、评价管理、财务管理、统计等。
+cms的下载地址：http://down.admin5.com/jsp/135501.html
+下载完讲一下安装这块，笔者的环境使用是tomcat8.5+phpmystudy，tomcat8.5部署web这个就不多说了，多百度百度自然就会了，这里的phpmystudy主要是需要使用到其中的mysql数据库，单独开启mysql数据库也行~
+这里下载完有一个使用说明，对整个安装流程介绍的还是非常详细的，这里不再赘述~
+0x01 cms功能整理
+这是网站首页，然后我们来进行一个功能上的浏览与汇总，这里可能是习惯问题，笔者在做代码审计的时候一般不会先看代码，而是根据功能点去进行一个代码的回溯，这样做会减少大量的代码审计时间，但是缺点就是一些不在显示页面的功能点所存在的漏洞可能就会挖掘不到，这里选择可以因情况而异~
+第一个功能点可能就是这个用户的注册功能，那用户的注册一般所存在的问题大多为sql注入、xss漏洞、逻辑漏洞、头像处getshell等等，顺着这样的思路去找，效率上应该会大大提高。
+第二个功能点可能就是这个主功能：租车服务。
+但是这里点击“立即预定”会跳转到用户界面，先放着，再看看其他功能点。
+但是这个cms终究是一个小型的cms，整个功能不是很多，其余功能点并未找到~
+那么我们来进行汇总！
+审计的时候首先测试用户功能点，这里首先是最常见的一些逻辑漏洞（任意密码重置这类）、SQL注入、存储型xss漏洞、后台头像getshell、订单遍历等等，之后再测试租车功能，看看有无逻辑漏洞（1元购）和订单遍历（修改ID获取其他用户的信息）等等，整个流程肯定大抵就是这样，下面进入审计实战！
+0x02 cms审计实操
+首先有一个获取手机动态码，那么这里由于是本地搭建，肯定发不出去，分析一下，这里存在的潜在风险可能就是短信炸弹，这里看了代码好像并没有加上一些检查机制，炸弹应该是存在的。
+这里说下怎么进行代码的回溯，我是采用的search，比如说这里的功能点为getTelCode，然后到eclipse中去进行全局的搜索，基本不到一分钟就能定位到代码。
+由于注册功能不完善，这里只能到后台手工添加了一个账号。
+这里的“忘记登录密码”功能被阉割了，依然无法进行测试！
+进入到个人中心，首先是功能点所引发的潜在漏洞汇总，映入眼帘的就是一个基本资料的修改：存储型xss OR SQL注入？？
+包括这里的资料修改和收货地址修改其实都存在上述两个问题，，这里选择一个进行代码跟踪和测试即可~
+订单功能，会不会出现订单的遍历，那么跟踪代码就应该看对订单的ID有无校验？
+优惠券这里没开放，最后就是积分功能，那么会不会存在使用积分付费，然后由于校验不完整，使用负积分付费从而导致积分反增不减这样的漏洞出现？
+首先测试来修改用户的“基本资料”，这里可以fuzz一下后台语句，可以修改为woaini"<>，然后看回显，，其实就可以大致猜出后台代码。
+修改完可以看到没有任何的顾虑，那么这里的存储型xss石锤！
+虽然这里是表单，但是后台管理员查看用户信息时却不需要闭合表单，因此直接插入xss语句即可~
+这里再来找一下源代码，看看到底怎么写的！
+可以看到这里都是直接request获得，并没有任何过滤，看代码的更大阴谋就是看看这里的sql语句怎么实现的，首先我们是登录用户，然后姓名、地址、电话什么的都没输错，因此进入最后一个else语句。
+flag=ss.addAddress(user.getId(), name, tel, address); //这里是用来实现sql语句的，跟进！
+-----------------------------------*分割线*----------------------------------------------------------
+public Integer addAddress(Integer userId, String name, String tel, String address) {
+Object args[] = { name, tel, address, userId };
+String sql = "insert into user_address (user_address_name,user_address_tel,user_address_content,user_address_user) values(?,?,?,?)";
+Serializable flag = jdbc.insertBackId(sql, args);
+/*采用预编译*/
+jdbc.close();
+return Integer.valueOf(flag.hashCode());
+}
+可以看到这里的sql语句采用的是预编译，因此sql注入漏洞可能不存在，但是预编译最怕的就是字符串的直接拼接，这里在sql语句里看了全部的sql语句，并不存在这样的案例，因此sql这条路可能走到底了。
+不过不用慌，继续审计！下面来重点关注这个订单功能，这是整个cms的核心所在！
+这里由于不存在数量这样的参数，因此修改数量为负数这样的情况并不存在，实际上是从session来获取用户的积分，因此积分上应该也不存在漏洞，最后只能提交订单然后抓包看参数进行代码溯源~
+这里由于都是通过id这样的参数来进行传递，那么可以在审计的过程中留意id是否判断所属用户，也就是越权的问题，最重要的可能就是这里的price参数有无检查！
+然后全局搜索，找到可疑函数，确定为添加订单的函数。
+public void addGoodsOrder(HttpServletRequest request, HttpServletResponse response)throws ServletException,IOException{ response.setContentType("text/html;charset=UTF-8"); HttpSession session = request.getSession(true); Object ordinary_user=session.getAttribute("ordinary_user"); String tem_store_id=request.getParameter("store_id");//门店id String price=request.getParameter("price"); String tem_address_id=request.getParameter("address_id"); String tem_goods_id[]=request.getParameterValues("goods_id"); String content=request.getParameter("content"); String serviceDate=request.getParameter("serviceDate"); Integer store_id=null; Integer address_id=null; Integer goods_id=null; Integer order_id=0; ……………略去部分代码…………… if(ordinary_user==null){ json="{\"tip\":\"请登录之后再操作\",\"status\":500}"; }else{ User user=(User)ordinary_user; //这里添加订单信息 //order_id=ss.addGoodsOrder(2, 1, 1, 1,serviceDate, null, content, user.getId(),null, store_id, null, price, 1, 1, address_id, 2,"3", user.getId().toString(), null, goods_id, 1,""); if(order_id>0){ if(tem_goods_id.length>0){ for(int i=0;i<tem_goods_id.length;i++){ ss.addGoodsAndOrder(Integer.parseInt(tem_goods_id[i]),order_id); } } json="{\"tip\":\"操作成功\",\"status\":200}"; }else{ json="{\"tip\":\"服务器内部错误\",\"status\":500}"; } }
+这里我们需要跟进这个ordinary_user，到这里price这个参数都没有任何过滤，是通过直接request请求获取的。
+这里就不截取代码了，可以明显看到这里的price参数依然没有进行任何校验，因此到这里我们可以最终判断，这个price参数可以进行任意修改！
+这里修改参数有两种方法，第一种就是直接抓包修改即可，因为无任何校验机制，所以可行。
+第二种则是修改页面的表单参数，这里后来查看付款源码，发现会在页面中hidden传过来的参数。
+这里通过修改页面源码里的value值也行~
+进入到个人中心，这里的订单信息获取是通过session来获取用户，因此也就无法获取他人的订单信息。
+不过这里有几个功能，第一个就是取消订单的功能，那么对订单编号是否进行了用户归属的检验呢？让代码来告诉我们！
+这里会将输入的订单与用户自身的订单号来进行一个匹配，若匹配成功才会取消订单信息，因此这里不存在越权的漏洞！
+那么前台的代码审计就告一段落，后台的代码就先不看了~
+这篇文章重点是讲解一下笔者的JAVA代码审计的思路与方法，希望抛砖引玉，能够有越来越多高质量的JAVA代码审计文章的出现~
+上述如有不当之处，敬请指正！
+*本文原创作者：ADog，属于FreeBuf原创奖励计划，未经许可禁止转载

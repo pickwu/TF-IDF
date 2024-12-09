@@ -1,0 +1,27 @@
+BlackWidow是一个基于python的web爬虫，用于从目标网站收集子域名，URL，动态参数，电子邮件地址和电话号码 。此外，该项目还包括Inject-X fuzzer来扫描动态URL的常见OWASP漏洞。
+演示视频：
+https://www.youtube.com/watch?v=mch8ht47taY
+特点：
+自动从目标网站收集所有网址
+自动从目标网站收集所有动态网址和参数
+自动从目标网站收集所有子域名
+自动从目标网站收集所有电话号码
+自动收集目标网站的所有电子邮件地址
+自动从目标网站收集所有表单网址
+自动扫描/fuzz常见的OWASP TOP漏洞
+自动将所有数据保存到排序的文本文件中
+LINUX安装：
+cp blackwidow /usr/bin/blackwidow cp injectx.py /usr/bin/injectx.py pip install -r requirements.txt
+使用：
+blackwidow -u https://target.com - 爬取target.com域爬取深度为3层 blackwidow -d target.com -l 5 - 爬取target.com域爬取深度为5层 blackwidow -d target.com -l 5 -c 'test=test' - 爬取target.com域爬取深度为5层,使用cookie 'test=test' blackwidow -d target.com -l 5 -s y - 爬取target.com域爬取深度为5层,并且fuzz所有OWASP常见漏洞参数 injectx.py https://test.com/uers.php?user=1&admin=true - fuzz所有OWASP常见漏洞GET参数
+报告示例：
+DOCKER：
+git clone https://github.com/1N3/BlackWidow.git cd BlackWidow docker build -t BlackWidow . docker run -it BlackWidow # Defaults to --help
+项目支持：
+欢迎大家通过以下方式向该项目的所有者发起捐赠，以支持项目的进一步开发和完善：
+[+] BTC 1Fav36btfmdrYpCAR65XjKHhxuJJwFyKum
+[+] ETH 0x20bB09273702eaBDFbEE9809473Fd04b969a794d
+[+] LTC LQ6mPewec3xeLBYMdRP4yzeta6b9urqs2f
+[+] XMR 4JUdGzvrMFDWrUUwY3toJATSeNwjn54LkCnKBPRzDuhzi5vSepHfUckJNxRL2gjkNrSqtCoRUrEDAgRwsQvVCjZbS3EN24xprAQ1Z5Sy5s
+[+] ZCASH t1fsizsk2cqqJAjRoUmXJSyoVa9utYucXt7
+*参考来源：GitHub，FB小编 secist 编译，转载请注明来自FreeBuf.COM

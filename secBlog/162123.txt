@@ -1,0 +1,10 @@
+根据外媒 Securitweek 报道，Istury IOT 的朱文哲（音）发现 3S-Smart Software Solutions 的 CODESYS WebVisu 产品所使用的 Web 服务器组件存在基于堆栈的缓冲区溢出漏洞，远程攻击者可以利用此漏洞触发拒绝服务（DoS），某些情况下还能在 Web 服务器上执行任意代码。
+CODESYS WebVisu 的作用是让用户在 Web 浏览器中查看可编程逻辑控制器（PLC）的人机交互界面（HMI）。CODESYS 官网消息称：施耐德电气、WAGO、日立、研华、Beck IPC、Berghof Automation、Hans Turck 和 NEXCOM（新汉） 等大约 50 家供应商的 116 台 PLC 和 HMI 都使用了 WebVisu 产品。因此，这些供应商的 ISC 系统都有可能受到漏洞影响。
+3S-Smart Software Solutions 在公告中声明：
+攻击者特意制作的 Web 服务器请求可能会造成缓冲区溢出，进而在 Web 服务器上执行任意代码，或者导致 Web 服务器崩溃，出现 DoS 的情况。
+此外，尽管目前没有证据表明这个漏洞已经有在野利用的实例，但没多少技术的攻击者也可以远程利用这个漏洞，所以厂商应当警惕。
+这个漏洞编号为 CVE-2018-5440，CVSS 评分为 9.8 分。在任何版本的 Windows（包括Windows Embedded Compact）系统上独立运行或作为 1.1.9.19 版本以上 CODESYS runtime 系统一部分而运行的 CODESYS 2.3 版本 web 服务器都受到这个漏洞影响。而目前，1.1.9.19 版本的 CODESYS runtime 系统（也是CODESYS 2.3.9.56 安装程序的一部分）已经修复了这个漏洞。
+目前，3S-Smart Software Solutions 并未针对该漏洞发布解决方案，但他们建议企业组织尽量减少网络暴露，使用防火墙和 VPN 来限制对控制器的访问。该公司还发布了一份关于工业控制应用安全的一般建议白皮书。
+这也并不是 CODESYS 组件首次出现漏洞。去年四月，工业网络安全创业公司 Cyber​​X 在 CODESYS 网络服务器上发现了一些严重漏洞。最近，SEC Consult 也报告称，CODESYS 组件中的一个漏洞导致 WAGO 等其他供应商的 PLCs 易于遭受攻击。
+Shodan 自 2014 年以来一直在爬取 2455 端口信息。这个端口是 CODESYS 协议特有的。Shodan 目前的爬取结果显示，通过该端口可以访问 5,600 多个系统，这些系统大部分在美国、德国、土耳其、中国和法国。
+*参考来源：SecurityWeek，AngelaY 编译整理，转载请注明来自 FreeBuf.COM

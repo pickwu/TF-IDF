@@ -1,0 +1,24 @@
+渗透测试有时其实并不是那么难，现在有很多工具被设计用来简化过程，让渗透测试者们更方便，更省时地达到预期目标。今天要介绍的工具是AutoSploit，顾名思义，这个工具的灵感就来源于“高效渗透”，由于该工具高度自动化（包括寻找漏洞的过程）的特点，不当使用可能会导致严重后果，所以建议使用时不要用力过猛。
+前言
+众所周知，在基本的渗透流程中，测试者需要先找到服务器（或其他目标），然后检查该目标是否有漏洞可以利用，然后成功利用漏洞。而AutoSploit结合了联网设备搜索引擎Shodan，同时使用Metasploit来进行渗透。Pseudonymous的安全研究员也即AutoSploit的作者Vector称：“基本上你只需要打开工具，然后输入一个关键字（如Apache）进行查询，然后工具就会使用Shodan API查找Shodan上描述为“Apache”的设备。之后根据所输入的关键字加载并排序Metasploit模块，一旦选择了适当的模块，就会对目标列表按顺序执行模块。”
+可以说这款工具也降低了黑客的门槛，因为黑客此前一般是没有办法一次性针对如此多的设备的。正因如此，这款工具在信息安全社区也受到了一些批评。Richard Bejtlich在Twitter上说：“这种工具真的没必要，结合Shodan让问题更突出了。现在根本没有正当理由让脚本小子也可以大范围利用公共系统，等着哭着结束吧。”不过Vector倒是很淡定。他回应说：“这种话也可以用在其他一些工具上，我个人认为信息应该是自由的，我本人也是开源的粉丝，所以何乐而不为呢？”
+工具介绍
+AutoSploit会使用Shodan API自动收集目标，前面已经提到通过关键词搜索，如Apache，IIS等。该步骤完成后，工具的“Exploit”组件就会运行一系列Metasploit模块来尝试利用目标，用哪些模块取决于该模块与搜索的关键词的匹配程度。不过作者也添加了运行所有可用模块的功能来进行“病急乱投医”式渗透。
+可用模块会尝试远程代码执行或得到TCP reverse shell或Meterpreter会话，在“Exploit”组件弹出之前可以配置IP，端口等。从OPSEC角度来看，使用本地主机接收连接并不是好主意，你可以考虑使用VPS。
+工具使用
+首先克隆repo.
+git clone https://github.com/NullArray/AutoSploit.git
+然后从终端打开autosploit.py即可，你可以参考后面的介绍来选择序号。
+可用模块
+在该工具中可用的模块都是可以远程执行代码的，你可以在modules.txt里查看这些模块。如果你想要添加更多模块，请通过以下方式添加：
+use exploit/linux/http/netgear_wnr2000_rce;exploit -j;
+另起一行将其添加到modules.txt中即可。
+依赖
+AutoSploit依赖于以下Python2.7模块。
+shodan blessings
+如果你发现没有安装这些，可以使用pip：
+pip install shodan pip install blessings
+由于AutoSploit调用了Metasploit Framework，所以你同时需要安装它。点击这里从Rapid7获取。
+注意事项
+虽然这不完全是一个Beta版本，但也算是个早期版本。在未来该工具可能会发生一些变化，如果你碰巧遇到bug或者也希望改善这款工具，那么点击这里前往提交。另外，请勿将其用于非法用途！
+参考来源：github/motherboard，FB小编Covfefe编译，转载请注明来自FreeBuf.COM

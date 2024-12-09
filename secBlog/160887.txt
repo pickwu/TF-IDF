@@ -1,0 +1,37 @@
+*本文原创作者：ghostsnow，本文属FreeBuf原创奖励计划，未经许可禁止转载
+大家好，继上次介绍过无线安全测试工具Wifipineapple（国产版）后，很多朋友后台私信、邮件我咨询设备在哪买的以及如何深入折腾的问题。该设备在某宝中只要搜索全名，第一个店就是啦。其老板是一位专门搞硬件方面的高手，支持定制化硬件开发等，为避免广告嫌疑，这里不多说。
+有兴趣的朋友自己去找一下，或者可以私信我。
+（国产版Packet Squirrel）
+Packet Squirrel(松鼠)是由国外Hak5推出的一款用来截获数据包实施攻击的小型硬件设备（约为一张银行卡大小），默认具有远程访问、数据包监听、DNS欺骗等功能。
+关于国产版Packet Squirrel硬件规格：
+高通SOC、64MB DDR2 RAM、16MB Flash
+外部接口：
+2个RJ45接口（Ethernet LAN／WAN） 1个USB2.0接口（用来插入U盘做存储） 1个RESET按钮（可用来停止tcpdump） 1个USB Power（USB电源接口，5V 150mAh） 1个RGB LED指示灯
+（USB2.0接口支持NTFS、EXT4格式的U盘，并不支持FAT32，亲测完美支持NTFS格式的三星64GB U盘可正常使用）
+如何使用：
+首次使用Packet Squirrel时，将U 盘插在 USB 口上，给Packet Squirrel通电。注意看灯的变化，首先绿灯会闪，系统启动后，蓝灯会慢闪。网线连接完成后,先测试一下网络连接。cmd 下 ping 172.16.32.1，看是否能 ping 通。如果 ping通，说明网络连接正常，如果没有 ping 通，就需要检查网络连接。
+电脑的有线网络是否设置成了静态 ip，如果是，需要改成自动获取 ip，松鼠会自动为电脑分配 ip。Windows 下 ssh 连接需要 ssh 客户端,常见的有 putty、xshell等。另外Packet Squirrel只提供了命令行界面，并没有web图形化界面。
+Linux 系统可直接使用命令：ssh root@172.16.32.1， username：root password：hak5squirrel
+在Packet Squirrel工作期间，通过一个LED指示灯来表示当前设备工作状态：
+国产版payloads的切换是通过读取U盘中switch文件来取代国外Hak5的Switch硬件开关（可能出于节约成本及开发难度等原因）。
+关于Payloads：
+设备出厂时内部预设了三个payloads（tcpdump、dns spoof、openVPN），payloads以插件形式支持自定义开发或通过官方推出的payload进行功能扩展。
+Payloads的启用方式采取通过读取U盘中switch文件内容来表明（即1、2、3...）
+一、tcpdump
+在首次SSH登陆后，默认为Arming Mode模式，可通过：echo 1 > /mnt/switch 来控制payloads的启用，也可直接编辑U盘中switch文件内容，例如“1”为启用tcpdump功能、“2”为启用DNS Spoof功能等。
+当U盘中switch文件内容为“1”时，将U盘插到Packet Squirrel上，连通电源待系统启动后，默认将所有数据包通过tcpdump保存到U盘根目录loot文件夹下。需要注意的是当准备结束抓包时，需要手动按下RESET键，LED指示灯红色闪烁表示文件写入完成。
+通过wireshark可分析抓取在U盘中保存的数据包文件：
+二、DNS Spoof
+通过编辑U盘中switch文件的内容为“2”，表示启用DNS Spoof功能，此时Packet Squirrel会拦截网络中设备的DNS请求，并且返回预设的DNS信息，默认状态下会返回Packet Squirrel的IP地址给目标设备（Packet Squirrel内置了DNSmasq模块）。通过编辑/payloads/switch2/spoofhost文件内容，实现DNS重定向。
+首先，登录到Packet Squirrel中编辑/payloads/switch2/spoofhost文件。
+格式为“address=/域名（目标域名）/IP（重定向至IP）”
+编辑好后，将U盘中switch文件内容设置为2，代表启用switch2的payload功能，经过断电重启后，我们先在cmd下“ping www.freebuf.com”，看到
+IP已经变为我们预先设置的重定向地址了（这里ping不通的原因是我重定向到这个IP的VPS本身已经禁ping）。
+我们再通过nslookup看一下域名解析情况：
+我们预先在重定向IP的VPS上跑一个nginx服务，默认为一个静态页面内容为“hello world”。
+现在通过Packet Squirrel访问www.freebuf.com的结果就是我们重定向IP上的nginx服务。
+可能一个简单的hello world显示不出什么威力，我们我们可以在重定向IP的VPS上仿制一个目标站点。
+例如我们做成下面这样呢？
+(这里仅出于演示目的，前面设置好的域名劫持没有改，实际应该改成类似于“mail.sina.com.cn”)
+关于Packet Squirrel的内容就先给大家介绍到这里，还有OpenVPN等其他内容请等待更新。
+*本文原创作者：ghostsnow，本文属FreeBuf原创奖励计划，未经许可禁止转载

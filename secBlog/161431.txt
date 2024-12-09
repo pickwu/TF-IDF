@@ -1,0 +1,31 @@
+今天给大家介绍的是一款名叫Joy的工具，该工具能够捕捉并分析网络流数据以及系统内部流数据，研究人员可以利用这些数据以及分析结果来进行网络研究、取证以及安全监控等活动。
+工具下载
+下载地址：【GitHub传送门】
+工具介绍
+Joy是一款基于BSD许可证协议下的软件数据包（基于libpcap），它可以从实时网络流量中提取数据或直接捕捉到数据包文件（pcap文件）。Joy使用的是一种指向数据流的模型，其工作机制跟IPFIX或Netflow有些类似，在捕捉到数据之后，Joy将以JSON格式呈现出这些数据。除此之外，Joy还包含了分析工具，用户可以直接使用这些分析工具来对数据文件进行分析。值得一提的是，Joy可以用来进行大规模数据提取，尤其是那些跟网络安全以及恶意威胁相关的数据。
+之所以这里要使用JSON，主要是为了方便将捕捉到的数据直接输入到数据分析工具之中以进行深入分析。虽然JSON输出文件稍微有些冗长，但是文件大小还是比较小的，而且可压缩性也很强。
+经过配置后，Joy还可以获取系统内部流数据，即网络流内部所发生的事件信息以及各种数据，其中包括：
+1. IP数据包的长度以及到达时间； 2. 数据流中特定数据的经验概率分布情况，以及相应的熵； 3. TLS记录的长度以及到达时间； 4. 其他非加密的TLS数据，例如提供的加密套件列表、选择的加密套件、clientKeyExchange域的长度、以及服务器证书字符串等等； 5. DNS域名、地址以及TTLs； 6. HTTP头元素以及HTTP body的前八个字节； 7. 跟数据流有关的进程名称以及pcap文件；
+适用范围
+Joy不仅适用于信息安全研究和取证，而且还可以对小型网络进行监控以检测安全漏洞、网络威胁、以及未授权的非法操作。研究人员、网络管理员、渗透测试人员和安全响应团队都可以利用Joy提供的数据来监控和保护自家网络的安全。当然了，对于攻击者来说，Joy同样可以帮助他们实现自己的目的，例如扫描目标网络中潜在的安全漏洞，或者窃取目标网络流数据。因此，我们建议大家在没有得到许可的情况下不要将该工具应用到其他个人或组织网络中。
+版本介绍
+目前发布的Joy仍是测试版本，我们希望有能力的同学可以在工具的使用过程中给我们提交反馈意见或更新功能代码【GitHub】。在接下来的一两周时间里，我们将会发布Joy 2.0版本，在新版本中我们对JSON模式进行了大幅度修改，并添加了很多新的功能，敬请期待。
+使用Tip
+Joy可以在Linux（Debian, Ubuntu, CentOS和Raspbian）、macOS以及Windows平台上正常运行。该工具使用了gcc编译，并且能够适用于多种开发环境。
+工具配置及依赖组件
+下载Joy源代码：
+git clone https://github.com/cisco/joy.git cd joy
+Linux（Ubuntu）
+sudo apt-get install build-essential libssl-dev libpcap-dev libcurl4-openssl-dev
+Windows
+嵌入到windows/子目录中。
+macOS
+在构建Joy之前，你需要安装OpenSSL开发组件，你可以运行下列命令来查看当前的OpenSSL版本信息：
+openssl version
+从openssl.org下载符合条件的文件包，并提取出来。
+MacOS Sierra native OpenSSL 0.9.8zh：【下载地址】
+curl -o openssl-0.9.8zh.tar.gz https://www.openssl.org/source/old/0.9.x/openssl-0.9.8zh.tar.gz
+下载好OpenSSL tarball之后，你还需要提取并运行配置脚本：
+tar zxf openssl-0.9.8zh.tar.gz cd openssl-0.9.8zh ./config
+详细的工具配置文档请参考【构建指引】。
+* 参考来源：joy，FB小编Alpha_h4ck编译，转载请注明来自FreeBuf.COM

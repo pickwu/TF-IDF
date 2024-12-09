@@ -1,0 +1,26 @@
+对于一个病毒来说，"Anti-AntiVirus"是一个很重要的指标，如果不能做到很好的免杀效果，那么这个病毒存活的时间就必然不会很长。而对于杀毒软件来说，如何正确的识别并解析出进行过各种伪装的病毒，也一直是一个难题。
+刚拿到这样样本的时候，查了一下文件类型，是个PNG格式，还以为是一个传统的图片马，里边被嵌入了PHP或者ASP的一句话木马，后来发现并不是，这是一个zip压缩包，只是被病毒作者加上一个0x78byte大小的PNG文件头，这种技术看似很土，很简单，但其实可以起到很好的免杀效果，因为它会导致杀毒引擎对文件格式解析时出错，使得真正的病毒体不被检测到。
+我们切去PNG文件头或者使用binwalk等工具可以获得一个zip压缩包。使用压缩软件解压之后其目录结构如下：
+下图是原样本与切去PNG头部之后的样本在VirusTotal上面的检出率：
+原样本：(SHA256:e098487b1e76025973a5cb2ca194715c190e8d42ad07076752da309610cd79e3)
+切去PNG头部之后：(SHA256:c1bac0053df5b64bf886f58267352a29c9d0c08e32a1b0ce037fbbb698f6bf74)
+PP:下面对解压后的各文件进行分析
+(1)Project description.lnk
+一个跟文件夹图标一样的快捷方式，指向Project_description文件夹，并且在"目标"位置确嵌入了一段脚本，只要双击这个链接，就会启动病毒thumbs.db并隐藏文件夹Project_description，而且会删除这个快捷方式，使得这个病毒问题难以追查。目标初代码如下：
+C:\Windows\System32\cmd.exe /c start Project_description/thumbs.db & cmd /c start Project_description & cmd /c del *.lnk & cmd /c ATTRIB -H Project_description
+(2)thumbs.db
+这是一个dropper，会释放一个动态链接库，并启动它，我们称这个模块为病毒的释放模块，释放步骤如下：
+step1.创建互斥量"win32_event_x86",检测tcpview，OllyDbg等安全工具，如果检测到就好退出进程。
+step2.在系统temp目录下释放病毒动态链接库nx00615.ttf。
+step3.解密启动病毒动态库时的命令行和参数。并创建一个进程启动动态库。至此，病毒释放过程结束。
+(3)nx00615.ttf
+这一部分是病毒功能模块，Windows defender security intelligence给出的分析如下：
+"This trojan connects to an attacker-controlled forum, blog, or profile webpage on legitimate websites in order to retrieve embedded information about command-and-control (C&C) to be used in the next stage. The C&C information is in encoded form. This behavior makes this threat a multi-stage remote access trojan. The technique, sometimes referred to as "dead drop resolver technique", is used by malware authors to make the initial network activity look like legitimate network traffic. This technique is also used to hide the actual C&C address in a webpage controlled by the attacker. This means that the attacker can update the C&C address anytime. It then attempts to establish connection with the C&C node."
+以下是我对这部分的分析：
+step1.病毒启动后会先检测thumbs.db创建的互斥量，并且通过IsDebuggerPresent()函数判断是否处于调试环境，当检测到异常时，就会退出病毒进程。
+step2.病毒会注册一个窗口类"TestWClass"作为与其他组件进行通信的机制。lpfnWndProc指向病毒体virus_body，virus_body会处理窗体传入的windows消息，并将其发送给C&C服务器。
+step2.设置自启动项。可以看到用了反转字符串的方式来起到一个免杀的效果，因为自启动一般是每个杀软都比较重视的地方。
+最后附上一张火绒剑的行为监控图，作为收尾：
+小结
+其实本文中病毒使用到的几种免杀技术都不是很新，很高深的，但却很实用，在免杀效果方面出人意料的好，我不禁想问在座的各位，是病毒太牛逼，还是杀软太垃圾？
+*本文作者：0zapt4toM，转载请注明来自FreeBuf.COM

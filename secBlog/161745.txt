@@ -1,0 +1,32 @@
+在这篇文章中，我们会介绍如何通过emond在macOS上实现持久化访问。根据苹果公司的说法，事件监视进程（emond）会“接受来自各种服务的事件，通过一个简单的规则引擎运行并采取相应操作（action），这些操作可以是执行命令，发送电子邮件或者短消息，推送通知等”。听起来挺有意思，实际上Emond自OS X 10.7就已经有了，所以本文所讨论的细节适用于最新版本的macOS（10.13.2）。
+具体步骤
+emond是一个普通的守护进程，每次系统启动时都会由launchd执行，其对于launchd的配置文件和其他系统守护进程在同一个地方：/System/Library/LaunchDaemons/com.apple.emond.plist，该配置文件决定了何时执行emond，并带有LaunchDaemons经常使用的任何期望的选项。 emond.plist配置文件位于/etc/emond.d/目录中。该文件定义了规则路径，UID/GID过滤，错误日志和事件日志路径以及一些其他选项。
+图1：emond.plist中的内容
+规则文件被存储在/etc/emond.d/rules/目录中，且应该为plist格式。在该目录下已经有一个示例规则文件了（SampleRules.plist），该示例定义了名称，类型和事件触发后的操作。事件有几种类型（startup, periodic, auth.success, auth.failure等），在这次的演示中我们只使用startup。一旦被emond加载，startup事件类型就会触发规则；periodic事件类型只有在定义了“startTime”之后才会触发；同样的，auth.success事件类型只会在用户成功验证后触发；auth.failure会在验证失败事件上触发，还有其他的一些事件类型就不一一列举。action定义了事件发生后emond将要做什么，需要注意的是，我们可以在规则中定义多个action。只有少数action可以被用于恶意目的（如运行命令和发送电子邮件），你可能已经猜到了，运行命令可以允许你执行任意系统命令，对于发送电子邮件，目的不言自明。对于本演示，我们将重点介绍执行命令。
+现在我们可以演示如何利用事件监视进程来建立持久化访问。 emond的机制与其他任何LaunchDaemon相似。 Launchd负责在启动过程中执行所有LaunchDaemons和LaunchAgent。 由于emond是在该过程中启动的，所以当使用执行命令时，应该注意一下你正在执行什么命令，以及在哪一个过程应该执行哪个命令。 这一点非常重要，因为事件发生然后触发action（执行命令）的时候电脑很可能没联网，所以任何需要网络访问的命令都没法用。接下来，我们会展示如何创建规则文件。
+要创建规则文件，我们可以使用已经存在的SampleRule.plist文件，并根据需要对其进行修改。
+图二：samplerules.plist
+该示例包含我们的规则文件所需的一些值。 具体而言，我们可以删除“allowPartialCriterionMatch”这个key并根据需要更改名称。 所定义的action需要针对执行命令的action类型进行修改。 一个完整的例子如下所示：
+图三：实现持久化访问示例
+需要注意的是，第一个操作是睡眠10秒，这样是为了等待网络连接。至于是10秒还是20秒，因人而异，请自行斟酌。第二个就不用介绍了，建立会话。不过这样持久性机制还有一个奇怪之处：launchd会在启动过程中执行emond，但是在QueueDirectories路径中存在一个文件之前，服务将保持不活动状态。 这在LaunchDaemon配置文件/System/Library/LaunchDaemons/com.apple.emond.plist中指定。 放在QueueDirectories路径中的文件不需要遵循特定的命名方案，也可以为空。
+图四：com.apple.emond.plist中的QueueDirectories
+把plist文件放进rules目录后，emond错误日志会显示服务已启动，emond也不会提示说找不到任何规则。
+图五：错误日志
+一旦服务开始，如果你已经定义了一个startup事件类型，那么事件将会立即发生并触发任何action。 现在，我们应该可以看到Empire会话建立了。
+图六：请求
+图七:会话建立
+Emond并不是一个OSX事件监视的新机制，但它可以作为一种攻击新用例。 回想起来，在我撰写本文时，所阅读过的任何macOS威胁报告中都没有提及过这样的方法。但也有可能已经在野使用，或者其本身人畜无害。
+如何检测
+这种持久化访问的方法需要对文件系统进行一些改变， 幸运的是，macOS提供了fsevents API来捕获文件系统事件。实质上fsevents会记录每个卷中的所有事件。 最初，事件存储在内存中，一旦内存缓冲区已满或即将卸载卷，事件会被写入磁盘。FSEvent日志文件以gzip压缩格式存储，并遵循十六进制命名方案。 所有日志文件都存储在一个隐藏的目录中：/fseventsd/。访问此目录需要root权限。 fsevents的一个注意事项是时间戳不包含在日志文件中。 通过访问API，我们可以使用Python或Objective-C筛选所有接收到的事件，并在rules目录或QueueDirectory中发生文件创建/修改事件时进行警报。
+点击这里查看开源fsevents项目
+你可以注意到fswatch可以在事件触发时提供时间戳。 此外，你可以将其输出到任何其他命令行，以便进一步处理。 你也可以指定多个目录进行监控。 下图显示了一旦我们在rules目录中放置了一个plist文件，fswatch将以一个JSON字符串显示事件详细信息。
+图九：事件发生时的输出
+当然这只是一个最基本的例子，可能不适用于部署在大型MacOS环境中。对于后者，更适用的选择是osquery。Osquery提供文件完整性监视，它使用fsevents api将文件系统更改记录到特定目录的文件。 更多信息可以点击这里。安装osquery之后，你需要提供一个配置文件来监视文件系统事件。 下图是一个简单的示例来监视rules目录中的所有文件系统事件。 所有事件将以60秒为间隔进行查询。
+为了简洁起见，我们从命令行启动osquery守护进程，并使用-config_path标志指定配置文件。 一旦我们创建了plist文件，并将其放置在rules目录中，60秒后，在osquery日志文件中就应该有一个条目。 结果默认记录到/var/log/osquery/osqueryd.results.log。 输出将包括路径，主机标识符，时间戳，文件事件的类型以及其他。
+以上检测方法并不能完全遏制对emond的恶意利用，但是足以作为一个很好的起点。
+另外如果你对IOS安全研究感兴趣，强烈推荐一本书：MacOS and iOS Internals, Volume I: User Mode
+Reference
+Levin, J. (2017) OS Internals, Volume I: User Space. North Castle, NY: Technologeeks.com
+Reynolds, J. (2016, April). What is emond?. Retrieved from: http://www.magnusviri.com/Mac/what-is-emond.html
+最初发布于www.xorrior.com
+参考来源：specterops，FB小编Covfefe编译，转载请注明来自FreeBuf.COM

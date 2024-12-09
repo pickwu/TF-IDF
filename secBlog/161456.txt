@@ -1,0 +1,28 @@
+近日，Bitdefender安全研究人员通过蜜罐系统捕获了一种物联网（IoT）僵尸网络，该僵尸网络利用自定义P2P技术进行传播控制，由于其恶意行为相对隐蔽，被Bitdefender命名为'捉迷藏'HNS（Hide ‘N Seek）僵尸网络。目前，据威胁情报统计，全球已有32000多台IoT设备受到HNS僵尸程序感染控制。
+传播感染态势
+HNS僵尸程序最早于1月10日被发现，之后传播势头减弱，但却于1月20日以增强态势重新出现。以下为其传播趋势：
+2018年1月24日 – 14.00 GMT+3：HNS僵尸网络跨区域感染超过14,000 台IoT设备，并有从亚洲向美国境内传播感染的态势； 2018年1月24日 – 17.30 GMT+3：HNS僵尸网络跨区域感染超过18,000 台IoT设备； 2018年1月24日 – 20.00 GMT+3：HNS僵尸网络跨区域感染超过20,000 台IoT设备； 2018年1月25日 – 11.50 GMT+3：HNS僵尸网络感染超过24,000 台IoT设备；
+2018年1月26日 – 14.06 GMT+3：HNS僵尸网络感染控制了超过32,312台IoT设备，且其貌似进行着大规模的设计完善，一些新型样本中被加入了不同的功能架构，并最终形成有效攻击载荷（Payload），如以下样本：
+0c90ea12275cadd96a67f8ee07e2fa04af91e51e: ELF 32-bit LSB executable, Intel 80386, version 1 (SYSV), statically linked, stripped 19f54473a721105982281b7b87503e3d60585042: ELF 32-bit MSB executable, MIPS, MIPS-I version 1 (SYSV), statically linked, stripped 2b36305f7dcb63b4f55bffab0f0dbbaaabf83b28: ELF 32-bit MSB executable, Motorola 68020 – invalid byte order, version 1 (SYSV), statically linked, stripped 4dcca2094b55b6576c1b27597e4b10db9b6bfa53: ELF 32-bit MSB executable, SPARC version 1 (SYSV), statically linked, stripped 6e5a74d0e39f7e17effb54270c41910b99f7e873: ELF 32-bit LSB executable, MIPS, MIPS-I version 1 (SYSV), statically linked, stripped 788f52df7aeae720c90fe21eeb946409dcd2fed7: ELF 32-bit LSB executable, ARM, version 1, statically linked, stripped a82c3cd904315131845d56101b7af8cc2b1eee7b: ELF 32-bit LSB executable, ARM, version 1, statically linked, stripped b7ccfbbcb3a29de4ae507415ddca93029d90923d: ELF 32-bit MSB executable, PowerPC or cisco 4500, version 1 (SYSV), statically linked, stripped ed24e8f5eb277e8b58fb39c15ece3d60af418459: ELF 32-bit LSB executable, Renesas SH, version 1 (SYSV), statically linked, stripped
+影响危害
+HNS僵尸网络的通信控制机制相对复杂和分散化，它使用了多种防篡改方式来避免第三方对其进行劫持或毒化，其僵尸程序可以针对存在同种漏洞（CVE-2016-10401）的网络设备自动执行web渗透攻击，另外其还具备数据窃取、代码执行和设备干扰等多种内置命令。
+运行机制
+HNS僵尸程序的传播类似于蠕虫程序，它会首先随机生成一个目标感染IP段列表，之后会向这些目标设备发起一个原始的SYN连接请求，一旦目标主机以端口23、2323、80、8080进行响应后，该僵尸程序就筛选出这些目标对象，并在这些目标设备的banner信息中寻找特定字段“buildroot login:”，如果有所匹配，则利用内置的字典组合和硬编码信息进行暴力登录尝试。
+登录成功与受害设备建立连接之后，僵尸程序样本会通过一种“状态机”模式来识别受害设备并选择最佳感染方式。例如，如果受害设备与僵尸程序处于同一LAN中，则僵尸程序就会配置TFTP服务让其允许受害设备可以下载运行恶意程序；如果受害设备处于外部互联网中，则僵尸程序会远程尝试向受害设备下载运行特定的恶意程序。HNS僵尸程序具备的这些渗透功能都是内置在其内存中且具有数字签名防篡改特性，这些功能特性可以被远程更新，也能在受害主机设备中传播共享。
+HNS僵尸程序最早于1月10日针对一家韩国网络摄像机设备进行攻击时，被Bitdefender蜜罐系统捕获。这些受害设备貌似在HNS僵尸网络的传播中扮演着重要角色，因为在该份恶意样本的硬编码共12个受感染设备信息中，有10个设备隶属Focus H&S公司所有。而在1月20日捕获的样本中，HNS僵尸程序却没有继续使用这些硬编码IP信息。
+与其它的IoT僵尸程序类似，HNS僵尸程序也不能实现持久驻留，且设备重启后也能恢复到未感染状态。HNS也算是继臭名昭著的Hajime之后又一个具备P2P传播机制的IoT僵尸网络，Hajime僵尸网络利用了基于BitTorrent协议的分散P2P通信体系，而HNS僵尸网络却具备了自定义的P2P通信机制。
+UDP 通信机制
+HNS僵尸程序会在受害设备中随机打开一个端口，并为该端口添加入站的防火墙规则，然后在该端口上监听以下特殊形式的命令。我们一开始对HNS僵尸程序样本进行分析时发现，其中竟然包含了一种椭圆曲线密码来对控制命令进行验证，攻击者通过这些控制命令可以执行对控制程序的内存配置更新，以及防止其它恶意程序的渗透毒化。
+HNS僵尸程序在运行时包含了以下一些控制参数：
+k’ + [端口号] – 启动时终止所有在该端口上运行的进程； ‘l’ + [端口号] – 启动后对该端口实施监听； ‘s’ + 路径 – 从该路径中读取文件或把它们加载进内存空间，然后通过‘m’, ‘y’ 和 ‘Y’命令来提取这些数据。此过程中创建的文件都具备sha256校验机制，而且会导致恶意二进制文件存留在受害者系统中； a’ + [IP:PORT] – 把IP:PORT关系关联映射到内部存储的IP:PORT表中； ‘e’ + IP:PORT – 添加一个新的感染目标，否则就随机生成一个感染列表。
+HNS僵尸程序控制命令
+为了解HNS僵尸程序的具体功能，我们分析检查了其它受感染网络对等端（peer）收到的一些命令信息，以下就是其中一些支持命令和相关说明：
+'i’ + u32(config_size) – 如果收到的config_size大于当前配置，则会向对等端返回一个确认信息，最终对等端会被设置为通信端以获取更多配置信息，如果dht_size太小, 则会向对等端返回一个‘I’消息以请求较多的配置信息； ‘I’ + u32(config_size) – 接收到的config_size应该大于当前配置（在 ‘i’ 消息查询后），向对等端返回一个确认信息，最终对等端会被设置为通信端以获取更多配置信息； ‘m’ + u8[32](hash) + u32(ip) + u16(port) + u16(seq) + u8(hops) + u8(unk) – 该条信息尝试找出基于给定哈希值的数据，它首先会执行本地检查，如果哈希已知则数据可用，此时，它会向ip:port发送一条‘Y’消息；如果本地数据不可用，则僵尸程序会向所有已知网络对等端广播当前的‘m’消息（跳数减少，且少于5跳）； ‘^’ + u8(flags) + u16(port) + u32(ip) – 以ip:port形式产生一个新的网络对等端，该对等端会被加入到已知的端点列表中（它也能替换其它对等端）； '~’ – 请求一个新的对等端点，在收到该请求后，僵尸程序会从已知端点列表中随机选择一个端点（peer），并通过‘^’消息响应； ‘Y’ + u16(chunk_index) + u16(seq) + u8[](data) – 这是数据接收到的消息，数据以最多0x100字节块的形式被复制（当前偏移量为chunk_index * 0x100），chunk_index也对应于当前通信缓冲区大小；
+如果恶意样本被下载后，可能产生多种后果：
+如果数据是新配置的，它会通过上述提到的椭圆曲线数字签名算法(ECDSA)进行验证，验证成功则会替换掉当前配置；在更新机制中，下载文件有可能被丢弃或执行。
+‘y’ + u8[32](hash) + u16(chunk_index) + u16(seq) – 该命令尝试向chunk_index中读取相应的以‘Y’消息发送的缓存数据，如果出于其它原因，数据本地不可用，则会向广播一条‘m’消息； ‘O’ + u8(checksum) – 这是一条确认消息，在收到的消息中进行checksum校验； ‘i’ , ‘I’ (first version)’h’, ‘H’ (second version) – 更新配置命令； ‘m’,’Y’,’y’ 数据渗漏机制，其中“m”负责一条哈希值的通信确认，而“Y”和“y”则负责数据转移； “z” 扫描组件，在字典暴力测试中，对探测发现到的对等端发送有效的登录凭据信息进行验证， “O” 确认“z”消息发送的凭据信息已经被有效接收； “^” 在已知对等端点列表中加入一个新的端点； “~” 以一个对等端IP作为控制端IP查询进行响应。
+总结
+虽然IoT僵尸网络已经存在多年，且大多用于发动DDoS攻击，但在对HNS僵尸网络的调查中，我们发现了其高度的复杂性和新颖性，比如其隐蔽的信息窃取方式，有可能被用于间谍活动或网络勒索。还值得注意的是，HNS僵尸网络一直在不断地自我完善和继续传播感染态势之中。
+已知样本HASH
+efcd7a5fe59ca8223cd282bfe501a2f92b18312c 05674f779ebf9dc6b0176d40ff198e94f0b21ff9
+*参考来源：Bitdefender，freebuf小编clouds编译，转载请注明来自FreeBuf.COM

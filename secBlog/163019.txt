@@ -1,0 +1,10 @@
+近日，Intel 为 Skylake、Kaby Lake、Coffee Lake 及相关处理器发布了稳定版本的Spectre 补丁微代码更新。
+此次补丁，依旧针对 CVE-2017-5717 的 Spectre 漏洞。在2018年初就备受关注的 Spectre 攻击，可允许用户模式的应用获取到系统进程信息。简单的漏洞利用即如，攻击者可通过恶意 JavaScript 程序从浏览器内存中获取用户的登录 cookie 进行攻击。Spectre 攻击打破了不同应用程序之间的隔离，用户程序也可以通过kernel获取信息。
+此次 Intel 公开的补丁则是微代码层面的全新稳定版本，修复了之前多个平台上的用户反馈出现的频繁重启问题。
+几周之前，Intel发布了针对 Skylake 处理器的微代码更新，而现在Kaby Lake、Coffee lake 和其他CPU也都可进行同样的补丁更新。Intel 芯片产品中6-8代核心处理器，X系列处理器以及Xeon Scalable和Xeon D芯片均可进行更新。
+支持列表
+目前 Intel 发布的固件更新支持以下芯片产品：
+Anniedale/Moorefield, Apollo Lake, Avoton/Rangeley, Broxton, Cherry View, Coffee Lake, Cougar Mountain, Denverton, Gemini Lake, Kaby Lake, Knights Landing, Knights Mill, Skylake, SoFIA, Tangier, Valleyview/Bay Trail，XGold
+除此之外，Intel 针对 Broadwell，Gladden, Haswell, some Ivy Bridge, Sandy Bridge,以及Skylake Xeon E3 处理器的beta修复版本也已经提供给了 OEM 进行最终的确认。
+其他处理器版本的修复仍在 pre-beta 或计划阶段。
+*参考来源：securityaffairs，本文作者Elaine，转载请注明FreeBuf.COM

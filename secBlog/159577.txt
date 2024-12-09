@@ -1,0 +1,55 @@
+一．背景
+对于2018年1月3日Intel CPU被Google Project Zero团队爆出的漏洞Spectre和Meltdown，影响Intel、AMD以及ARM等多个厂商的产品，受影响的操作系统平台有Windows、Linux、Android、IOS以及Mac OS等。任子行SurfSRC针对漏洞整理了漏洞检测工具以及针对多个平台的缓解措施方案。
+二．影响范围
+Meltdown和Spectre漏洞影响范围非常广，目前已公开的漏洞利用代码经过测试有效，完全可以被攻击者利用，影响范围：
+l 处理器芯片：Intel为主、ARM、AMD，对其他处理器同样可能存在相关风险； l 操作系统：Windows、Linux、macOS、Android； l 云服务提供商：亚马逊、微软、谷歌、腾讯云、阿里云等； l 各种私有云基础设施。 l 桌面用户可能遭遇到结合该机理组合攻击或者通过浏览器泄露cookies、网站密码等信息。
+三．防御建议
+meltdown和spectre均是本地执行的漏洞，攻击者想利用该漏洞首先需要有在目标机器上具备代码执行的权限，所以只要用户不引入不可信的代码，那么该漏洞不会影响到用户。但是考虑到普通用户安全意识不强，无法假设不引入不可信的代码，所以请根据自身受影响情况情况配合相关厂商进行修复。
+3.1个人用户与个人维护服务器
+考虑到浏览器作为一个常见的攻击面，恶意代码通过浏览器进入到用户个人机器可能性较高，所以对于对于该漏洞针对个人的主要防御还是在在浏览器层面上。参考一下不同浏览器的防御方式：
+（1）360浏览器防御方法
+http://down.360safe.com/cpuleak_scan.exe
+可安装360的一键浏览器升级安装免疫工具。
+（2）Chrome浏览器防御方法
+开启Chrome的"站点隔离"的可选功能，启用站点隔离后，可以被侧信道攻击的数据减少，因为Chrome在单独的进程中为每个打开的网站呈现内容。Chrome浏览器会在1月下旬的更新中提供对漏洞的修复。
+（3）Edge/IE浏览器防御方法
+升级Edge/IE浏览器补丁程序
+（4）Firefox浏览器防御方法
+升级浏览器至Firefox 57.0.4版本：
+https://www.mozilla.org/en-US/security/advisories/mfsa2018-01/
+3.1.1 Windows
+微软已经对于该漏洞已推送更新，请先更新系统（以windows 10为例）：
+接着按以下步骤检查Windows系统是否已成功打补丁：
+以管理员权限打开powershell，分别执行一下powershell命令（如下图）：
+Set-ExecutionPolicy Bypass Install-Module SpeculationControl Get-SpeculationControlSettings
+若显示输入如上，那么说明系统已打补丁，其他显示的红色部分说明还需要其他硬件厂商的中间件更新补丁，可关注所使用的硬件产品关注对应的安全通告；若是出现很多的红色提示，那么说明系统没有修复成功。
+3.1.2 Linux
+linux 系统过增加 KPTI 防护到达隔离用户空间和内核空间，阻止攻击者在普通用户权限读取内核内存。
+https://lwn.net/Articles/738975/
+Fedora 防御 Meltdown 漏洞利用的方法:
+https://fedoramagazine.org/protect-fedora-system-meltdown/
+Centos的更新通告：
+https://lists.centos.org/pipermail/centos-announce/2018-January/022696.html
+Redhat的更新通告：https://access.redhat.com/security/vulnerabilities/speculativeexecution
+ubuntu 预计1.9 号能发布patch。
+https://wiki.ubuntu.com/SecurityTeam/KnowledgeBase/SpectreAndMeltdown
+linux - debian
+https://security-tracker.debian.org/tracker/source-package/linux
+打完补丁，检查Linux服务器是否已打补丁成功，检查程序地址：
+https://github.com/paboldin/meltdown-exploit
+如下编译执行即可：
+若显示如上图，那么说明Linux机器仍然处于未修复状态。
+3.1.3 Mac OS
+苹果也发表针对 CPU 预测执行侧信道漏洞发表公告，所有的 mac/iOS 设备均受影响
+https://support.apple.com/en-us/HT208394
+3.1.4 Vmware
+VMware 针对 CPU 预测执行侧信道漏洞发表公告：
+https://www.vmware.com/us/security/advisories/VMSA-2018-0002.html
+更多关于该漏洞以及厂商的信息请参考：
+https://github.com/hannob/meltdownspectre-patches
+3.2云主机用户
+考虑到本次漏洞具备越权访问内核数据以及虚拟机宿主机器内存数据，一旦攻击者具备了在用户机器上执行代码的权限，利用该漏洞就可以通过读取内核数据绕过操作系统KASLR缓解措施、读取用户凭据用于权限提升以及在基于虚拟化的机器集群中入侵经过隔离的云主机租户。云主机用户请注意云服务厂商关于这一次漏洞的安全公告，配合打补丁。
+四．参考
+https://mp.weixin.qq.com/s?__biz=MzI2MDc2MDA4OA==&mid=2247484395&idx=1&sn=86cd1f9e4d611b1d9d09fb7c0c5fc494
+http://www.freebuf.com/vuls/159291.html
+*本文作者：任子行，转载请注明来自FreeBuf.COM

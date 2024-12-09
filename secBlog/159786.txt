@@ -1,0 +1,85 @@
+0x01 前言
+继续上一篇的内容，往下闯关。这篇将是最后一篇，有兴趣的小伙伴可以看一下整个系列：
+第一篇：黑客游戏| Owasp juice shop (一)
+第二篇：黑客游戏| Owasp juice shop (二)
+第三篇：黑客游戏| Owasp juice shop (三)
+0x02 玩耍
+第三十三关：Retrieve Blueprint.
+要求下载OWASP Juice Shop Logo (3D-printed)该商品的设计文件。
+本关的要求应该是嫌这个商品买的太贵了要$99.99,想自己下载设计文件通过3d打印去打。
+先把商品的图片下载下来 。
+查看图片详情发现是通过openscad这个软件编辑的。通过了解发现这个软件编辑的3d打印的格式为.stl。
+然后在http://192.168.239.128:3000/public/images/products/ 该目录下爆破.stl的文件，或者去猜。 斗哥直接通过源码看到文件名为JuiceShop.stl，下载该文件即可过关。
+第三十四关：Typosquatting Tier 1
+要求告知商店关于注册近似域名欺骗成为受害者。（提及罪犯的确切姓名）。
+不太能get到出题者的点， 看来官方说明。
+先下载package.json.bak 文件并打开，找到epilogue-js
+通过epilogue-js 找到https://www.npmjs.com/package/epilogue-js。然后在评论处提交epilogue-js，即可过关，代码看不懂无法给大家分析，有看懂的大佬指点一下。
+第三十五关：XSS Tier 4
+要求执行一个持续的XSS攻击与<script>alert("XSS4")</script>绕过服务器端的安全机制。
+这里就利用到了之前sanitize-html这个版本的漏洞，该漏洞编号为CVE-2016-1000237，国内资料比较少， 有兴趣需用google搜索。根据该版本的特征通过不递归绕过验证。在评论处，构造语句<<script>123</script>script>alert("XSS4")<</script>/script>
+第三十六关：Redirects
+要求Wherever you go, there you are.。
+看了一下提示是要能随意从定向到任意网站。
+在http://192.168.239.128:3000/redirect?to=https://github.com/bkimminich/juice-shop，有个重定向，但是做了白名单现在， 不在白名单中的重定向会报406。
+通过构造有白名单中的域名即可绕过白名单限制。
+即可过关。
+第三十七关：CSRF
+要求修改Bender的密码为slurmCl4ssic，不是通过sql注入。
+题目很明显就是通过CSRF修改Bender的密码。
+随意登入一个账号，看修改密码的功能，需要提供旧密码才能修改，这里怎么能csrf呢？
+测试了一下发现，删掉旧密码的参数能直接通过，难怪会有csrf漏洞。
+这样就存在csrf了， 具体利用就不去构造了， 直接登入Bender的账号（SQL注入），修改Bender的密码，即可过关。
+第三十八关：Easter Egg Tier 2
+要求应用一些高级密码分析找到真正的复活节彩蛋。
+这题难道之前找到的复活节彩蛋还有其他解密方式？下图为之前找的复活节彩蛋密码为base64加密，解密后为/gur/qrif/ner/fb/shaal/gurl/uvq/na/rnfgre/rtt/jvguva/gur/rnfgre/rtt。既然还有加密的话肯定是这串解密后的url（这串url看着也很奇怪）。
+感觉是使用了凯撒密码这一类的加密方式，尝试后发现是rot-13。解密后为/the/devs/are/so/funny/they/hid/an/easter/egg/within/the/easter/egg
+访问即可过关。
+第三十九关：Extra Language
+要求检索从未投入生产的语言文件。
+使用换密码功能，发现访问的是/i18n/ru.json，对换几个语言发现都是xx.json，这样的格式，既然有个没有使用个， 那斗哥遍历xx.json(aa-zz)，应该可以过关把， 两位字母的遍历完却没有过关，这是为什么呢？
+最后发现未使用的语言是三字母的，tlh.json。爆破一次三位数的字母即可过关。
+第四十关：Login CISO
+要求利用OAuth 2登陆的首席信息安全官的用户帐户。
+这题在当前环境下做不了， 因为这里要有个使用谷歌账号登入的功能但是页面上没有。
+第四十一关：Reset Bjoern's Password
+要求使用忘记密码功能重置bjoern的账号密码。
+好吧根据之前的经验这题又是社工。
+先看一下这次的问题是什么，问这个人少年时代的邮政编码是多少。
+谷歌这个人，可以从https://www.facebook.com/bjoern.kimminich中得知他来自德国的于特森城（the town of Uetersen in Germany），从http://www.geopostcodes.com/Uetersen会告诉你，uetersen的邮政编码是25436，提交该答案错了！！！看了官方说明Bjoern使用的是早期的邮政密码http://www.alte-postleitzahlen.de/uetersen上可查到为W-2082,而且Bjoern还做了修改变成了West-2082.（斗哥表示脑袋有点不够用）
+最有提交west-2082成功过关。
+第四十二关：Find JWT Secret
+要求通知商店JWT的问题。（在你的评论中提到使用JWT签名的秘密）。
+本关官方无解释，斗哥也没做出来。只能去查源码了，再检测是否过关的文件中居然没有本关的答案。
+第四十三关：Typosquatting Tier 2
+这一题的要求是找到拼写错误。
+在首页查看源码发现下图处angular-tooltipps拼写错误，多了一个p。
+告知商店即可过关。
+第四十四关：Forged Coupon
+这一题的要求伪造优惠券代码，给你至少80%的折扣。
+在ftp文件夹下有个coupons_2013该文件位2013年的优惠券。
+下载打开coupons_2013该文件如下：
+这是优惠券的构成，肯定使用了某种加密，后来发现是Z85算法（https://github.com/bkimminich/z85-cli）。通过该算法可知优惠券的构成方式位JAN13-10。
+也就是（月份缩写）（年份数字）（-折后），如现在是17年12月份要求打折80%那就是：DEC17-80，经z85算法后得l}6D$h.v0y。
+再购物车页面提交优惠券并购买商品即可过关。
+第四十五关：Imaginary Challenge
+这一题的要求解决挑战# 99。不幸的是，这种挑战并不存在。
+这题没弄懂， 斗哥跟大家说一下官方说明，通过http://hashids.org/和http://codepen.io/ivanakimov/pen/bNmExm这两个网站可发现juice-shop加密用的salt是默认的abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890，然后加密99得到
+69OxrZ8aJEgxONZyWoz1Dw4BvXmRGkKgGe9M7k2rK63YpqQLPjnlb5V5LvDj。Put该链接即可过关http://localhost:3000/rest/continue-code/apply/69OxrZ8aJEgxONZyWoz1Dw4BvXmRGkKgGe9M7k2rK63YpqQLPjnlb5V5LvDj
+第四十六关：Login Support Team
+这一题的要求在不使用SQL注入或任何其他旁路的情况下，使用支持团队的原始用户凭据登录。
+首先在ftp文件夹下发现有个incident-support.kdbx，这个是keepass的加密文件， 从字面理解这里面包含了support账号的相关信息先现在该文件，然后安装keepass。
+使用keepass打开，需要密码， 这里就要开始去找密码了。
+找了半天没找到密码，崩溃了。最后看来官方说明说有这句Support Team: Our secret is still common Caoimhe master password empty!，master password为空，重点是找Caoimhe，这是一个人名，然后这个肯定是个文件，（因为keepass解密需要一个文件），这里小编觉的脑子不够用了， 官方说明中通过这个名字是一个意大利女生找到了这张照片。
+下载这张照片，然后使用keepass解密如下：
+最后获得密码使用密码登入即可过关。
+第四十七关：Premium Paywall
+这一题的要求访问独占内容。
+审查该元素发现，一段密文，这是使用aes 256位加密的， 需要找到密钥。
+通过爆破目录发现：
+通过该密钥解密得：
+访问/this/page/is/hidden/behind/an/incredibly/high/paywall/that/could/only/be/unlocked/by/sending/1btc/to/us，即可过关。
+0x03 To be continued
+最后这几关做的真的累，很多地方都需要猜测揣摩。初学者建议理解理解关键点就好。做完整个juice shop，看到了很多新的知识点，后续继续学习，对斗哥解题有不同建议的欢迎提出，互相交流。
+参考链接：
+https://github.com/bkimminich/pwning-juice-shop/blob/master/part2/README.md

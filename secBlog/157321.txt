@@ -1,0 +1,91 @@
+* 本文作者：DX安全团队，本文属FreeBuf原创奖励计划，未经许可禁止转载
+不知道各位有没有听过不要重复造轮子？因为有些开源的工具，它们经过时间和众人的捶打，其实会比我们自己一个人造出来的轮子考虑的更加周到和全面。可是有时候有些开源工具的入口太沉重，而我们只需要其中的一部分功能并且加到我们自己的程序，所以怎么样把她们进行提炼成我们想要的呢？
+介绍
+最近想给自己的程序加上一个检测WAF的功能，思路可能很简单，就是构成一些存在恶意参数的URL地址，然后检测返回的response的headers或者body，通过指纹匹配的方式来定位是哪一款WAF，可是自己收集WAF信息太多了，而且写检测程序又是要费一定功夫，想到SqlMap中是可以检测Waf信息的，所以打算直接将其关键函数或者类拉出来改造后加到自己的程序中。
+粗略分析源码
+SqlMap源码的分析网上有太多太多了，这里就不加以仔细分析了，因为我们只要是提取一部分功能，而不是想研究学习SqlMap。先上一张SqlMap的目录结构图和他的入口文件SqlMap.py源代码（如下）。明确目的，我们需要的是他找waf的那一小段函数，看他的目录，就有一个waf的目录，打开看一下，就是十几个以waf厂商命名的函数，心中先有数，等下肯定要用到它。然后看一下sqlmap.py主文件，一共定义了3个函数，就只看函数英文名，大致的用处就可以猜到，第一个是和模块路径有关，第二个是检查环境，第三个main主函数。 进入main函数，其中命名的函数也很明显，第一个就是执行环境检查，第二个是设置环境变量，第三个banner有点工具经验应该会知道是输出SqlMap标志图案信息，但是看不明白也没事，然后往下2个函数还有备注，可以看出是提取命令行的一些参数的。
+def main ():
+"""
+Main function of sqlmap when running from command line.
+"""
+try :
+checkEnvironment()
+setPaths(modulePath())
+banner()
+# Store original command line options for possible later restoration
+cmdLineOptions.update(cmdLineParser(). __dict__ )
+initOptions(cmdLineOptions)
+其中，设置环境变量这个函数很有意思。不知道大家平时有没有注意到，当我们用命令行使用一些开源工具的时候，有一些工具必须先cd到他的根目录下，然后才能执行，否则就会报找到不XXX的文件错误，而SqlMap就不需要，看到这个函数，大家就应该明白了，因为SqlMap在程序刚开始跑的时候，就已经把所有的可能会用到的各种目录和文件，统统都把他们的绝对路径设置到了Paths变量里，这样，不管在哪里，都可以找到这个文件。明明只是想提取功能的，不知不觉就学会了一招。。。。。。
+还记得一开始看到的waf目录么，所以我们需要进入这个环境设置函数看看，他究竟吧我们的waf目录设置了什么变量
+paths.SQLMAP_ROOT_PATH = rootPath
+# sqlmap paths
+paths.SQLMAP_EXTRAS_PATH = os.path.join(paths.SQLMAP_ROOT_PATH , "extra" )
+paths.SQLMAP_PROCS_PATH = os.path.join(paths.SQLMAP_ROOT_PATH , "procs" )
+paths.SQLMAP_SHELL_PATH = os.path.join(paths.SQLMAP_ROOT_PATH , "shell" )
+paths.SQLMAP_TAMPER_PATH = os.path.join(paths.SQLMAP_ROOT_PATH , "tamper" )
+paths.SQLMAP_WAF_PATH = os.path.join(paths.SQLMAP_ROOT_PATH , "waf" )
+paths.SQLMAP_TXT_PATH = os.path.join(paths.SQLMAP_ROOT_PATH , "txt" )
+paths.SQLMAP_UDF_PATH = os.path.join(paths.SQLMAP_ROOT_PATH , "udf" )
+paths.SQLMAP_XML_PATH = os.path.join(paths.SQLMAP_ROOT_PATH , "xml" )
+paths.SQLMAP_XML_BANNER_PATH = os.path.join(paths.SQLMAP_XML_PATH , "banner" )
+paths.SQLMAP_XML_PAYLOADS_PATH = os.path.join(paths.SQLMAP_XML_PATH , "payloads" )
+可以看到，他是把这个目录设置成了paths.SQLMAP_WAF_PATH，然后我们全局搜索这个看看哪里用到了这个变量
+搜到在一个_setWafFunction()的函数，看名字又是通熟易懂，设置检查waf的函数。然后我带大家来理解一下这个函数。做功能移植，基本代码要能粗略看懂。第一个就是glob库，一个文件搜索库，第一个for循环就是遍历waf目录里所有的python脚本，把文件路径返回过来循环，下面可以看到他把文件路径结果分割成了绝对路径和文件名，然后把绝对路径设置到系统环境变量里，目的就是配合下面的__import__()函数(和import 函数类似，导入一个模块)，使他能够找到我们的python脚本，最后检查模块里面是不是有detect函数，有的话把函数给存到kb.wafFunctions里，最后再做个排序。
+def _setWafFunctions ():
+"""
+Loads WAF/IPS/IDS detecting functions from script(s)
+"""
+if conf.identifyWaf:
+for found in glob.glob(os.path.join(paths.SQLMAP_WAF_PATH , "*.py" )):
+dirname , filename = os.path.split(found)
+dirname = os.path.abspath(dirname)
+if filename == "__init__.py" :
+continue
+debugMsg = "loading WAF script '%s'" % filename[:- 3 ]
+logger.debug(debugMsg)
+if dirname not in sys.path:
+sys.path.insert( 0 , dirname)
+try :
+if filename[:- 3 ] in sys.modules:
+del sys.modules[filename[:- 3 ]]
+module = __import__ (filename[:- 3 ].encode(sys.getfilesystemencoding() or UNICODE_ENCODING))
+except ImportError , msg:
+raise SqlmapSyntaxException( "cannot import WAF script '%s' (%s)" % (filename[:- 3 ] , msg))
+_ = dict (inspect.getmembers(module))
+if "detect" not in _:
+errMsg = "missing function 'detect(get_page)' "
+errMsg += "in WAF script '%s'" % found
+raise SqlmapGenericException(errMsg)
+else :
+kb.wafFunctions.append((_[ "detect" ] , _.get( "__product__" , filename[:- 3 ])))
+kb.wafFunctions = sorted (kb.wafFunctions , key = lambda _: "generic" in _[ 1 ].lower())
+这里仅仅只是把waf目录里面的函数给导入进来了，还没有开始使用，所以我们还得找到使用他的入口。继续看之前提到的，提取命令行信息的函数，使用ide一直跟进去，会看到如下的代码，看到这些参数有没有特别的熟悉，没有的话说明你对sqlmap还用的不是特别的多。 我们平时用sqlmap想检查是不是有waf用的参数是--identify-waf，直接找到这一行，发现他定义成了identifyWaf，dest就是他的变量名。继续全局搜索这个变量，终于找到了我们最想看到的东西。
+miscellaneous.add_option( "--identify-waf" , dest = "identifyWaf" ,
+action = "store_true" ,
+help = "Make a thorough testing for a WAF/IPS/IDS protection" )
+执行检测的函数截图如下，然后我们搜索一下之前我们了解到的，kb.wafFunctions变量，这个变量之前分析过，把检查函数都存到这里，现在我们搜索一下这个变量，看看哪里用到了，结果发现在for循环中，把这个变量循环返回其中的函数和对应的脚本名字，然后把上面定义的一个函数_当作参数执行这个函数，如果找到了认为有这个WAF，found就会等于True，然后把WAF名称存到reval变量里，接下来再进行日志输出，所以我们现在就差最后一步，就可以把这个功能移植出来了，那就是了解_函数的功能意义。函数第一行定义了三个变量为空，进入到try分支，前两行在没有通读sqlmap全部函数的情况下，大家应该是看不懂的，所以先跳过，如在后面发现是关键语句，再慢慢分析，如果只是一个全局的flag，那么就可以不复习了，往下看，先是提取get参数给他url编码了一下，然后加上raise404和silent参数后把参数转发调用Request.getPage函数，我们跟进入这个函数，发现整整500多行，一行一行分析也太麻烦了吧！ 确实，所以这里又有一个小技巧，先看看他返回的东西到底是什么，还有函数到底用返回的东西干了什么，就可以推断出来，这400多行代码到底干了什么，这就和英语阅读理解一样，知道上下文，就可以推断出你不认识的某个单词到底什么意思。
+return page , responseHeaders , code
+直接看return语句，发现一共返回了3个参数，其中第二个参数一看就知道是返回的头部信息，第三个是返回的code，可以猜测可能是状态码，因为不管什么库，他的.code都是返回状态码，不过仅仅做猜测，我们先看看waf利用这些信息做了什么。
+下面这几行代码是我从waf文件夹随便挑的检测aws的一段函数，其中WAF_ATTACK_VERCTORS是事先定义好的为了触发WAF的一些代码，是常量可以直接拿来用，加在URL后面的，看到他把这段代码加进去进行get然后code==403，所以可以确定之前code就是加入触发WAF代码后就行get请求放回的状态码，responseHeaders就是所有的返回头信息，HTTP_HEADER.SERVER是一个常量，事先定义好的，直接可以拿来用，所以现在就差page不知道是什么意思了，我们换个脚本，看第二个检测360的，其中page是“/wzws-waf-cgi/ in page”，所以可以推断出，应该page就是返回的body信息。
+至此，整个sqlmap检测WAF的逻辑已经全部理清楚，我们只需要把各个函数剥离出来，定义在我们的程序即可。
+def detect (get_page):
+retval = False
+for vector in WAF_ATTACK_VECTORS:
+page , headers , code = get_page( get =vector)
+retval = code == 403 and re.search( r"\bAWS" , headers.get(HTTP_HEADER.SERVER , "" ) , re.I) is not None
+if retval:
+break
+return retval
+def detect (get_page):
+retval = False
+for vector in WAF_ATTACK_VECTORS:
+page , headers , code = get_page( get =vector)
+retval = re.search( r"wangzhan\.360\.cn" , headers.get( "X-Powered-By-360wzb" , "" ) , re.I) is not None
+retval |= code == 493 and "/wzws-waf-cgi/" in (page or "" )
+if retval:
+break
+return retval
+回顾与组装
+我们重新捋一捋sqlmap检查waf的运行流程，首先用glob库，把文件夹所有的python文件中的检查函数统统压入一个list变量(这一段我们是可以直接复制出来，稍加修改即可利用加在自己的程序)，然后定义一个函数，返回3个参数，分别是返回的body正文，header请求头，code状态码（我们可以用urllib2或者request来把函数编写出来，并不难）。然后还定义了一些能够触发WAF的恶意代码，一些HTTP头部字段，这两个常量在data里（直接拷贝过来用）。终于，检查WAF的整整一个功能就直接被剥离出来加在了我们自己的程序里，sqlmap的WAF库很全，国内国外的，肯定比自己重新收集指纹写一个要好，因为我们也没有什么和市面上检测思路不一样的想法，也就是检查返回头返回状态码和正文。
+很多程序其实都是如此，学会改装、移植、模仿，可以帮助你省下很多时间。
+* 本文作者：DX安全团队，本文属FreeBuf原创奖励计划，未经许可禁止转载
